@@ -52,7 +52,7 @@ public sealed class FeatureCatalogTests
             "Read one file or list one directory of a repository, at a branch, tag or commit, for a code review",
             "List every file of a repository and search its code, to audit a whole project",
         ]);
-        GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder").Actions.Select(a => a.Split(' ')[2]).ShouldBe(["conventions", "snapshot", "audit"]);
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder").Actions.Select(a => a.Split(' ')[2]).ShouldBe(["conventions", "snapshot", "audit", "review"]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Pull requests").Actions.ShouldBe([
             "List open pull requests",
             "Read one pull request with its changed files and their diffs",
@@ -86,7 +86,7 @@ public sealed class FeatureCatalogTests
             ("Pull requests", ScopeAccess.Read, "List and read pull requests, their diffs, comments, checks and reviews, and the account Scout signs in as"),
             ("Issues", ScopeAccess.Read, "List open issues and read one issue"),
             ("Notifications", ScopeAccess.Read, "Search every five minutes for your mentions, review requests and replies; read the pull requests that mention your Scout bot and the bot's own name"),
-            ("Scout's data folder", ScopeAccess.Write, "Keep conventions profiles, repository snapshots and audit jobs on this computer"),
+            ("Scout's data folder", ScopeAccess.Write, "Keep conventions profiles, repository snapshots, audit jobs and review jobs on this computer"),
             ("Pull request reviews", ScopeAccess.IrreversibleWrite, "Post a review with comments; your click on Post on a review card is the approval, and one asked in chat waits for you in Approvals"),
             ("Pull request verdicts", ScopeAccess.IrreversibleWrite, "Approve a pull request or request changes; your choice on a review card is the approval, and one asked in chat waits for you in Approvals"),
             ("Pull request comments", ScopeAccess.IrreversibleWrite, "Comment on a pull request or reply to a review comment; each one waits for you in Approvals"),
@@ -105,7 +105,8 @@ public sealed class FeatureCatalogTests
                 ("Scout's data folder",
                     "Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules | " +
                     "Keep a snapshot of a repository at one commit, within a size cap (200 MB unless configured), so a review or an audit reads every file locally and the Knowledge index can search it | " +
-                    "Keep the audit job of a repository, its plan, progress and findings, when you ask for a whole-repository audit in chat; the audit reads the snapshot and pauses or stops when you ask"),
+                    "Keep the audit job of a repository, its plan, progress and findings, when you ask for a whole-repository audit in chat; the audit reads the snapshot and pauses or stops when you ask | " +
+                    "Keep the review job of a pull request too large for one turn, its plan, progress and findings, when a review in chat finds diffs left out; the review reads the snapshot at the head commit and posts one card in the chat, nothing on GitHub"),
                 ("Pull request reviews",
                     "Post a review with comments on a pull request; this review only comments, it never approves or requests changes. A review notifies the pull request's author and everyone following it, so each one needs your approval in Scout Desktop: your click on Post on a review card is that approval, and a review asked for in chat waits for you to approve it"),
                 ("Pull request verdicts",
@@ -361,5 +362,16 @@ public sealed class FeatureCatalogTests
 
         ex.Message.ShouldBe("Features with a write row must declare a write class other than None: sneaky, drafty.");
         Should.NotThrow(() => FeatureCatalog.Validate(new FeatureCatalog().All));
+    }
+
+    [Fact]
+    public void GitHub_declares_the_review_job_under_Scouts_data_folder()
+    {
+        var row = GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder");
+
+        row.Access.ShouldBe(ScopeAccess.Write);
+        row.Actions.ShouldContain(
+            a => a.StartsWith("Keep the review job of a pull request too large for one turn", StringComparison.Ordinal) && a.EndsWith("nothing on GitHub", StringComparison.Ordinal),
+            "the start of a review job is a write declared under Scout's data folder, and says nothing is written on GitHub");
     }
 }

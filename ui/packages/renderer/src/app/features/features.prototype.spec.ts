@@ -691,7 +691,7 @@ describe("Features as Features.dc.html draws it: each panel's description, Reads
         [
           "Scout's data folder",
           'Write',
-          'Keep conventions profiles, repository snapshots and audit jobs on this computer',
+          'Keep conventions profiles, repository snapshots, audit jobs and review jobs on this computer',
         ],
         [
           'Pull request reviews',

@@ -16,6 +16,7 @@ import {
   type PresenterVersionRequest,
   type ReadinessDto,
   type ReviewCheck,
+  type ReviewCoverage,
   type ReviewFindings,
   type ReviewTests,
 } from '../src/ipc-contract.js';
@@ -330,6 +331,17 @@ describe('the controls a job entry offers', () => {
       { action: 'continue', phase: 'waiting' },
       '',
     ],
+    ['a running review job', 'reviewjob:acme/api#52', 'running', undefined, 'pause stop'],
+    ['a paused review job', 'reviewjob:acme/api#52', 'paused', undefined, 'continue stop'],
+    ['a done review job', 'reviewjob:acme/api#52', 'done', undefined, ''],
+    [
+      'a running review job while a stop waits for Scout',
+      'reviewjob:acme/api#52',
+      'running',
+      { action: 'stop', phase: 'waiting' },
+      '',
+    ],
+    ["the mention review's running entry", 'review:acme/api#52', 'running', undefined, ''],
     ['a running test run', 'tests:acme/api#41', 'running', undefined, 'stop'],
     ['a paused test run', 'tests:acme/api#41', 'paused', undefined, ''],
     ['a finished test run', 'tests:acme/api#41', 'done', undefined, ''],
@@ -1050,7 +1062,10 @@ describe('the verdict on a pull request', () => {
       checks: true,
       tests: true,
       selfAuthored: true,
+      coverage: true,
+      notes: true,
     };
+    const coverageFields: Record<keyof ReviewCoverage, true> = { read: true, of: true };
     const checkFields: Record<keyof ReviewCheck, true> = {
       name: true,
       status: true,
@@ -1068,7 +1083,23 @@ describe('the verdict on a pull request', () => {
     };
     const bare: ReviewFindings = { repository: 'acme/shop', number: 5, verdict: 'v', findings: [] };
 
-    expect(Object.keys(reviewFields).slice(-3)).toEqual(['checks', 'tests', 'selfAuthored']);
+    expect(Object.keys(reviewFields).slice(-5)).toEqual([
+      'checks',
+      'tests',
+      'selfAuthored',
+      'coverage',
+      'notes',
+    ]);
+    expect(Object.keys(coverageFields)).toEqual(['read', 'of']);
+    const job: ReviewFindings = {
+      ...{ repository: 'acme/api', number: 52, verdict: 'v', findings: [] },
+      coverage: { read: 51, of: 133 },
+      notes: ['82 files not read: the review was stopped.'],
+    };
+    expect([job.coverage, job.notes]).toEqual([
+      { read: 51, of: 133 },
+      ['82 files not read: the review was stopped.'],
+    ]);
     expect(Object.keys(checkFields)).toEqual(['name', 'status', 'conclusion', 'url']);
     expect(Object.keys(testsFields)).toEqual([
       'ran',

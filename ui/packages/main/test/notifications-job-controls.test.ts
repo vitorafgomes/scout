@@ -1454,3 +1454,117 @@ describe('main.ts wiring of the job controls', () => {
     expect(main).toContain('jobControls?.dispose();');
   });
 });
+
+describe('a review job in the bell', () => {
+  const PROGRESS =
+    'Review of acme/api#52: 6 of 17 batches done, 51 of 133 files read, 3 findings so far, reading tests/orders.';
+  const RUNNING_REVIEW: NotificationInput = {
+    id: 'reviewjob:acme/api#52',
+    kind: 'running',
+    title: 'Review of acme/api#52',
+    detail:
+      '6 of 17 batches done · reading tests/orders · 51 of 133 files read · 3 findings so far · the findings arrive in the chat when the review ends',
+    progress: 35,
+    source: 'worker',
+  };
+
+  it.each([
+    ['pause', 'pause'],
+    ['stop', 'stop'],
+  ] as const)(
+    '%s on a running review asks the control plane for the review by its pull request number',
+    async (action) => {
+      const t = setup([RUNNING_REVIEW]);
+
+      await t.jobs.control(RUNNING_REVIEW.id, action);
+
+      expect(t.asked).toEqual([{ kind: 'review', owner: 'acme', repo: 'api', number: 52, action }]);
+      expect(t.get(RUNNING_REVIEW.id)?.control).toEqual({ action, phase: 'waiting' });
+    },
+  );
+
+  it("the owner's pause keeps the counts of the last batch line: Paused by you, the batches, the files and the findings", () => {
+    const t = setup();
+    t.workerLine(notice(PROGRESS));
+
+    t.workerLine(
+      notice(
+        'The review of acme/api#52 paused: you paused it. Ask Scout to continue the review of acme/api#52 to resume it from the first batch not done.',
+      ),
+    );
+
+    expect(shown(t.get(RUNNING_REVIEW.id))).toEqual({
+      kind: 'paused',
+      title: 'Review of acme/api#52 paused',
+      detail: 'Paused by you · 6 of 17 batches done · 51 of 133 files read · 3 findings so far',
+      progress: null,
+      control: null,
+      note: null,
+      offered: 'continue stop',
+    });
+  });
+
+  it('the stopped card ends the entry with the batches done, the files read and the findings, on the card in the chat', () => {
+    const t = setup();
+    t.workerLine(notice(PROGRESS));
+
+    t.workerLine(
+      notice(
+        `Review of acme/api#52 at 4cf6972, stopped at your request:\n\n\`\`\`scout-findings\n${JSON.stringify({ coverage: { read: 51, of: 133 }, findings: [{}, {}, {}] })}\n\`\`\``,
+      ),
+    );
+
+    expect([t.get(RUNNING_REVIEW.id)?.title, t.get(RUNNING_REVIEW.id)?.detail]).toEqual([
+      'Review of acme/api#52 stopped',
+      '6 of 17 batches · 51 of 133 files read · 3 findings, on the card in the chat',
+    ]);
+  });
+
+  it('a Stop on a paused review ends the entry as stopped from the record, with its counts', async () => {
+    const t = setup();
+    t.workerLine(notice(PROGRESS));
+    t.workerLine(notice('The review of acme/api#52 paused: you paused it.'));
+    await t.jobs.control(RUNNING_REVIEW.id, 'stop');
+    t.writesAre(async () => [record('applied', 'Stopped the review of acme/api#52.')]);
+
+    await t.tick();
+
+    expect([
+      t.get(RUNNING_REVIEW.id)?.kind,
+      t.get(RUNNING_REVIEW.id)?.title,
+      t.get(RUNNING_REVIEW.id)?.detail,
+    ]).toEqual([
+      'done',
+      'Review of acme/api#52 stopped',
+      '6 of 17 batches · 51 of 133 files read · 3 findings, on the card in the chat',
+    ]);
+  });
+
+  it('Continue on a paused review asks the control plane to continue the review by its pull request number', async () => {
+    const t = setup();
+    t.workerLine(notice(PROGRESS));
+    t.workerLine(notice('The review of acme/api#52 paused: you paused it.'));
+
+    await t.jobs.control(RUNNING_REVIEW.id, 'continue');
+
+    expect(t.asked).toEqual([
+      { kind: 'review', owner: 'acme', repo: 'api', number: 52, action: 'continue' },
+    ]);
+  });
+
+  it('the plain "is done" sentence that answers a Stop ends the entry as stopped, not done', async () => {
+    const t = setup([RUNNING_REVIEW]);
+    await t.jobs.control(RUNNING_REVIEW.id, 'stop');
+
+    t.workerLine(
+      notice(
+        'The review of acme/api#52 at 4cf6972 is done: no blocking findings in the files read, 51 of 133 files read, 3 findings kept.',
+      ),
+    );
+
+    expect([t.get(RUNNING_REVIEW.id)?.kind, t.get(RUNNING_REVIEW.id)?.title]).toEqual([
+      'done',
+      'Review of acme/api#52 stopped',
+    ]);
+  });
+});

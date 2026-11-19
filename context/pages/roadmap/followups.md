@@ -2,7 +2,7 @@
 title: "Follow-ups"
 version: "1.2"
 date: 2026-10-21
-updated: 2026-11-14
+updated: 2026-11-19
 changes: "v1.2 (2026-11-14): citations re-pointed. v1.1 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Initial tracker page"
 page_type: roadmap
 status: active
@@ -25,6 +25,120 @@ reliability: medium
 
 The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]]; its findings are not repeated here.
 
+### A review stopped while paused loses its card when the host restarts first (2026-11-19)
+
+- **Gap:** the card of a review stopped while paused reaches the worker through a hand-off kept in memory (`AuditSignal`); a host restart before the worker's next wake loses it, and the review ends with no card ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
+- **Blocker:** none; the owner chose the in-memory hand-off over a column and a migration.
+- **Unblocks with:** a durable mark on the job that its stopped card was posted, read by the worker on start, with its test across a restart.
+
+### A wave runs past the 60 minutes, and an interrupted batch's time is not counted (2026-11-19)
+
+- **Gap:** the 60 minutes are checked before each wave, so a wave begun just before them runs to its end; and a batch a provider limit interrupted has no end time, so its minutes are not counted ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
+- **Blocker:** none.
+- **Unblocks with:** a test that pins how far past the bound a wave may run, and, if the owner wants it, the interrupted batch's time counted up to the pause.
+
+### The plain "is done" sentence of a stopped review says done (2026-11-19)
+
+- **Gap:** when a stopped review's card cannot be presented, the worker's plain sentence says the review "is done"; the bell retitles it as stopped, the chat does not.
+- **Blocker:** none.
+- **Unblocks with:** a stopped variant of the sentence, with its test.
+
+### The area name in the bell is not cut to a length (2026-11-19)
+
+- **Gap:** the review's progress line carries the area being read, a path from the pull request, and the bell shows it whole; a long path stretches the entry.
+- **Blocker:** none.
+- **Unblocks with:** a length the bell cuts it to, with its spec.
+
+### The audit library knows the default provider (2026-11-19)
+
+- **Gap:** to choose the default of batches at once, the audit library reads `Scout:Llm:Provider` and compares it with `Ollama`, a second place, beside the LLM project, that knows which provider is the local default ([[pages/invariants/local-first-default]], [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
+- **Blocker:** none.
+- **Unblocks with:** the LLM project saying whether the provider is local, read by the audit's registration, with its test.
+
+### A second verdict or other comments at the same commit are not sent (2026-11-19)
+
+- **Gap:** after a first verdict on a pull request at a commit, a different verdict or different comments at the same commit are not sent. The owner decided on 2026-11-19 that they must be.
+- **Blocker:** none; it is the next change.
+- **Unblocks with:** that change, with its tests.
+
+### A review judges mostly what the patches show (2026-11-19)
+
+- **Gap:** a review batch reads the patches and what its five reads find; it is not given the purpose of the pull request nor the project's own rules, and it makes one pass over every concern with no pass that tries to refute each finding.
+- **Blocker:** none; these are the next changes.
+- **Unblocks with:** the pull request's purpose and the project's rules in the batch request, one pass per concern, and a second pass that tries to refute each finding, each with its test.
+
+### The e2e suite was not run for the review job in the bell (2026-11-19)
+
+- **Gap:** the bell's review entry, its controls and the quiet chat are proven by unit and component specs; the e2e suite under `ui/e2e` was not run for this change.
+- **Blocker:** none.
+- **Unblocks with:** an e2e run, and a spec for a review job's controls through the real control plane like the audit's.
+
+### A diff larger than one batch gives no warning at the start (2026-11-18)
+
+- **Gap:** a changed file whose patch alone passes the batch cap is kept not read in a batch of its own and named only on the card's notes; the checks before the start say nothing of it ([[pages/decisions/0061-the-pull-request-review-job-as-built]]).
+- **Blocker:** none; the warning belonged to the context window check, which is not built.
+- **Unblocks with:** a warning on the size check naming how many files will not be read for that reason, with its test.
+
+### No chat function pauses or stops a review (2026-11-18)
+
+- **Gap:** since 2026-11-19 the owner pauses, continues and stops a review from the bell and the notices are posted ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]); no chat function pauses or stops a review, and a start resumes a paused one.
+- **Blocker:** none.
+- **Unblocks with:** two declared functions on `Scout's data folder` like the audit's, each with its test.
+
+### The desktop's card offers Approve on a reading that is not complete (2026-11-18)
+
+- **Gap:** since 2026-11-19 the card shows a review job's measured count and notes ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]); it still offers Approve when the files read are fewer than the files changed.
+- **Blocker:** the artboard state for that card, for the owner's approval.
+- **Unblocks with:** the state drawn, then the card and its spec rows, with Approve held back while the coverage is below the files changed.
+
+### A review answered in one turn after the model skipped the job is not measured (2026-11-18)
+
+- **Gap:** when the model reviews in the turn although `get_pull_request` left a diff out, the card carries the model's read sentence, never a count measured by code.
+- **Blocker:** none; refusing a one-turn review by code was left out of the change.
+- **Unblocks with:** a check in `present_review_findings` that sends a review with diffs left out to the job, with its test.
+
+### The batch cap does not follow the model's context window (2026-11-18)
+
+- **Gap:** a review batch is capped by the configured characters only, 60,000 unless configured; a small context window can be filled by one batch.
+- **Blocker:** the context window known for each AI Source, which only Ollama reports.
+- **Unblocks with:** the cap taken as half the window when it is known, with its test.
+
+### A review that throws on every wake holds every audit (2026-11-18)
+
+- **Gap:** the worker picks a running review before any audit; a review that fails on every wake is picked again each time, so no audit runs until the review is stopped.
+- **Blocker:** none.
+- **Unblocks with:** a review that fails twice on a wake set aside for that wake, with its test.
+
+### Each batch's present_review_findings reads GitHub for evidence the batch discards (2026-11-18)
+
+- **Gap:** a review batch's `present_review_findings` reads the pull request's checks, its author and the signing identity, three GitHub reads, for a block of which the batch keeps only the findings.
+- **Blocker:** none.
+- **Unblocks with:** a batch presentation that skips the evidence, the card alone reading it, with a test counting the reads.
+
+### The rule that classifies a commit's checks is written twice (2026-11-18)
+
+- **Gap:** passing, pending and failing are decided once at the start of a review and once in the approval gate, in two places of the GitHub plugin.
+- **Blocker:** none.
+- **Unblocks with:** one function both call, with its tests.
+
+### AuditJob.Started has no production reader (2026-11-18)
+
+- **Gap:** the job's start time is read from the rows into `AuditJob.Started` and only a store test reads it, since the 60 minutes count the batches' turns.
+- **Blocker:** none.
+- **Unblocks with:** the member removed with its test, or a reader that needs it.
+
+### No test covers a batch that presents nothing, then a block (2026-11-18)
+
+- **Gap:** the retry of a review batch whose first attempt presents no block is tested when the second presents nothing too, never when the second presents a block.
+- **Blocker:** none.
+- **Unblocks with:** that test.
+
+### A main package test fails in the container from a linked worktree (2026-11-18)
+
+- **Gap:** the desktop main package's test that asks git whether the bundled client file is ignored fails inside the test container when it runs from a linked worktree, where git cannot find the main checkout.
+- **Blocker:** none.
+- **Unblocks with:** the test reading the ignore rule without git, or skipping only when git cannot answer, said in its output.
+
 ### Four desktop rules files load together on any ui file (2026-11-13)
 
 - **Gap:** `.claude/rules/desktop-ui.md`, `desktop-channels.md`, `desktop-operator.md` and `desktop-quick-ask.md` all load when a file under `ui/packages/` is opened, about 30,000 characters together; `desktop-ui.md` (17,724) and `operator.md` (15,833) are each over the 6,000-character ceiling.
@@ -39,19 +153,19 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A build older than the review job reads a review as the repository's audit (2026-11-13)
 
-- **Gap:** the job row's kind and pull request arrive with [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]]; a build from before them looks a job up by owner and repository only, so once a review row exists, going back to that build makes its latest-job and stop calls take the review for the audit. No review row is written until the change that starts the job.
-- **Blocker:** none until that change; then the owner's word on whether going back a version is supported at all.
+- **Gap:** the job row's kind and pull request arrive with [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]]; a build from before them looks a job up by owner and repository only, so once a review row exists, going back to that build makes its latest-job and stop calls take the review for the audit. Since 2026-11-18 review rows are written: the chat starts the job ([[pages/decisions/0061-the-pull-request-review-job-as-built]]).
+- **Blocker:** the owner's word on whether going back a version is supported at all.
 - **Unblocks with:** the start of the review job refusing to run under a schema it does not know, or the decision recorded that a downgrade past it is not supported.
 
 ### Defaults taken for the checks before a review, waiting for the owner's word (2026-11-13)
 
-- **Gap:** the first part of the checks before a review ([[pages/services/audit]], Checks before a review) is built with these defaults, shown to the owner and not yet confirmed. 1. The outcomes that block: the missing grant (the gate's own sentence, unchanged), no AI Source connected (not built yet), and a review of the same pull request and commit already running or done; everything else is a warning. 2. A review already done at the same commit blocks the start with its progress; the owner may prefer a warning that lets a done review run again. 3. The size shows an upper bound only, `at most M minutes`, the smaller of the turn time limit times two tries per batch for at most 10 batches and the ADR's 60 minutes, never an expected time. 4. The context window, when it is built, compares one batch at 4 characters per token and only warns. 5. Compose files are not read for tests that need Docker. 6. A job paused by the provider means one paused now, since no pause time is kept. 7. A resume of a paused review at the same commit runs no check and keeps the checks of its own start.
+- **Gap:** the first part of the checks before a review ([[pages/services/audit]], Checks before a review) is built with these defaults, shown to the owner and not yet confirmed. 1. The outcomes that block: the missing grant (the gate's own sentence, unchanged), no AI Source connected (not built yet), and a review of the same pull request and commit already running or done; everything else is a warning. 2. A review already done at the same commit blocks the start with its progress; the owner may prefer a warning that lets a done review run again. 3. The size shows an upper bound only, `at most M minutes`, the smaller of the turn time limit times two tries per wave of the batches at once and the 60 minutes (no bound on batches since 2026-11-19), never an expected time. 4. The context window, when it is built, compares one batch at 4 characters per token and only warns. 5. Compose files are not read for tests that need Docker. 6. A job paused by the provider means one paused now, since no pause time is kept. 7. A resume of a paused review at the same commit runs no check and keeps the checks of its own start.
 - **Blocker:** the owner's word on each.
 - **Unblocks with:** each answer as a dated line on [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]], and the change that alters a default with its test.
 
 ### The checks before a review that are not built yet (2026-11-13)
 
-- **Gap:** four checks [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]] lists are left from the first part: the AI Source (a block when none is connected, read from the provider's name; the context window, known for Ollama only, through a default member on the provider factory; a job the provider paused now); Docker on this computer, through the sandbox's existing `docker version` probe made reachable through `IReviewEnvironment`, a read, with a time bound so a daemon that does not answer cannot stall the start; tests that need a Docker daemon, a count of manifests that name a container testing library, read as text with symbolic links skipped, a 1 MB cap and the folders the sandbox's scan skips, where a manifest that cannot be read or is over the cap is a "Could not check", never a zero; and the stack and test command, from the sandbox's detection, whose refusal sentences for Node, Python, Go and Java must be checked first for text echoed from the repository's manifests. The head's check counts also wait for the plugin to pass them, with the third change.
+- **Gap:** four checks [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]] lists are left from the first part: the AI Source (a block when none is connected, read from the provider's name; the context window, known for Ollama only, through a default member on the provider factory; a job the provider paused now); Docker on this computer, through the sandbox's existing `docker version` probe made reachable through `IReviewEnvironment`, a read, with a time bound so a daemon that does not answer cannot stall the start; tests that need a Docker daemon, a count of manifests that name a container testing library, read as text with symbolic links skipped, a 1 MB cap and the folders the sandbox's scan skips, where a manifest that cannot be read or is over the cap is a "Could not check", never a zero; and the stack and test command, from the sandbox's detection, whose refusal sentences for Node, Python, Go and Java must be checked first for text echoed from the repository's manifests. The head's check counts arrive from the plugin since 2026-11-18, read at the start of the review.
 - **Blocker:** none; split out because the whole set passed the size of one change.
 - **Unblocks with:** one change that builds the four, each with the test whose input makes its warning or block fire and one test where its source throws.
 
@@ -63,8 +177,8 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review job's open points, built with defaults (2026-11-13)
 
-- **Gap:** [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]] left seven points to the owner; the three changes build these defaults until the owner answers. 1. A review with zero findings: answered by the separate change that gives a clean review a card, so the default of one plain sentence with the verdict and no card no longer applies. 2. GitHub failing on the head re-read before a batch: the job pauses, and a start resumes it. 3. The 60 minutes: wall clock from the start, pauses included. 4. The status as its own function: yes, in the third change. 5. A fork's head commit through `snapshot_repository` is unverified: the refusal is returned as it is. 6. `kind`, derivable from `pull_request`: kept as its own column, as approved. 7. A stopped review may be started again at the same commit; a done one is refused.
-- **Blocker:** the owner's answers to points 2, 3, 4, 5 and 7; point 6 follows the approved design.
+- **Gap:** [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]] left seven points to the owner; the three changes build these defaults until the owner answers. 1. A review with zero findings: answered by the separate change that gives a clean review a card, so the default of one plain sentence with the verdict and no card no longer applies. 2. GitHub failing on the head re-read before a batch: the job pauses, and a start resumes it. 3. The 60 minutes: answered by the owner on 2026-11-19, a pause that asks at 60 minutes of clock time during which any batch ran since the last resume, a continue giving 60 more ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]). 4. The status as its own function: yes, in the third change. 5. A fork's head commit through `snapshot_repository` is unverified: the refusal is returned as it is. 6. `kind`, derivable from `pull_request`: kept as its own column, as approved. 7. A stopped review may be started again at the same commit; a done one is refused.
+- **Blocker:** the owner's answers to points 2, 4, 5 and 7; point 6 follows the approved design. Since 2026-11-18 the three changes are built ([[pages/decisions/0061-the-pull-request-review-job-as-built]]).
 - **Unblocks with:** each answer recorded on ADR 0055 as a dated line, and the change that alters a default with its test.
 
 ### The checks before a review starts, for an audit and a test run (2026-11-13)
@@ -76,7 +190,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### Defaults taken for the clean review card, waiting for the owner's approval (2026-11-12)
 
-- **Gap:** a review that found nothing now comes back as a findings card ([[pages/services/desktop-quick-ask]]), drawn first as the Main artboard state "Review: no findings" ([[pages/conventions/desktop-prototype]]). Four choices were taken as defaults: Request changes is not shown on that card, the chat's verdict function remaining the way to request changes; the sentence of what Scout read is shown only on the clean card, as plain text on its own line under "No findings.", worded "What Scout says it read: <read>" so it reads as the model's report beside the checks and tests Scout read itself (the wording waits for the owner's approval, and a count measured by the code, "read N of M files", replaces it when the review job lands); the posted body says "No findings." only when the review has none; Approve follows today's rules (hidden on a pull request the signing identity opened, off without a reviewed commit), with the tests chips above it.
+- **Gap:** a review that found nothing now comes back as a findings card ([[pages/services/desktop-quick-ask]]), drawn first as the Main artboard state "Review: no findings" ([[pages/conventions/desktop-prototype]]). Four choices were taken as defaults: Request changes is not shown on that card, the chat's verdict function remaining the way to request changes; the sentence of what Scout read is shown only on the clean card, as plain text on its own line under "No findings.", worded "What Scout says it read: <read>" so it reads as the model's report beside the checks and tests Scout read itself (the wording waits for the owner's approval, and a count measured by the code, "read N of M files", replaces it when the review job lands; since 2026-11-18 a job review's card carries that count as `coverage`, and a review answered in one turn still carries the model's sentence); the posted body says "No findings." only when the review has none; Approve follows today's rules (hidden on a pull request the signing identity opened, off without a reviewed commit), with the tests chips above it.
 - **Blocker:** the owner's approval of the artboard state; open.
 - **Unblocks with:** the owner's answer on each default; a different answer changes the artboard first, then the card and its spec rows.
 
@@ -239,7 +353,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The audit job's batches cannot read the open issues the audit skill asks for (2026-11-11)
 
-- **Gap:** `code-audit` says that, when `list_issues` is available, the audit reads the open issues once and reports none of them again ([[pages/services/skills]]). The job's batches read that sentence as part of their instructions but are offered only five reads and `present_audit_findings` (`src/Scout.Audit/AuditBatchRunner.cs:41`), not `GitHub.list_issues`, so an audit run as a job can still report a finding an open issue already describes. An audit run in one conversation is offered the function through the skill's functions line.
+- **Gap:** `code-audit` says that, when `list_issues` is available, the audit reads the open issues once and reports none of them again ([[pages/services/skills]]). The job's batches read that sentence as part of their instructions but are offered only five reads and `present_audit_findings` (`src/Scout.Audit/AuditBatchRunner.cs:46`), not `GitHub.list_issues`, so an audit run as a job can still report a finding an open issue already describes. An audit run in one conversation is offered the function through the skill's functions line.
 - **Unblocks with:** `GitHub.list_issues` added to the batch's offered set (a read, so no write enters the job), or the job reading the open issues once and passing their titles to each batch as it passes the findings so far, with a test in `AuditBatchRunnerTests` that a batch does not report a finding an open issue describes.
 
 ### What the started entry of a reversible write leaves open (2026-11-12)
@@ -275,7 +389,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A partly read batch's card drops a worse verdict the model gave (2026-11-10)
 
-- **Gap:** the card of an area whose outcome names an unread file says `incomplete` whatever the model said (`src/Scout.Audit/AuditWorker.cs:195`), so a model's `needs rework` is not shown on that card; the findings and their severities stay.
+- **Gap:** the card of an area whose outcome names an unread file says `incomplete` whatever the model said (`src/Scout.Audit/AuditWorker.cs:209`), so a model's `needs rework` is not shown on that card; the findings and their severities stay.
 - **Unblocks with:** a decision on the card's words when both apply (for example `incomplete, needs rework`), with a row in `The_card_of_an_area_read_in_part_says_incomplete_whatever_verdict_the_model_gave`.
 
 ### Project discovery checks cancellation only after the whole listing (2026-11-10)
@@ -371,7 +485,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A queued GitHub write is checked only after the owner approved it (2026-11-10)
 
-- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:472`, `:495`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
+- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:473`, `:496`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
 - **Unblocks with:** running the checks that need no network when the call is queued, and answering the model the refusal instead of queuing; the checks that read GitHub (the diff a review comment anchors to) stay at the send.
 
 ### A rejected action keeps its whole payload (2026-11-10)
@@ -391,7 +505,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The five GitHub write functions still carry a body that sends (2026-11-10)
 
-- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:578` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
+- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:579` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
 - **Unblocks with:** bodies that answer the queued sentence and send nothing, the senders staying internal to the runner.
 
 ### What is left of the review turn nothing builds (2026-11-10)

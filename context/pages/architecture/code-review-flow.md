@@ -1,8 +1,9 @@
 ---
 title: "Code review: the whole flow, step by step"
-version: "1.1"
+version: "1.3"
 date: 2026-11-10
-changes: "v1.1 (2026-11-10): the skill carries every step the owner asked for; the markers removed and each item moved into what the review does; marking a conversation resolved stays the one thing Scout cannot do."
+updated: 2026-11-19
+changes: "v1.3 (2026-11-19): the review job reads every batch, code first, several at once, shown in the bell, one card. v1.2 (2026-11-18): a pull request whose answer left a diff out becomes a review job"
 page_type: longform
 status: active
 description: "The flow of a code review in Scout as one diagram and ten steps: choosing the process, reading, the checks of each dimension, the answer, the owner's decisions on the cards, the writes on the pull request and the follow-up; each step as the skill carries it since 2026-11-10."
@@ -44,8 +45,11 @@ flowchart TD
       T1 --> R1[Existing comments, the diffs left out, the code around the hunks, the language guides]
     end
 
-    R1 --> BIG{Too large to read in full?}
-    BIG -- yes --> BIG1[Review file by file and say which files were read] --> J
+    R1 --> BIG{Did get_pull_request leave a diff out?}
+    BIG -- yes --> JOB[Start a review job and end the turn]
+    JOB --> JB[Every batch, code first, several at once, each a closed read-only turn; progress in the bell]
+    JB --> JC[One card: verdict and files read computed by code] --> O
+    BIG -- "yes, and writes are not allowed" --> BIG1[Review file by file and say which files were read] --> J
     BIG -- no --> J
 
     subgraph JUDGE [Judge, only what the diff shows]
@@ -78,7 +82,8 @@ flowchart TD
    - `get_pull_request` gives the title, the description, the branches and the files; `list_pull_request_comments` what reviewers already said.
    - When the description or the branch names an issue or a story, `get_issue` reads it and the summary says whether the change solves what it claims, not only whether the code is tidy.
 2. **Overview.** The size, the files touched, the structure.
-   - The file list and the diffs that fit the budget, the snapshot, the files left out and the language skills; a pull request too large to read in full is reviewed file by file and the answer says which files were read.
+   - The file list and the diffs that fit the budget, the snapshot, the files left out and the language skills. A pull request whose diffs all fit is reviewed in this turn.
+   - When `get_pull_request` says any diff was left out, the skill starts a review job with `start_pull_request_review` and ends the turn: Scout reads every changed file in batches, code first, several batches at once; the progress, with the findings so far and the owner's Pause, Continue and Stop, is in the bell of Scout Desktop, and the chat gets one card at the end, with the verdict and the files read computed by code; at 60 minutes of running time the review pauses and asks ([[pages/services/audit/how-it-works-review-job]], [[pages/decisions/0061-the-pull-request-review-job-as-built]], [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]). When writes are not allowed, it reviews file by file in the turn and says which files were read.
    - When the pull request is too large to review well or mixes a refactor, a feature and a fix, the summary says so once and suggests how to split it.
 3. **The pipeline.** Build, tests, linters and static analysis, before any human-style judgement.
    - `get_pull_request_checks` at the head commit; when no check runs the tests, or the owner asks, the tests run in a disposable container the owner enabled.

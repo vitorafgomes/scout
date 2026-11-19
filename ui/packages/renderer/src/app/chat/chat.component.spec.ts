@@ -655,6 +655,48 @@ describe('Chat screen', () => {
     );
   });
 
+  it('a reply carrying a block with coverage shows no measured line and still says what Scout says it read; the same block in a worker notice shows the measured line', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const block = JSON.stringify({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'ready to merge',
+      read: '6 of 6 files read',
+      findings: [],
+      coverage: { read: 50, of: 50 },
+      notes: ['Every file was read.'],
+    });
+    const reply = `Done.\n\n\`\`\`scout-findings\n${block}\n\`\`\``;
+    bridge.push([
+      { id: 'q-1', question: 'review acme/shop#5', reply, citations: [], state: 'done' },
+      { id: 'notice:1', question: '', reply, citations: [], state: 'done', notice: true },
+    ]);
+    const fixture = await open();
+    const [fromReply, fromNotice] = Array.from(
+      fixture.nativeElement.querySelectorAll('li.turn') as NodeListOf<HTMLElement>,
+    );
+    const line = (turn: HTMLElement | undefined, test: string) =>
+      turn?.querySelector(`[data-test="${test}"]`)?.textContent?.trim() ?? null;
+
+    expect(
+      {
+        coverage: line(fromReply, 'coverage-read'),
+        note: line(fromReply, 'coverage-note'),
+        read: line(fromReply, 'clean-read'),
+      },
+      'a reply turn renders the card as before, without the measured line or notes',
+    ).toEqual({ coverage: null, note: null, read: 'What Scout says it read: 6 of 6 files read' });
+    expect(
+      {
+        coverage: line(fromNotice, 'coverage-read'),
+        note: line(fromNotice, 'coverage-note'),
+        read: line(fromNotice, 'clean-read'),
+      },
+      'a worker notice renders the measured line and its notes',
+    ).toEqual({ coverage: '50 of 50 files read', note: 'Every file was read.', read: null });
+  });
+
   it('a posting question shows the bare question and a with the review tag', async () => {
     const bridge = makeBridge();
     configure(bridge);

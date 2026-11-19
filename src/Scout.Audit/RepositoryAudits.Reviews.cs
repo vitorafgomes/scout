@@ -10,24 +10,31 @@ namespace Scout.Audit;
 /// plugin's declared snapshot write, plans the batches from the changed files' patches and keeps the job under Scout's data
 /// folder; the status is read from the job's rows. Neither makes a call to GitHub of its own.
 /// </summary>
-internal interface IPullRequestReviews
+public interface IPullRequestReviews
 {
     /// <summary>
     /// Start a review of pull request <paramref name="number"/> at <paramref name="headSha"/> and answer at once with its plan
     /// and the checks it ran before it started, resume its paused review at that commit, or say why neither happened.
     /// <paramref name="files"/> are every changed file, each with its patch or null when GitHub returned no diff for it;
     /// <paramref name="diffsLeftOut"/> is how many diffs the pull request's answer left out, and none left out starts no
-    /// review; <paramref name="checks"/> are the head commit's checks as the caller read them, null when it could not.
+    /// review; <paramref name="notListed"/> is how many changed files GitHub did not list, each counted as not read;
+    /// <paramref name="checks"/> are the head commit's checks as the caller read them, null when it could not.
     /// </summary>
     Task<ReviewStart> StartAsync(
-        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, ReviewCheckCounts? checks, CancellationToken ct);
+        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, int notListed, ReviewCheckCounts? checks, CancellationToken ct);
 
     /// <summary>How the latest review of the pull request is going, from its rows.</summary>
     Task<string> StatusAsync(string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>
+    /// The owner's pause, continue or stop of the latest review of the pull request, as Scout Desktop asks it: whether it
+    /// took and the sentence the owner reads. A batch in progress finishes first; continue only resumes a paused review.
+    /// </summary>
+    Task<AuditControlAnswer> ControlAsync(string owner, string repo, int number, string action, CancellationToken ct);
 }
 
 /// <summary>One changed file of a pull request: its repository-relative path and its patch, null when GitHub returned no diff for it.</summary>
-internal sealed record ReviewFile(string Path, string? Patch);
+public sealed record ReviewFile(string Path, string? Patch);
 
 internal sealed partial class RepositoryAudits : IPullRequestReviews
 {
@@ -44,14 +51,29 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
     /// <summary>The area of the last batch of a review, which holds the files GitHub gave no patch for.</summary>
     internal const string NoDiffArea = "files GitHub returned no diff for";
 
-    /// <summary>The batches a review runs at most; the files of the batches after them are not read.</summary>
-    internal const int MaxReviewBatches = 10;
+    /// <summary>Why a changed file whose patch is longer than one batch holds is counted as not read.</summary>
+    internal const string DiffTooLarge = "diff larger than one batch";
+
+    /// <summary>Why a changed file whose path holds a control character is counted as not read; the path never reaches a request.</summary>
+    internal const string ControlCharacterPath = "its path has a control character";
+
+    /// <summary>The area of the batch that holds the files whose path holds a control character, first of the batches kept not covered.</summary>
+    internal const string ControlCharacterArea = "files whose path has a control character";
+
+    /// <summary>The area of the batch that holds the files whose patch is longer than one batch holds, before the files with no diff.</summary>
+    internal const string DiffTooLargeArea = "files whose diff is larger than one batch";
+
+    /// <summary>Why a changed file GitHub counts but did not list is counted as not read.</summary>
+    internal const string NotListed = "GitHub did not list these files";
+
+    /// <summary>The area of the batch that stands for the changed files GitHub did not list, last of the batches kept not covered.</summary>
+    internal const string NotListedArea = "files GitHub did not list";
 
     /// <summary>The minutes a review takes at most, whatever its batches.</summary>
     internal const int MaxReviewMinutes = 60;
 
     public async Task<ReviewStart> StartAsync(
-        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, ReviewCheckCounts? checks, CancellationToken ct)
+        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, int notListed, ReviewCheckCounts? checks, CancellationToken ct)
     {
         if (!IsValid(owner, repo))
         {
@@ -74,27 +96,46 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
             return NotStarted($"No {review} was started: the pull request's answer left no diff out, so it is reviewed in this turn.");
         }
 
-        if (!files.Any(f => f.Patch is not null))
+        var cap = options.MaxBatchCharacters;
+        var controlled = files.Where(f => f.Path.Any(char.IsControl)).Select(f => f.Path).ToList();
+        var unread = files.Where(f => f.Patch is null && !controlled.Contains(f.Path)).Select(f => f.Path).ToList();
+        var sized = files.Where(f => f.Patch is not null && !controlled.Contains(f.Path)).Select(f => new AuditPlanner.Entry(f.Path, AuditBatchRunner.SentLength(f.Path, f.Patch!) + 1)).ToList();
+        var room = cap - 1;
+        var tooLarge = sized.Where(f => f.Size > room).ToList();
+        if (tooLarge.Count == sized.Count)
         {
-            return NotStarted(string.Create(
-                CultureInfo.InvariantCulture,
-                $"No {review} was started: GitHub returned no diff for any of the {files.Count} changed files, so there is nothing to read in batches."));
+            return NotStarted(NothingToRead(review, files.Count, unread.Count, tooLarge.Count, controlled.Count, cap));
         }
 
-        var unread = files.Where(f => f.Patch is null).Select(f => f.Path).ToList();
         List<AuditBatchPlan> plan =
         [
-            .. AuditPlanner.Plan(
-                [.. files.Where(f => f.Patch is not null).Select(f => new AuditPlanner.Entry(f.Path, f.Patch!.Length))],
-                options.MaxBatchFiles,
-                options.MaxBatchCharacters),
+            .. sized.Except(tooLarge).GroupBy(f => ReadingOrder(f.Path)).OrderBy(g => g.Key)
+                .SelectMany(g => AuditPlanner.Plan([.. g], options.MaxBatchFiles, room)),
         ];
+        if (controlled.Count > 0)
+        {
+            plan.Add(new AuditBatchPlan(ControlCharacterArea, controlled, 0, Failure: ControlCharacterPath));
+        }
+
+        if (tooLarge.Count > 0)
+        {
+            plan.Add(new AuditBatchPlan(DiffTooLargeArea, [.. tooLarge.Select(f => f.Path)], tooLarge.Sum(f => f.Size), Failure: DiffTooLarge));
+        }
+
         if (unread.Count > 0)
         {
             plan.Add(new AuditBatchPlan(NoDiffArea, unread, 0, Failure: NoDiff));
         }
 
-        List<PreflightCheck> preflight = [Size(files.Count, plan), DockerRuns(ct), Head(headSha, checks)];
+        notListed = Math.Max(0, notListed);
+        if (notListed > 0)
+        {
+            plan.Add(new AuditBatchPlan(NotListedArea, [.. Enumerable.Range(1, notListed).Select(i => string.Create(CultureInfo.InvariantCulture, $"(file {i} GitHub did not list)"))], 0, Failure: NotListed));
+        }
+
+        var changed = files.Count + notListed;
+
+        List<PreflightCheck> preflight = [Size(changed, plan), DockerRuns(ct), Head(headSha, checks)];
         try
         {
             var latest = await store.LatestJobAsync(owner, repo, number, ct).ConfigureAwait(false);
@@ -102,6 +143,7 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
             if (same is { Status: AuditStatus.Paused })
             {
                 await store.ResumeAsync(same.Id, origin(), ct).ConfigureAwait(false);
+                signal.Wake();
                 return new ReviewStart(true, $"Resuming the {review} at {Short(headSha)} from the first batch not done. {await ProgressAsync(same, ct).ConfigureAwait(false)}", ReviewPreflight.None);
             }
 
@@ -138,10 +180,14 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
                 : string.Empty;
             var kept = new ReviewPreflight(preflight);
             await store.CreateJobAsync(owner, repo, number, taken.Commit, origin(), plan, kept, ct).ConfigureAwait(false);
-            var started = string.Create(CultureInfo.InvariantCulture, $"review started: {files.Count} files, {plan.Count} batches, {owner}/{repo}#{number} at {Short(taken.Commit)}.{moved}");
+            signal.Wake();
+            var started = string.Create(
+                CultureInfo.InvariantCulture,
+                $"review started: {changed} files in {plan.Count} batches, {owner}/{repo}#{number} at {Short(taken.Commit)}; code first, {options.ReviewParallelBatches} batches at a time. Follow it in the bell of Scout Desktop; every finding arrives here once, when the review ends.{moved}");
+            var noDiff = unread.Count == 0 ? started : string.Create(CultureInfo.InvariantCulture, $"{started} Files GitHub returned no diff for, counted as not read: {unread.Count}.");
             return new ReviewStart(
                 true,
-                unread.Count == 0 ? started : string.Create(CultureInfo.InvariantCulture, $"{started} Files GitHub returned no diff for, counted as not read: {unread.Count}."),
+                notListed == 0 ? noDiff : string.Create(CultureInfo.InvariantCulture, $"{noDiff} Files GitHub did not list, counted as not read: {notListed}."),
                 kept);
         }
         catch (AuditStoreException ex)
@@ -156,20 +202,71 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
     }
 
     /// <summary>
-    /// The pull request's size: every changed file and every batch kept, and the most the batches can take, each batch a
-    /// turn tried at most twice under the turn time limit and never more than a review's bound; a warning when more batches are planned than a review runs, with
-    /// how many files will not be read. An upper bound only, never an expected time.
+    /// The pull request's size: every changed file and every batch kept, and the most the batches can take, each wave of
+    /// <see cref="AuditOptions.ReviewParallelBatches"/> batches tried at most twice under the turn time limit, and never more
+    /// than a review's 60 minutes. An upper bound only, never an expected time.
     /// </summary>
     private PreflightCheck Size(int changed, List<AuditBatchPlan> plan)
     {
-        var runnable = plan.Where(b => b.Failure is null).ToList();
-        var minutes = Math.Min(Math.Ceiling(Math.Min(runnable.Count, MaxReviewBatches) * AuditBatchRunner.Attempts * options.TurnTimeout.TotalMinutes), MaxReviewMinutes);
-        var size = string.Create(CultureInfo.InvariantCulture, $"{changed} files in {plan.Count} batches; at most {minutes} minutes");
-        var left = runnable.Skip(MaxReviewBatches).Sum(b => b.Files.Count);
-        return left == 0
-            ? new(PreflightName.Size, PreflightOutcome.Ok, $"{size}.")
-            : new(PreflightName.Size, PreflightOutcome.Warning, string.Create(CultureInfo.InvariantCulture, $"{size}; {left} files will not be read."));
+        var waves = Math.Ceiling(plan.Count(b => b.Failure is null) / (double)options.ReviewParallelBatches);
+        var minutes = Math.Min(Math.Ceiling(waves * AuditBatchRunner.Attempts * options.TurnTimeout.TotalMinutes), MaxReviewMinutes);
+        return new(PreflightName.Size, PreflightOutcome.Ok, string.Create(CultureInfo.InvariantCulture, $"{changed} files in {plan.Count} batches; at most {minutes} minutes."));
     }
+
+    /// <summary>
+    /// Where a changed file comes in a review's reading order: 0 source code, 1 tests, 2 build and configuration files,
+    /// 3 documentation. Documentation is a file with a documentation extension, or any file under a <c>docs</c>,
+    /// <c>context</c> or <c>.claude</c> folder; a test is a file under a test folder, in a project whose name ends
+    /// <c>.Tests</c>, or named as a test; the rest is code, its build and configuration files after the tests.
+    /// </summary>
+    internal static int ReadingOrder(string path)
+    {
+        var segments = path.Split('/');
+        var name = segments[^1];
+        var folders = segments[..^1];
+        if (DocumentationExtensions.Contains(Path.GetExtension(name)) || folders.Any(DocumentationFolders.Contains))
+        {
+            return 3;
+        }
+
+        if (folders.Any(f => TestFolders.Contains(f) || f.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            || name.Contains(".test.", StringComparison.OrdinalIgnoreCase) || name.Contains(".spec.", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith("Tests.cs", StringComparison.Ordinal))
+        {
+            return 1;
+        }
+
+        return ConfigurationExtensions.Contains(Path.GetExtension(name)) || name.Equals("Dockerfile", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+    }
+
+    private static readonly HashSet<string> DocumentationExtensions = new([".md", ".mdx", ".txt", ".rst", ".adoc", ".html"], StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> DocumentationFolders = new(["docs", "context", ".claude"], StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> TestFolders = new(["test", "tests", "spec", "e2e", "__tests__"], StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> ConfigurationExtensions = new([".json", ".yml", ".yaml", ".toml", ".xml", ".props", ".lock"], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Why no review starts when none of the changed files is left to read in batches: how many, and the count per reason,
+    /// in Scout's words and never a path, with the batch's size in tokens for a diff too large.
+    /// </summary>
+    private static string NothingToRead(string review, int changed, int noDiff, int tooLarge, int controlled, long cap)
+    {
+        List<string> reasons =
+        [
+            .. noDiff > 0 ? [string.Create(CultureInfo.InvariantCulture, $"{noDiff} with no diff from GitHub")] : Array.Empty<string>(),
+            .. tooLarge > 0 ? [string.Create(CultureInfo.InvariantCulture, $"{tooLarge} with a diff larger than one batch of about {Tokens(cap):N0} tokens")] : Array.Empty<string>(),
+            .. controlled > 0 ? [string.Create(CultureInfo.InvariantCulture, $"{controlled} with a control character in the path")] : Array.Empty<string>(),
+        ];
+        var counted = reasons.Count == 0 ? "." : $": {string.Join("; ", reasons)}.";
+        return string.Create(CultureInfo.InvariantCulture, $"No {review} was started: none of the {changed} changed files can be read in batches{counted}");
+    }
+
+    private static long Tokens(long characters) => (characters + CharactersPerToken - 1) / CharactersPerToken;
+
+    /// <summary>The characters a token is counted as when a batch's size is told in tokens.</summary>
+    internal const int CharactersPerToken = 4;
 
     /// <summary>Whether the owner has Docker runs on, so the review's tests may run; a switch that cannot be read is a warning.</summary>
     private PreflightCheck DockerRuns(CancellationToken ct)
@@ -199,6 +296,107 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
     private static PreflightCheck CouldNotCheck(string name, string what) => new(name, PreflightOutcome.Warning, $"Could not check {what}.");
 
     private static ReviewStart NotStarted(string sentence) => new(false, sentence, ReviewPreflight.None);
+
+    public async Task<AuditControlAnswer> ControlAsync(string owner, string repo, int number, string action, CancellationToken ct)
+    {
+        if (!IsValid(owner, repo))
+        {
+            return new AuditControlAnswer(false, InvalidRepository);
+        }
+
+        if (number <= 0)
+        {
+            return new AuditControlAnswer(false, InvalidPullRequest);
+        }
+
+        var review = Review(owner, repo, number);
+        var resume = $"Ask Scout to continue the {review} to resume it from the first batch not done.";
+        try
+        {
+            var job = await store.LatestJobAsync(owner, repo, number, ct).ConfigureAwait(false);
+            switch (action)
+            {
+                case Pause when job is { Status: AuditStatus.Running } && await store.PauseAsync(job.Id, PausedByOwner, ct).ConfigureAwait(false):
+                    return new AuditControlAnswer(true, $"Paused the {review}; a batch in progress finishes first. {await ProgressAsync(job, ct).ConfigureAwait(false)} {resume}");
+                case Pause:
+                    job = job is null ? null : await store.JobAsync(job.Id, ct).ConfigureAwait(false);
+                    return new AuditControlAnswer(false, job is { Status: AuditStatus.Paused }
+                        ? $"The {review} is already paused{(job.PausedReason is { } reason ? $": {reason}" : string.Empty)}. {await ProgressAsync(job, ct).ConfigureAwait(false)} {resume}"
+                        : $"No {review} is running.");
+                case Continue when job is { Status: AuditStatus.Paused }:
+                    await store.ResumeAsync(job.Id, origin(), ct).ConfigureAwait(false);
+                    await PostReviewResumedAsync(job.Id, ct).ConfigureAwait(false);
+                    signal.Wake();
+                    return new AuditControlAnswer(true, $"Resuming the {review} at {Short(job.Commit)} from the first batch not done. {await ProgressAsync(job, ct).ConfigureAwait(false)}");
+                case Continue:
+                    return new AuditControlAnswer(false, job is { Status: AuditStatus.Running }
+                        ? $"The {review} is already running. {await ProgressAsync(job, ct).ConfigureAwait(false)}"
+                        : $"No paused {review} to continue.");
+                case Stop when await store.StopAsync(owner, repo, number, ct).ConfigureAwait(false):
+                    AuditJob? stopped;
+                    try
+                    {
+                        stopped = await store.LatestJobAsync(owner, repo, number, ct).ConfigureAwait(false);
+                    }
+                    catch (AuditStoreException)
+                    {
+                        if (job is not null)
+                        {
+                            signal.Stopped(job.Id);
+                        }
+
+                        return new AuditControlAnswer(true, $"Stopped the {review}.");
+                    }
+
+                    if (stopped is null)
+                    {
+                        return new AuditControlAnswer(true, $"Stopped the {review}.");
+                    }
+
+                    signal.Stopped(stopped.Id);
+                    return new AuditControlAnswer(true, $"Stopped the {review}; a batch in progress finishes first, and the card of what was read arrives in the chat. {await ProgressAsync(stopped, ct).ConfigureAwait(false)}");
+                case Stop:
+                    return new AuditControlAnswer(false, $"No {review} is running.");
+                default:
+                    return new AuditControlAnswer(false, $"Scout does not {action} a review.");
+            }
+        }
+        catch (AuditStoreException ex)
+        {
+            return new AuditControlAnswer(false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The resume line of a review, only to a job the desktop's local chat holds after the resume, so its entry turns
+    /// running at once; a post or a read that fails is logged and the resume stands.
+    /// </summary>
+    private async Task PostReviewResumedAsync(string jobId, CancellationToken ct)
+    {
+        if (notifier is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await store.JobAsync(jobId, ct).ConfigureAwait(false) is not { } job || !AuditWorker.IsLocal(job))
+            {
+                return;
+            }
+
+            var counts = AuditWorker.ReviewCounts(await store.BatchesAsync(jobId, ct).ConfigureAwait(false));
+            var items = (await store.FindingsAsync(jobId, ct).ConfigureAwait(false)).Count;
+            if (!await notifier().PostAsync(job.Origin!, AuditWorker.ReviewResumedNotice(job, counts, items), ct).ConfigureAwait(false))
+            {
+                logger.LogWarning("Review {JobId} could not post its resume to the conversation it holds.", jobId);
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Review {JobId} could not post its resume to the conversation it holds ({ExceptionType}).", jobId, ex.GetType().Name);
+        }
+    }
 
     public async Task<string> StatusAsync(string owner, string repo, int number, CancellationToken ct)
     {

@@ -53,6 +53,7 @@ import type { Logger } from '../util/logger.js';
 import { ASK_ARG } from '../shell/login-item.js';
 import { fitInWorkArea, placeInCorner } from './placement.js';
 import { registerSpeech } from './speech.js';
+import { isBellOnlyReviewLine } from '../notifications/sources.js';
 
 export const DEFAULT_QUICK_ASK_SHORTCUT = 'CommandOrControl+Alt+Space';
 export const NOT_RUNNING_MESSAGE = 'Scout is not running. Start it from the tray or the app.';
@@ -1880,6 +1881,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
       const event = toLocalEvent(parsed);
       if (event === null) return;
       if ('notice' in event) {
+        if (isBellOnlyReviewLine(event.notice)) return;
         notices += 1;
         append({
           id: `notice:${notices}`,

@@ -31,6 +31,7 @@ public static class ChatFunctions
         "GitHub.present_review_findings",
         "GitHub.present_audit_findings",
         "GitHubActions.get_repository_audit_status",
+        "GitHubActions.get_pull_request_review_status",
         "GitHubActions.get_project_conventions",
         "Kubernetes.list_contexts",
         "Kubernetes.list_namespaces",

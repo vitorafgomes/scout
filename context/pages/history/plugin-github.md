@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub - history"
-version: "1.3"
+version: "1.5"
 date: 2026-11-10
-updated: 2026-11-15
-changes: "v1.3 (2026-11-15): no approval over a conflict; unrunnable in the answer and the block. v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-19
+changes: "v1.5 (2026-11-19): the review start counts the files GitHub did not list. v1.4 (2026-11-17): a pull request whose diffs were left out is reviewed as a job. v1.3 (2026-11-15): no approval over a conflict; unrunnable in the answer and the block. v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the GitHub plugin and when."
@@ -18,6 +18,18 @@ reliability: high
 # Plugin.GitHub - history
 
 > Dated changes to [[pages/services/plugin-github]]; the service page states how it works now.
+
+## 2026-11-19 - The review start counts the files GitHub did not list
+
+- **Found:** an outside review of the change. A pull request with more changed files than GitHub lists, at most 3,000, was reviewed as if whole: the job planned and counted only the listed files and could end "ready to merge, N of N files read".
+- **What changed:** `start_pull_request_review` passes the count of changed files GitHub counts but did not list, a new `notListed` argument of `IPullRequestReviews.StartAsync`, which the host's adapter relays to the audit library (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Reviews.cs:56`, `src/Scout.Plugin.GitHub/Abstractions/IPullRequestReviews.cs:21`, `src/Scout.Host.Console/PullRequestReviewsAdapter.cs:13`). The audit library keeps them as one batch not read ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
+- **Tests:** `tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginReviewJobTests.cs:61`; 543 tests in the project.
+
+## 2026-11-17 - A pull request whose diffs were left out is reviewed as a job
+
+- **What it was:** `get_pull_request` said how many diffs it left out and pointed to `get_pull_request_file`; nothing started the review job.
+- **What changed:** `start_pull_request_review(owner, repo, number)` reads the pull request, counts the diffs left out by the same budget rule as `get_pull_request` (`src/Scout.Plugin.GitHub/GitHubPlugin.Reads.cs:573`), reads the head commit's checks as counts, and hands them to the host's reviews (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Reviews.cs:26`); `get_pull_request_review_status` relays the job's rows (`:64`). The start is a declared write on `Scout's data folder` (`src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:155`). The left-out sentence and the function's description name the start. Nothing is posted on GitHub.
+- **Tests:** `tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginReviewJobTests.cs` (7 tests, 11 cases), `tests/Scout.Plugin.GitHub.Tests/GitHubPluginReadsTests.cs:75`, `tests/Scout.Plugin.GitHub.Tests/GitHubPluginMetadataTests.cs:128`; 542 tests in the project.
 
 ## 2026-11-15 - No approval over a conflict, and a run that could not run its tests says so
 

@@ -20,6 +20,32 @@ const AUDIT_PAUSED = new RegExp(`^The audit of ${REPOSITORY} paused: (.+)$`, 's'
 const AUDIT_DONE = new RegExp(`^Audit of ${REPOSITORY} at [0-9a-f]+ is done\\.\\s*(.*)$`);
 const AUDIT_STOPPED = new RegExp(`^The audit of ${REPOSITORY} ended at your request: (.+)$`);
 const STOPPED_COUNTS = /^(\d+) of (\d+) areas done, (\d+) findings kept/;
+const PULL_REQUEST = `${REPOSITORY}#(\\d+)`;
+const REVIEW_COUNTS =
+  '(\\d+) of (\\d+) batches done, (\\d+) of (\\d+) files read, (\\d+ findings? so far)';
+const REVIEW_PROGRESS = new RegExp(
+  `^Review of ${PULL_REQUEST}: ${REVIEW_COUNTS}(?:, reading (.+))?\\.$`,
+);
+const REVIEW_RESUMED = new RegExp(`^Review of ${PULL_REQUEST} resumed: ${REVIEW_COUNTS}\\.$`);
+const REVIEW_PAUSED = new RegExp(`^The review of ${PULL_REQUEST} paused: (.+)$`, 's');
+const REVIEW_CARD = new RegExp(
+  `^Review of ${PULL_REQUEST} at [0-9a-f]+(, stopped at your request)?:$`,
+);
+const REVIEW_DONE = new RegExp(
+  `^The review of ${PULL_REQUEST} at [0-9a-f]+ is done: .+?, (\\d+) of (\\d+) files read, (\\d+) findings kept\\.$`,
+);
+const REVIEW_NOTHING_READ = new RegExp(
+  `^The review of ${PULL_REQUEST} ended at your request: nothing was read\\.$`,
+);
+const FINDINGS_BLOCK = /```scout-findings\n([\s\S]*?)\n```/;
+/** The tail of every running review entry's detail. */
+export const REVIEW_FINDINGS_ARRIVE = 'the findings arrive in the chat when the review ends';
+/** The button of an ended review entry: the card is in the chat. */
+export const OPEN_IN_THE_CHAT = { id: 'open-chat', label: 'Open in the chat' } as const;
+
+/** The tail of an ended review entry's detail. */
+export const ON_THE_CARD = 'on the card in the chat';
+export const NOTHING_READ = 'Nothing was read.';
 const TESTS_STOPPED = new RegExp(`^The tests of ${REPOSITORY}#(\\d+) ended at your request`);
 const PAUSED_BY_OWNER = 'you paused it.';
 export const PAUSED_BY_YOU = 'Paused by you';
@@ -77,6 +103,141 @@ function urlIn(text: string): { url?: string } {
   return found === undefined ? {} : { url: found };
 }
 
+/** The one entry of a pull request's review job, `owner/repo#N`; the mention review's entries are `review:`. */
+export function reviewJobId(pullRequest: string): string {
+  return `reviewjob:${pullRequest}`;
+}
+
+/**
+ * The bell's sentence for why a review paused: the AI Source's reasons as the audit's, the 60 minutes and GitHub in
+ * the artboard's words, the review's own tail dropped.
+ */
+function reviewPause(reason: string): string {
+  const bare = reason.replace(/\.\s*Ask Scout to [\s\S]*$/, '');
+  const bound = /^it ran for 60 minutes with (\d+) batches left$/.exec(bare);
+  if (bound !== null) {
+    return `It ran for 60 minutes with ${bound[1]} batches left. Continue to give it 60 more minutes.`;
+  }
+  if (bare === 'GitHub could not be read')
+    return 'GitHub could not be read. Continue to try again.';
+  return pauseSentence(`${bare}. Ask Scout to continue.`);
+}
+
+/** A count of findings as the bell writes it: "1 finding", "3 findings". */
+function findingsCount(count: number): string {
+  return `${count} ${count === 1 ? 'finding' : 'findings'}`;
+}
+
+/** The read count and the findings of a review's card block, null when the block cannot be read. */
+function cardCounts(text: string): { read: number; of: number; findings: number } | null {
+  const block = FINDINGS_BLOCK.exec(text)?.[1];
+  if (block === undefined) return null;
+  try {
+    const parsed = JSON.parse(block) as {
+      coverage?: { read?: unknown; of?: unknown };
+      findings?: unknown;
+    };
+    const read = parsed.coverage?.read;
+    const of = parsed.coverage?.of;
+    if (typeof read !== 'number' || typeof of !== 'number') return null;
+    return { read, of, findings: Array.isArray(parsed.findings) ? parsed.findings.length : 0 };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The entry of a review job's line, one per pull request: its progress and resume as running with the batches, the
+ * files read, the findings so far and the area being read; its pauses, its card at the end and its stop. Null for any
+ * other line.
+ */
+function reviewNotice(text: string, first: string): NotificationInput | null {
+  const running = REVIEW_PROGRESS.exec(first) ?? REVIEW_RESUMED.exec(first);
+  if (running !== null) {
+    const [, repository, number, done, total, read, of, soFar, area] = running;
+    const pullRequest = `${repository}#${number}`;
+    const reading = area === undefined ? [] : [`reading ${area}`];
+    return {
+      id: reviewJobId(pullRequest),
+      kind: 'running',
+      title: `Review of ${pullRequest}`,
+      detail: [
+        `${done} of ${total} batches done`,
+        ...reading,
+        `${read} of ${of} files read`,
+        soFar,
+        REVIEW_FINDINGS_ARRIVE,
+      ].join(' · '),
+      progress: Math.min(100, Math.floor((Number(done) * 100) / Math.max(1, Number(total)))),
+      source: 'worker',
+    };
+  }
+  const paused = REVIEW_PAUSED.exec(text.trim());
+  if (paused !== null) {
+    const pullRequest = `${paused[1]}#${paused[2]}`;
+    const reason = paused[3] ?? '';
+    return {
+      id: reviewJobId(pullRequest),
+      kind: 'paused',
+      title: `Review of ${pullRequest} paused`,
+      detail: reason.startsWith(PAUSED_BY_OWNER) ? PAUSED_BY_YOU : reviewPause(reason),
+      source: 'worker',
+    };
+  }
+  const card = REVIEW_CARD.exec(first);
+  if (card !== null) {
+    const pullRequest = `${card[1]}#${card[2]}`;
+    const counts = cardCounts(text);
+    const stopped = card[3] !== undefined;
+    return {
+      id: reviewJobId(pullRequest),
+      kind: 'done',
+      title: stopped ? `Review of ${pullRequest} stopped` : `Review of ${pullRequest} is done`,
+      actions: [OPEN_IN_THE_CHAT],
+      detail:
+        counts === null
+          ? ON_THE_CARD.charAt(0).toUpperCase() + ON_THE_CARD.slice(1)
+          : `${counts.read} of ${counts.of} files read · ${findingsCount(counts.findings)}, ${ON_THE_CARD}`,
+      source: 'worker',
+    };
+  }
+  const plain = REVIEW_DONE.exec(first);
+  if (plain !== null) {
+    return {
+      id: reviewJobId(`${plain[1]}#${plain[2]}`),
+      kind: 'done',
+      title: `Review of ${plain[1]}#${plain[2]} is done`,
+      actions: [OPEN_IN_THE_CHAT],
+      detail: `${plain[3]} of ${plain[4]} files read · ${findingsCount(Number(plain[5]))}, ${ON_THE_CARD}`,
+      source: 'worker',
+    };
+  }
+  const nothing = REVIEW_NOTHING_READ.exec(first);
+  if (nothing !== null) {
+    return {
+      id: reviewJobId(`${nothing[1]}#${nothing[2]}`),
+      kind: 'done',
+      title: `Review of ${nothing[1]}#${nothing[2]} stopped`,
+      actions: [OPEN_IN_THE_CHAT],
+      detail: NOTHING_READ,
+      source: 'worker',
+    };
+  }
+  return null;
+}
+
+/**
+ * Whether a worker notice is a review job's line the chat does not show: its progress after each batch, its resume and
+ * its pause by the owner, which the bell shows instead. The start answer, the cards and a pause that needs the owner
+ * still reach the chat.
+ */
+export function isBellOnlyReviewLine(text: string): boolean {
+  const first = linesOf(text)[0] ?? '';
+  if (REVIEW_PROGRESS.test(first) || REVIEW_RESUMED.test(first)) return true;
+  const paused = REVIEW_PAUSED.exec(text.trim());
+  return paused !== null && (paused[3] ?? '').startsWith(PAUSED_BY_OWNER);
+}
+
 /** The one entry of a pull request's test run, `owner/repo#N`, its key compared without case. */
 export function testsId(pullRequest: string): string {
   return `tests:${pullRequest.toLowerCase()}`;
@@ -121,6 +282,8 @@ export function workerNotice(json: string, nextId: () => string): NotificationIn
   const first = lines[0];
   if (first === undefined) return null;
 
+  const review = reviewNotice(text, first);
+  if (review !== null) return review;
   const batch = AUDIT_BATCH.exec(first) ?? AUDIT_RESUMED.exec(first);
   if (batch !== null) {
     const [, repository, done, total, soFar] = batch as unknown as [

@@ -32,7 +32,7 @@ public sealed partial class OwnerControlService(IOwnerControlQueue queue, IWrite
     public const string Queued = "Queued; Scout applies it within a few seconds.";
 
     /// <summary>Why a control of another kind is refused.</summary>
-    public const string UnknownKind = "Scout controls audits and test runs only.";
+    public const string UnknownKind = "Scout controls audits, reviews and test runs only.";
 
     /// <summary>Why a control with another action is refused.</summary>
     public const string UnknownAction = "The action must be pause, continue or stop.";
@@ -43,6 +43,9 @@ public sealed partial class OwnerControlService(IOwnerControlQueue queue, IWrite
 
     /// <summary>Why a pause or continue of a test run is refused.</summary>
     public const string TestsStopOnly = "A test run can only be stopped.";
+
+    /// <summary>Why a review without its pull request number is refused.</summary>
+    public const string ReviewNeedsNumber = "A review is named by its pull request number, above zero.";
 
     /// <summary>Why a test run without its pull request number is refused.</summary>
     public const string TestsNeedNumber = "A test run is named by its pull request number, above zero.";
@@ -73,7 +76,7 @@ public sealed partial class OwnerControlService(IOwnerControlQueue queue, IWrite
             return new OwnerControlAnswer(false, refused);
         }
 
-        var control = new OwnerControl(Guid.NewGuid().ToString("N"), kind!, owner!, repo!, kind == OwnerControlKinds.Tests ? number : null, action!, _time.GetUtcNow());
+        var control = new OwnerControl(Guid.NewGuid().ToString("N"), kind!, owner!, repo!, kind is OwnerControlKinds.Tests or OwnerControlKinds.Review ? number : null, action!, _time.GetUtcNow());
         try
         {
             await SweepAsync(await _queue.UnsettledAsync(_time.GetUtcNow() - MaxAge, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
@@ -177,7 +180,7 @@ public sealed partial class OwnerControlService(IOwnerControlQueue queue, IWrite
     /// <inheritdoc/>
     public void Dispose() => _settleGate.Dispose();
 
-    /// <summary>The write log's action for a control: <c>Pause audit</c>, <c>Continue audit</c>, <c>Stop audit</c> or <c>Stop tests</c>.</summary>
+    /// <summary>The write log's action for a control: <c>Pause audit</c>, <c>Continue audit</c>, <c>Stop audit</c>, <c>Pause review</c>, <c>Continue review</c>, <c>Stop review</c> or <c>Stop tests</c>.</summary>
     public static string LogAction(OwnerControl control)
     {
         ArgumentNullException.ThrowIfNull(control);
@@ -187,7 +190,13 @@ public sealed partial class OwnerControlService(IOwnerControlQueue queue, IWrite
             OwnerControlActions.Continue => "Continue",
             _ => "Stop",
         };
-        return $"{verb} {(control.Kind == OwnerControlKinds.Tests ? "tests" : "audit")}";
+        var job = control.Kind switch
+        {
+            OwnerControlKinds.Tests => "tests",
+            OwnerControlKinds.Review => "review",
+            _ => "audit",
+        };
+        return $"{verb} {job}";
     }
 
     /// <summary>
@@ -212,7 +221,7 @@ public sealed partial class OwnerControlService(IOwnerControlQueue queue, IWrite
 
     private static string? Refusal(string? kind, string? owner, string? repo, int? number, string? action)
     {
-        if (kind is not (OwnerControlKinds.Audit or OwnerControlKinds.Tests))
+        if (kind is not (OwnerControlKinds.Audit or OwnerControlKinds.Tests or OwnerControlKinds.Review))
         {
             return UnknownKind;
         }
@@ -231,6 +240,7 @@ public sealed partial class OwnerControlService(IOwnerControlQueue queue, IWrite
         {
             OwnerControlKinds.Tests when action != OwnerControlActions.Stop => TestsStopOnly,
             OwnerControlKinds.Tests when number is not > 0 => TestsNeedNumber,
+            OwnerControlKinds.Review when number is not > 0 => ReviewNeedsNumber,
             OwnerControlKinds.Audit when number is not null => AuditHasNoNumber,
             _ => null,
         };

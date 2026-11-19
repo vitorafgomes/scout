@@ -238,12 +238,19 @@ const CONTROL_STATUSES: readonly ControlStatus[] = [
   'expired',
 ];
 
-/** A job the owner controls from the bell: an audit by its repository, a test run by its pull request. */
+/** A job the owner controls from the bell: an audit by its repository, a review job or a test run by its pull request. */
 export type JobControlRequest =
   | {
       readonly kind: 'audit';
       readonly owner: string;
       readonly repo: string;
+      readonly action: JobControlAction;
+    }
+  | {
+      readonly kind: 'review';
+      readonly owner: string;
+      readonly repo: string;
+      readonly number: number;
       readonly action: JobControlAction;
     }
   | {

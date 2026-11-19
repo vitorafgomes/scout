@@ -123,4 +123,14 @@ public sealed class GitHubPluginMetadataTests
 
         function!.Metadata.Parameters.Single(p => p.Name == parameter).Description.ShouldNotBeNullOrWhiteSpace();
     }
+
+    [Fact]
+    public void Get_pull_request_says_to_start_a_review_job_when_diffs_were_left_out()
+    {
+        BuildPlugin().TryGetFunction("get_pull_request", out var function).ShouldBeTrue();
+
+        function!.Metadata.Description.ShouldContain(
+            "to review a pull request whose diffs were left out, start a review job with start_pull_request_review; to read one file, use get_pull_request_file.",
+            customMessage: "the description says to start a review job when diffs were left out, and keeps get_pull_request_file for one file");
+    }
 }

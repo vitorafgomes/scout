@@ -76,6 +76,7 @@ public sealed class HostReviewTurnTests
                 "GitHubActions.reply_to_review_comment",
                 "GitHubActions.run_pull_request_tests",
                 "GitHubActions.snapshot_repository",
+                "GitHubActions.start_pull_request_review",
                 "GitHubActions.submit_pull_request_review",
             ], "a code review must always add comments on the pull request and never open issues");
         }

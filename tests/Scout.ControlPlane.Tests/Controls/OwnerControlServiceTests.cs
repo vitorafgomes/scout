@@ -43,6 +43,10 @@ public sealed class OwnerControlServiceTests : IDisposable
         { "tests", "acme", "shop", null, "stop", OwnerControlService.TestsNeedNumber },
         { "tests", "acme", "shop", 0, "stop", OwnerControlService.TestsNeedNumber },
         { "audit", "acme", "shop", 42, "stop", OwnerControlService.AuditHasNoNumber },
+        { "review", "acme", "shop", null, "pause", OwnerControlService.ReviewNeedsNumber },
+        { "review", "acme", "shop", 0, "stop", OwnerControlService.ReviewNeedsNumber },
+        { "review", "acme", "shop", -3, "continue", OwnerControlService.ReviewNeedsNumber },
+        { "review", "acme", "shop", 12, "restart", OwnerControlService.UnknownAction },
     };
 
     [Theory]
@@ -54,7 +58,7 @@ public sealed class OwnerControlServiceTests : IDisposable
 
         var answer = await service.RequestAsync(kind, owner, repo, number, action, CancellationToken.None);
 
-        answer.ShouldBe(new OwnerControlAnswer(false, reason));
+        answer.ShouldBe(new OwnerControlAnswer(false, reason), $"{kind} {action} on number {number?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "none"} is refused with its reason");
         (await service.TakeNextAsync(CancellationToken.None)).ShouldBeNull();
     }
 
@@ -63,6 +67,9 @@ public sealed class OwnerControlServiceTests : IDisposable
     [InlineData("audit", null, "continue", "acme/shop")]
     [InlineData("audit", null, "stop", "acme/shop")]
     [InlineData("tests", 42, "stop", "acme/shop#42")]
+    [InlineData("review", 12, "pause", "acme/shop#12")]
+    [InlineData("review", 12, "continue", "acme/shop#12")]
+    [InlineData("review", 12, "stop", "acme/shop#12")]
     public async Task A_control_that_applies_is_queued_and_handed_to_the_worker_once(string kind, int? number, string action, string target)
     {
         var service = Service();
@@ -73,8 +80,26 @@ public sealed class OwnerControlServiceTests : IDisposable
 
         (answer.Accepted, answer.Reason).ShouldBe((true, OwnerControlService.Queued));
         taken.ShouldNotBeNull();
-        (taken.Id, taken.Kind, taken.Target, taken.Action).ShouldBe((answer.ControlId, kind, target, action));
+        (taken.Id, taken.Kind, taken.Target, taken.Action).ShouldBe((answer.ControlId, kind, target, action), $"a {kind} control is queued and names {target}");
         again.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("pause", "Pause review")]
+    [InlineData("continue", "Continue review")]
+    [InlineData("stop", "Stop review")]
+    public async Task A_review_control_is_kept_in_the_write_log_as_the_owners_on_its_pull_request(string action, string logged)
+    {
+        var log = Log();
+        var service = Service(log: log);
+        var asked = await service.RequestAsync("review", "acme", "shop", 12, action, CancellationToken.None);
+        await service.TakeNextAsync(CancellationToken.None);
+
+        await service.SettleAsync(asked.ControlId!, OwnerControlStatuses.Applied, "The sentence.", CancellationToken.None);
+
+        var entry = (await log.ListAsync(5, CancellationToken.None)).ShouldHaveSingleItem();
+        (entry.Action, entry.Target, entry.Outcome, entry.ApprovedBy, entry.ControlStatus)
+            .ShouldBe((logged, "acme/shop#12", "The sentence.", "owner", "applied"), "a review control is logged on owner/repo#number");
     }
 
     [Fact]

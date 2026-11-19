@@ -29,7 +29,7 @@ public sealed class AuditWorkerTests : IDisposable
     private SqliteAuditStore Store() => new(Path.Combine(_folder.Path, "audit.db"), TimeProvider.System);
 
     private static AuditWorker Worker(IAuditJobStore store, ScriptedChat chat, RecordingNotifier notifier, AuditSignal? signal = null, Kernel? kernel = null) =>
-        new(store, Kernels.Runner(kernel ?? Kernels.Audit(), chat), notifier, signal ?? new AuditSignal(), NullLogger<AuditWorker>.Instance);
+        new(store, Kernels.Runner(kernel ?? Kernels.Audit(), chat), notifier, signal ?? new AuditSignal(), new FakePullRequests(() => null), NullLogger<AuditWorker>.Instance);
 
     private static string AreaOf(string request) => request.Split('\n')[0];
 
@@ -579,7 +579,7 @@ public sealed class AuditWorkerTests : IDisposable
         var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
         var logger = new ErrorLogger<AuditWorker>();
         AuditBatchRunner brokenRunner = null!;
-        using var worker = new AuditWorker(store, brokenRunner, new RecordingNotifier(), new AuditSignal(), logger);
+        using var worker = new AuditWorker(store, brokenRunner, new RecordingNotifier(), new AuditSignal(), new FakePullRequests(() => null), logger);
 
         await worker.StartAsync(CancellationToken.None);
         await Task.WhenAny(logger.Error, Task.Delay(TimeSpan.FromSeconds(10)));
@@ -1007,7 +1007,7 @@ public sealed class AuditWorkerTests : IDisposable
         var signal = new AuditSignal();
         var chat = new ScriptedChat(ReadingEveryFile());
         var notifier = new RecordingNotifier();
-        using var worker = new AuditWorker(store, Kernels.Runner(Kernels.Audit(), chat), notifier, signal, logger);
+        using var worker = new AuditWorker(store, Kernels.Runner(Kernels.Audit(), chat), notifier, signal, new FakePullRequests(() => null), logger);
         var audits = new RepositoryAudits(sqlite, signal, new AuditOptions(), new FakeSnapshots(), new FakeEnvironment(), () => Kernels.Audit(), () => "local:session", NullLogger<RepositoryAudits>.Instance);
 
         await worker.StartAsync(CancellationToken.None);
@@ -1025,23 +1025,41 @@ public sealed class AuditWorkerTests : IDisposable
     }
 
     [Fact]
-    public async Task The_worker_leaves_a_running_review_alone_and_runs_the_audit_behind_it()
+    public async Task A_running_review_is_picked_before_an_audit_and_the_audit_yields_after_its_batch()
     {
-        var review = await Store().CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
-        var audit = await Store().CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", [new("src/Orders", ["src/Orders/Checkout.cs"], 10)], null, CancellationToken.None);
         var store = Store();
-        var chat = new ScriptedChat(ReadingEveryFile());
+        var audit = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
+        string? review = null;
+        var chat = new ScriptedChat(async (history, kernel, turn) =>
+        {
+            if (turn == 1)
+            {
+                review = await store.CreateJobAsync(
+                    "acme", "shop", 12, "abc1234def", "local:session", [new("src", ["src/A.cs"], 10), new("tests", ["tests/T.cs"], 10)], null, CancellationToken.None);
+            }
+
+            await (history[1].Content!.StartsWith("Review", StringComparison.Ordinal) ? Kernels.PresentingAnEmptyReview : ReadingEveryFile())(history, kernel, turn);
+        });
         var notifier = new RecordingNotifier();
-        using var worker = Worker(store, chat, notifier);
+        var pullRequests = new FakePullRequests(() => new ReviewPullRequest("abc1234def", [new("src/A.cs", "+a"), new("tests/T.cs", "+t")]));
+        using var worker = new AuditWorker(store, Kernels.Runner(Kernels.Audit(), chat), notifier, new AuditSignal(), pullRequests, NullLogger<AuditWorker>.Instance);
 
         await worker.StartAsync(CancellationToken.None);
         await Task.WhenAny(notifier.Done, Task.Delay(TimeSpan.FromSeconds(10)));
         await worker.StopAsync(CancellationToken.None);
 
-        notifier.Done.IsCompletedSuccessfully.ShouldBeTrue("the audit started after the review ran to its end");
-        chat.Turns.Select(t => AreaOf(t.Request)).ShouldBe(["Audit acme/shop at commit abc1234def, area src/Orders (batch 1 of 1)."]);
+        notifier.Done.IsCompletedSuccessfully.ShouldBeTrue("the audit ran to its end after the review");
+        chat.Turns.Select(t => AreaOf(t.Request)).ShouldBe(
+        [
+            "Audit acme/shop at commit abc1234def, area src/Orders (batch 1 of 3).",
+            "Review pull request acme/shop#12 at head commit abc1234def (batch 1 of 2).",
+            "Review pull request acme/shop#12 at head commit abc1234def (batch 2 of 2).",
+            "Audit acme/shop at commit abc1234def, area src/Billing (batch 2 of 3).",
+            "Audit acme/shop at commit abc1234def, area tests (batch 3 of 3).",
+        ], "a running review is picked before an audit, and the audit yields after its batch");
+        (await store.JobAsync(review!, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
         (await store.JobAsync(audit, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
-        (await store.JobAsync(review, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Running, "the worker leaves the review as it was");
-        (await store.BatchesAsync(review, CancellationToken.None)).Select(b => b.Status).ShouldBe([AuditStatus.Pending, AuditStatus.Pending, AuditStatus.Pending]);
+        notifier.Posts.Select(p => p.Text).ShouldNotContain(p => p.StartsWith("The audit of acme/shop ended", StringComparison.Ordinal) || p.StartsWith("The audit of acme/shop paused", StringComparison.Ordinal),
+            "the audit's hand-over to the review posts no notice");
     }
 }

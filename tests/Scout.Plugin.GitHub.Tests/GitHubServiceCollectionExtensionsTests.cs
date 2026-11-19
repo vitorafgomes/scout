@@ -106,9 +106,9 @@ public sealed class GitHubServiceCollectionExtensionsTests
         var actions = provider.GetServices<KernelPlugin>().Single(p => p.Name == "GitHubActions");
         actions.Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal)
             .ShouldBe([
-                "comment_on_issue", "comment_on_pull_request", "create_issue", "get_project_conventions", "get_repository_audit_status",
+                "comment_on_issue", "comment_on_pull_request", "create_issue", "get_project_conventions", "get_pull_request_review_status", "get_repository_audit_status",
                 "give_pull_request_verdict", "pause_repository_audit", "remember_project_conventions", "reply_to_review_comment", "run_pull_request_tests",
-                "snapshot_repository", "start_repository_audit", "stop_repository_audit", "submit_pull_request_review",
+                "snapshot_repository", "start_pull_request_review", "start_repository_audit", "stop_repository_audit", "submit_pull_request_review",
             ]);
         provider.GetServices<WriteFunctionDeclaration>()
             .Select(d => (d.PluginName, d.FunctionName, d.FeatureId, d.Scope))
@@ -122,6 +122,7 @@ public sealed class GitHubServiceCollectionExtensionsTests
                 ("GitHubActions", "remember_project_conventions", "github", "Scout's data folder"),
                 ("GitHubActions", "snapshot_repository", "github", "Scout's data folder"),
                 ("GitHubActions", "start_repository_audit", "github", "Scout's data folder"),
+                ("GitHubActions", "start_pull_request_review", "github", "Scout's data folder"),
                 ("GitHubActions", "stop_repository_audit", "github", "Scout's data folder"),
                 ("GitHubActions", "pause_repository_audit", "github", "Scout's data folder"),
                 ("GitHubActions", "run_pull_request_tests", "github", "Local container"),

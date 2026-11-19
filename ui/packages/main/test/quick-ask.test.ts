@@ -633,6 +633,60 @@ describe('quick ask: one conversation for every window', () => {
     expect(turns[1]?.notice).toBe(true);
   });
 
+  it.each([
+    [
+      'a review batch line',
+      'Review of acme/api#52: 6 of 17 batches done, 51 of 133 files read, 3 findings so far, reading tests/orders.',
+      false,
+    ],
+    [
+      'a review resume line',
+      'Review of acme/api#52 resumed: 6 of 17 batches done, 51 of 133 files read, 3 findings so far.',
+      false,
+    ],
+    [
+      "the owner's pause of a review",
+      'The review of acme/api#52 paused: you paused it. Ask Scout to continue the review of acme/api#52 to resume it from the first batch not done.',
+      false,
+    ],
+    [
+      'a review paused at 60 minutes',
+      'The review of acme/api#52 paused: it ran for 60 minutes with 11 batches left. Ask Scout to continue the review of acme/api#52 to give it 60 more minutes.',
+      true,
+    ],
+    [
+      'a review paused by the AI Source',
+      "The review of acme/api#52 paused: the AI provider's usage limit was reached. Ask Scout to review acme/api#52 again to resume it from the first batch not done.",
+      true,
+    ],
+    ['the review card', 'Review of acme/api#52 at 4cf6972:\n\n```scout-findings\n{}\n```', true],
+    [
+      'the stopped review card',
+      'Review of acme/api#52 at 4cf6972, stopped at your request:\n\n```scout-findings\n{}\n```',
+      true,
+    ],
+    [
+      'a review stopped with nothing read',
+      'The review of acme/api#52 ended at your request: nothing was read.',
+      true,
+    ],
+    [
+      'an audit batch line, left as it was',
+      'Audit of acme/shop, src (3 of 8, 4 findings so far):',
+      true,
+    ],
+  ] as const)(
+    '%s reaches the chat only when the owner needs it there',
+    async (_kind, text, inChat) => {
+      const t = await setup();
+
+      t.quickAsk.handleWorkerLine(JSON.stringify({ id: null, event: 'notice', text }));
+
+      const turns = (await t.invoke(CHANNEL.localGetTurns, sender())) as { reply: string }[];
+      expect(turns.map((x) => x.reply)).toEqual(inChat ? [text] : []);
+    },
+  );
+
   it('a fail with a null id is still dropped and leaves the running question as it was', async () => {
     const t = await setup();
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'hi' });

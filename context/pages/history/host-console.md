@@ -1,14 +1,25 @@
 ---
 title: "Host console"
-version: "1.2"
+version: "1.4"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-19
+changes: "v1.4 (2026-11-19): JobControlPoller passes a review's control to the audit library. v1.3 (2026-11-17): the host joins the review job to the GitHub plugin. v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-19 - JobControlPoller passes a review's control to the audit library
+
+- **What changed:** a control of kind `review` goes to `IPullRequestReviews.ControlAsync` with its pull request number and is settled once with its sentence. Without the reviews in the host, or without a number, it is settled as not applied (`src/Scout.Host.Console/JobControlPoller.cs:174`, `:176`). The owner's decision is [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]].
+- **Tests:** `tests/Scout.Host.Console.Tests/JobControlPollerTests.cs:86`, `:99`, `:114`, `:324`.
+- **Also:** `PullRequestReviewsAdapter` relays the plugin's new `notListed`, the count of changed files GitHub did not list, to the audit library's `StartAsync` (`src/Scout.Host.Console/PullRequestReviewsAdapter.cs:17`, `tests/Scout.Host.Console.Tests/PullRequestReviewsAdapterTests.cs:12`). 377 tests in the project.
+
+## 2026-11-17 - The host joins the review job to the GitHub plugin
+
+- **What changed:** `PullRequestReviewsAdapter` maps the plugin's start and status onto the audit library's review service, a start that ran answering its sentence and each warning of its checks; `ReviewPullRequestsAdapter` reads the pull request's changed files and, alone, its head commit for the review worker (`src/Scout.Host.Console/HostComposition.cs:102`, `:103`). The kernel holds 60 functions, 22 of them declared writes.
+- **Tests:** `tests/Scout.Host.Console.Tests/HostAuditTurnTests.cs:247`, `:266`, `:336` to `:424`, `tests/Scout.Host.Console.Tests/FunctionDeclarationTests.cs:55`; 367 tests in the project after the card tests of 2026-11-18.
 
 ## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
 

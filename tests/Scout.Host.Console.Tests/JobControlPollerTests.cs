@@ -28,12 +28,13 @@ public sealed class JobControlPollerTests
 {
     private readonly ScriptedControls _controls = new();
     private readonly Scout.Audit.IRepositoryAudits _audits = Substitute.For<Scout.Audit.IRepositoryAudits>();
+    private readonly Scout.Audit.IPullRequestReviews _reviews = Substitute.For<Scout.Audit.IPullRequestReviews>();
     private readonly RunningTests _running = new();
     private readonly PostedNotices _notices = new();
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 11, 10, 9, 0, 0, TimeSpan.Zero));
 
     private JobControlPoller Poller(Scout.Audit.IRepositoryAudits? audits = null, IJobControls? controls = null, RunningTests? tests = null) =>
-        new(controls ?? _controls, _notices, NullLogger<JobControlPoller>.Instance, audits ?? _audits, tests ?? _running, _time);
+        new(controls ?? _controls, _notices, NullLogger<JobControlPoller>.Instance, audits ?? _audits, tests ?? _running, _time, _reviews);
 
     private RunningTests.Run RunThatEnds(bool stopped, string? origin = "local:session")
     {
@@ -78,6 +79,52 @@ public sealed class JobControlPollerTests
         await new JobControlPoller(_controls, _notices, NullLogger<JobControlPoller>.Instance, audits: null, _running, _time).RunOnceAsync(CancellationToken.None);
 
         _controls.Settled.ShouldBe([("c1", "not applied", JobControlPoller.NoAudits)]);
+    }
+
+    [Theory]
+    [MemberData(nameof(AuditControls))]
+    public async Task A_review_control_is_applied_by_the_audit_librarys_reviews_and_settled_once_with_its_status_and_sentence(string action, bool changed, string status)
+    {
+        _reviews.ControlAsync("acme", "shop", 12, action, Arg.Any<CancellationToken>()).Returns(new AuditControlAnswer(changed, $"The review {action} sentence."));
+        _controls.Waiting.Enqueue(new DomainControl("c1", "review", "acme", "shop", 12, action));
+
+        var ran = await Poller().RunOnceAsync(CancellationToken.None);
+        var again = await Poller().RunOnceAsync(CancellationToken.None);
+
+        (ran, again).ShouldBe((true, false));
+        _controls.Settled.ShouldBe([("c1", status, $"The review {action} sentence.")], "a review control is applied through the audit library by its pull request and settled once");
+    }
+
+    [Fact]
+    public async Task Without_reviews_or_a_number_a_review_control_is_settled_as_not_applied()
+    {
+        _controls.Waiting.Enqueue(new DomainControl("c1", "review", "acme", "shop", 12, "pause"));
+        _controls.Waiting.Enqueue(new DomainControl("c2", "review", "acme", "shop", null, "pause"));
+
+        await new JobControlPoller(_controls, _notices, NullLogger<JobControlPoller>.Instance, _audits, _running, _time, reviews: null).RunOnceAsync(CancellationToken.None);
+        await Poller().RunOnceAsync(CancellationToken.None);
+
+        _controls.Settled.ShouldBe(
+            [("c1", "not applied", JobControlPoller.NoReviews), ("c2", "not applied", "Not applied: Scout does not pause a review job.")],
+            "without the audit library's reviews, or without a number, a review control applies nothing");
+        await _reviews.DidNotReceiveWithAnyArgs().ControlAsync(default!, default!, default, default!, default);
+    }
+
+    [Fact]
+    public async Task A_review_control_that_throws_is_settled_as_not_applied_and_the_poller_keeps_running()
+    {
+        _reviews.ControlAsync("acme", "shop", 12, "stop", Arg.Any<CancellationToken>()).Returns<AuditControlAnswer>(_ => throw new InvalidOperationException("the database is locked"));
+        _controls.Waiting.Enqueue(new DomainControl("c1", "review", "acme", "shop", 12, "stop"));
+        _controls.Waiting.Enqueue(new DomainControl("c2", "audit", "acme", "shop", null, "pause"));
+        _audits.ControlAsync("acme", "shop", "pause", Arg.Any<CancellationToken>()).Returns(new AuditControlAnswer(true, "Paused."));
+        var poller = Poller();
+
+        await poller.RunOnceAsync(CancellationToken.None);
+        await poller.RunOnceAsync(CancellationToken.None);
+
+        _controls.Settled.ShouldBe(
+            [("c1", "not applied", "Not applied: it failed in Scout (InvalidOperationException)."), ("c2", "applied", "Paused.")],
+            "a review control that throws is settled as not applied, and the next control is still applied");
     }
 
     /// <summary>A stop on a test run, by how the runs of that pull request ended: the status, the sentence and the notices.</summary>
@@ -274,6 +321,36 @@ public sealed class JobControlPollerTests
     }
 
     [Fact]
+    public async Task Over_the_real_worker_gate_a_desktop_review_click_reaches_the_poller_once_and_the_write_log_keeps_it_on_its_pull_request()
+    {
+        var directory = Directory.CreateTempSubdirectory("scout-job-controls-").FullName;
+        try
+        {
+            _reviews.ControlAsync("acme", "shop", 12, "pause", Arg.Any<CancellationToken>())
+                .Returns(new AuditControlAnswer(true, "Paused the review of acme/shop#12; a batch in progress finishes first."));
+            var options = Options.Create(new FeatureStateStoreOptions { FilePath = Path.Combine(directory, "features.json") });
+            var log = new JsonLinesWriteLog(options, NullLogger<JsonLinesWriteLog>.Instance);
+            using var service = new OwnerControlService(
+                new JsonFileOwnerControlQueue(options, NullLogger<JsonFileOwnerControlQueue>.Instance), log, NullLogger<OwnerControlService>.Instance);
+            var asked = await service.RequestAsync("review", "acme", "shop", 12, "pause", CancellationToken.None);
+            await using var server = await GrpcWriteGateTests.WorkerGateServer.StartAsync(new ControlGate(service));
+            using var gate = new GrpcWriteGate(server.SocketPath, "worker-session-token");
+
+            var ran = await Poller(controls: gate).RunOnceAsync(CancellationToken.None);
+            var again = await Poller(controls: gate).RunOnceAsync(CancellationToken.None);
+
+            (ran, again).ShouldBe((true, false), "the review click reaches the poller once");
+            var entry = (await log.ListAsync(5, CancellationToken.None)).ShouldHaveSingleItem();
+            (entry.Action, entry.Target, entry.Outcome, entry.ApprovedBy, entry.ActionId, entry.ControlStatus)
+                .ShouldBe(("Pause review", "acme/shop#12", "Paused the review of acme/shop#12; a batch in progress finishes first.", "owner", asked.ControlId, "applied"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void The_poller_runs_only_when_the_worker_reaches_the_control_plane()
     {
         static List<IHostedService> Hosted(bool gate)
@@ -342,6 +419,10 @@ public sealed class JobControlPollerTests
             if (await controls.TakeNextAsync(context.CancellationToken) is { } taken)
             {
                 response.Control = new Scout.ControlPlane.Contracts.JobControl { Id = taken.Id, Kind = taken.Kind, Owner = taken.Owner, Repo = taken.Repo, Action = taken.Action };
+                if (taken.Number is { } number)
+                {
+                    response.Control.Number = number;
+                }
             }
 
             return response;

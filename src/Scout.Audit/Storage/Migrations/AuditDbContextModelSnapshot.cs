@@ -204,6 +204,10 @@ namespace Scout.Audit.Storage.Migrations
                         .HasColumnName("repo")
                         .UseCollation("NOCASE");
 
+                    b.Property<DateTime?>("Resumed")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("resumed");
+
                     b.Property<DateTime>("Started")
                         .HasColumnType("TEXT")
                         .HasColumnName("started");

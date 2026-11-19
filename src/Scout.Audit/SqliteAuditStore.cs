@@ -103,6 +103,11 @@ internal sealed class SqliteAuditStore : IAuditJobStore
         });
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<AuditBatch>> PendingBatchesAsync(string jobId, int count, CancellationToken ct) =>
+        RunAsync<IReadOnlyList<AuditBatch>>("read", async db =>
+            await Batches(db.Batches.Where(b => b.JobId == jobId && b.Status == Pending).OrderBy(b => b.Seq).Take(count)).ToListAsync(ct).ConfigureAwait(false));
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<AuditFinding>> FindingsAsync(string jobId, CancellationToken ct) =>
         RunAsync<IReadOnlyList<AuditFinding>>("read", async db =>
             await Findings(db, jobId)
@@ -180,7 +185,7 @@ internal sealed class SqliteAuditStore : IAuditJobStore
         RunAsync("save", db => db.Jobs
             .Where(j => j.Id == jobId && j.Status == Paused)
             .ExecuteUpdateAsync(
-                set => set.SetProperty(j => j.Status, Running).SetProperty(j => j.PausedReason, (string?)null).SetProperty(j => j.Origin, j => origin ?? j.Origin),
+                set => set.SetProperty(j => j.Status, Running).SetProperty(j => j.PausedReason, (string?)null).SetProperty(j => j.Origin, j => origin ?? j.Origin).SetProperty(j => j.Resumed, Now()),
                 ct));
 
     /// <inheritdoc />
@@ -237,7 +242,7 @@ internal sealed class SqliteAuditStore : IAuditJobStore
     }
 
     private static IQueryable<AuditJob> Jobs(IQueryable<AuditJobRow> rows) =>
-        rows.Select(j => new AuditJob(j.Id, j.Owner, j.Repo, j.CommitSha, j.Origin, j.Status, j.PausedReason, j.Kind, j.PullRequest));
+        rows.Select(j => new AuditJob(j.Id, j.Owner, j.Repo, j.CommitSha, j.Origin, j.Status, j.PausedReason, j.Kind, j.PullRequest, DateTime.SpecifyKind(j.Started, DateTimeKind.Utc)));
 
     private static IQueryable<AuditBatch> Batches(IQueryable<AuditBatchRow> rows) =>
         rows.Select(b => new AuditBatch(b.Seq, b.Area, b.Files, b.Status, b.FilesRead, b.Failure, b.Partial));
@@ -326,4 +331,36 @@ internal sealed class SqliteAuditStore : IAuditJobStore
         new(string.Create(CultureInfo.InvariantCulture, $"Scout could not {operation} the audit database (SQLite error {ex.SqliteErrorCode})."), ex);
 
     private DateTime Now() => _time.GetUtcNow().UtcDateTime;
+
+    /// <inheritdoc />
+    public Task<TimeSpan> RunningTimeAsync(string jobId, CancellationToken ct) =>
+        RunAsync("read", async db =>
+        {
+            var resumed = await db.Jobs.Where(j => j.Id == jobId).Select(j => j.Resumed).SingleOrDefaultAsync(ct).ConfigureAwait(false);
+            var intervals = await db.Batches.Where(b => b.JobId == jobId && b.Started != null && b.Finished != null && (resumed == null || b.Started >= resumed))
+                .Select(b => new { Start = b.Started!.Value, End = b.Finished!.Value }).ToListAsync(ct).ConfigureAwait(false);
+            var total = TimeSpan.Zero;
+            DateTime? from = null;
+            DateTime? to = null;
+            foreach (var interval in intervals.OrderBy(i => i.Start))
+            {
+                if (to is { } end && interval.Start <= end)
+                {
+                    to = interval.End > end ? interval.End : end;
+                    continue;
+                }
+
+                total += to - from ?? TimeSpan.Zero;
+                (from, to) = (interval.Start, interval.End);
+            }
+
+            return total + (to - from ?? TimeSpan.Zero);
+        });
+
+    /// <inheritdoc />
+    public Task<ReviewPreflight?> PreflightAsync(string jobId, CancellationToken ct) =>
+        RunAsync("read", async db =>
+            await db.Jobs.Where(j => j.Id == jobId).Select(j => j.Preflight).SingleOrDefaultAsync(ct).ConfigureAwait(false) is { } kept
+                ? JsonSerializer.Deserialize<ReviewPreflight>(kept, JsonSerializerOptions.Web)
+                : null);
 }

@@ -52,13 +52,13 @@ public sealed class FunctionDeclarationTests : IDisposable
     private static IEnumerable<string> AuditJob() => AuditBatchRunner.Offered.Select(o => $"{o.Plugin}.{o.Function}");
 
     [Fact]
-    public void The_Host_Kernel_Holds_All_58_Functions_And_21_Of_Them_Are_Declared_Writes()
+    public void The_Host_Kernel_Holds_All_60_Functions_And_22_Of_Them_Are_Declared_Writes()
     {
         var functions = KernelFunctions();
 
-        functions.Count.ShouldBe(58);
+        functions.Count.ShouldBe(60);
         functions.ShouldBeUnique();
-        Writes().Count.ShouldBe(21);
+        Writes().Count.ShouldBe(22);
         Writes().ShouldBeSubsetOf(functions);
     }
 
@@ -88,7 +88,7 @@ public sealed class FunctionDeclarationTests : IDisposable
         var writes = Writes();
 
         ChatFunctions.General.Where(writes.Contains).ShouldBeEmpty();
-        ChatFunctions.General.ShouldBe(KernelFunctions().Where(f => !writes.Contains(f)), ignoreOrder: true);
+        ChatFunctions.General.ShouldBe(KernelFunctions().Where(f => !writes.Contains(f)), ignoreOrder: true, customMessage: "the general set is every read the kernel holds, the review job's status included");
     }
 
     [Fact]

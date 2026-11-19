@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.50"
+version: "1.52"
 date: 2026-11-08
-updated: 2026-11-15
-changes: "v1.50 (2026-11-15): Approve when the checks pass. v1.49 (2026-11-15): an update that fails says its own reason, never the network by default. v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+updated: 2026-11-19
+changes: "v1.52 (2026-11-19): the review job in the bell, its controls, the quiet chat and the card's measured line. v1.51 (2026-11-17): the data folder row names the review job. v1.50 (2026-11-15): Approve when the checks pass. v1.49 (2026-11-15): an update that fails says its own reason, never the network by default. v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,21 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-19 - The review job in the bell, its controls, the quiet chat and the card's measured line
+
+- **Asked for:** the owner's decisions of 2026-11-19 ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]). The Review job group of the Main artboard was drawn first and approved by the owner before the code ([[pages/conventions/desktop-prototype]]).
+- **What changed:**
+  - One bell entry per review job, `reviewjob:owner/repo#n`, from the worker's lines: running with the batches, the area, the files read and the findings so far; paused; done or stopped with the card's counts (`ui/packages/main/src/notifications/sources.ts:107`, `:154`).
+  - Pause and Stop on a running one, Continue and Stop on a paused one (`ui/packages/shared/src/ipc-contract.ts:2070`), sent as kind `review` with the pull request number on the existing `scout:notifications.control` (`ui/packages/main/src/notifications/job-controls.ts:101`). A Stop on a paused review, and the plain "is done" sentence that answers a Stop, end the entry as stopped (`:216`, `:310`).
+  - The new action `open-chat`, Open in the chat, on a done or stopped entry, opens the chat in the window (`ui/packages/renderer/src/app/shell/notification-bell.component.ts:114`).
+  - The quiet chat: a review's progress line, its resume and the owner's pause never become chat turns (`ui/packages/main/src/notifications/sources.ts:234`, `ui/packages/main/src/quick-ask/quick-ask.ts:1884`).
+  - The card shows the measured line and the notes, kept only from a worker's notice, in place of "What Scout says it read" (`ui/packages/renderer/src/app/core/review-findings.ts:205`, `ui/packages/renderer/src/app/core/review-findings.component.ts:347`).
+- **Tests:** `ui/packages/main/test/notifications-sources.test.ts:587`; `ui/packages/main/test/notifications-job-controls.test.ts:1458`; `ui/packages/main/test/quick-ask.test.ts:636`; `ui/packages/shared/test/ipc-contract.test.ts:334`; `ui/packages/renderer/src/app/core/review-findings.spec.ts:457`; `ui/packages/renderer/src/app/chat/chat.component.spec.ts:658`; `ui/packages/renderer/src/app/core/review-findings.component.spec.ts:2034`; `ui/packages/renderer/src/app/shell/notification-bell.component.spec.ts:625`.
+
+## 2026-11-17 - The data folder row names the review job
+
+The Features screen's fixtures, its prototype spec, the end-to-end spec of the loaded features and the Features artboard carry the GitHub feature's `Scout's data folder` row as the catalog now gives it: the summary names review jobs, and a sentence says Scout keeps the review job of a pull request too large for one turn. Text only; no component changed.
 
 ## 2026-11-15 - Approve when the checks pass
 

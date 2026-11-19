@@ -1,9 +1,9 @@
 ---
 title: "Conversation - history"
-version: "1.2"
+version: "1.3"
 date: 2026-11-09
-updated: 2026-11-11
-changes: "v1.2 (2026-11-11) a task the turn started keeps no owner authority after the turn."
+updated: 2026-11-17
+changes: "v1.3 (2026-11-17): the general set offers the review job's status. v1.2 (2026-11-11) a task the turn started keeps no owner authority after the turn."
 page_type: reference
 status: artefact
 description: "What changed in the conversation core and when."
@@ -22,6 +22,11 @@ reliability: high
 # Conversation - history
 
 > Dated changes to [[pages/services/conversation]]; the service page states how it works now.
+
+## 2026-11-17 - The general set offers the review job's status
+
+- **What changed:** `GitHubActions.get_pull_request_review_status`, a read, joins the functions a turn with no skill is offered (`src/Scout.Conversation/Routing/ChatFunctions.cs:34`).
+- **Tests:** `tests/Scout.Host.Console.Tests/FunctionDeclarationTests.cs:86`, the general set is every kernel function that is not a write.
 
 ## 2026-11-11 - A model the AI Source does not have is said in the chat, not as a failure
 

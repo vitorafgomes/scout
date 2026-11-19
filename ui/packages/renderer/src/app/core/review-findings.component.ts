@@ -61,6 +61,16 @@ export class ReviewFindingsPipe implements PipeTransform {
   imports: [MarkdownPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (review().coverage; as coverage) {
+      <section class="coverage" data-test="coverage" aria-label="What Scout read">
+        <p class="coverage-read" data-test="coverage-read">
+          {{ coverage.read }} of {{ coverage.of }} files read
+        </p>
+        @for (line of review().notes ?? []; track $index) {
+          <p class="coverage-note" data-test="coverage-note">{{ line }}</p>
+        }
+      </section>
+    }
     @if (review().checks || review().tests) {
       <section class="tests" data-test="tests" aria-label="Tests">
         <div class="chips">
@@ -334,7 +344,7 @@ export class ReviewFindingsPipe implements PipeTransform {
         }
         @if (clean()) {
           <p class="clean" data-test="clean">No findings.</p>
-          @if (review().read; as read) {
+          @if (review().coverage === undefined && review().read; as read) {
             <p class="clean" data-test="clean-read">What Scout says it read: {{ read }}</p>
           }
         } @else if (allDismissed()) {

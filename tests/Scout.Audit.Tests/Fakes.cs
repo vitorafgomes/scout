@@ -89,6 +89,10 @@ internal sealed class RacingStore(SqliteAuditStore store) : IAuditJobStore
 
     public Func<Task>? BeforeCreate { get; init; }
 
+    public Func<Task>? BeforeComplete { get; init; }
+
+    public Func<Task>? BeforePreflight { get; set; }
+
     public async Task<string> CreateJobAsync(
         string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct)
     {
@@ -112,19 +116,49 @@ internal sealed class RacingStore(SqliteAuditStore store) : IAuditJobStore
 
     public Task<AuditJob?> JobAsync(string id, CancellationToken ct) => store.JobAsync(id, ct);
 
-    public Task<AuditJob?> LatestJobAsync(string owner, string repo, int? pullRequest, CancellationToken ct) => store.LatestJobAsync(owner, repo, pullRequest, ct);
+    /// <summary>Rewrites each latest-job read: the row the store answered and the read's number, from 1.</summary>
+    public Func<AuditJob?, int, AuditJob?>? OnLatest { get; init; }
+
+    private int _latestReads;
+
+    public async Task<AuditJob?> LatestJobAsync(string owner, string repo, int? pullRequest, CancellationToken ct)
+    {
+        var job = await store.LatestJobAsync(owner, repo, pullRequest, ct);
+        return OnLatest is null ? job : OnLatest(job, ++_latestReads);
+    }
 
     public Task<IReadOnlyList<AuditBatch>> BatchesAsync(string jobId, CancellationToken ct) => store.BatchesAsync(jobId, ct);
 
     public Task<(AuditBatch? Next, int Count)> NextBatchAsync(string jobId, CancellationToken ct) => store.NextBatchAsync(jobId, ct);
 
+    public Task<IReadOnlyList<AuditBatch>> PendingBatchesAsync(string jobId, int count, CancellationToken ct) => store.PendingBatchesAsync(jobId, count, ct);
+
     public Task<IReadOnlyList<AuditFinding>> FindingsAsync(string jobId, CancellationToken ct) => store.FindingsAsync(jobId, ct);
 
     public Task BeginBatchAsync(string jobId, int order, CancellationToken ct) => store.BeginBatchAsync(jobId, order, ct);
 
-    public Task<IReadOnlyList<AuditFinding>> CompleteBatchAsync(
-        string jobId, int order, IReadOnlyList<string> filesRead, IReadOnlyList<AuditFinding> findings, CancellationToken ct) =>
-        store.CompleteBatchAsync(jobId, order, filesRead, findings, ct);
+    public async Task<IReadOnlyList<AuditFinding>> CompleteBatchAsync(
+        string jobId, int order, IReadOnlyList<string> filesRead, IReadOnlyList<AuditFinding> findings, CancellationToken ct)
+    {
+        if (BeforeComplete is not null)
+        {
+            await BeforeComplete();
+        }
+
+        return await store.CompleteBatchAsync(jobId, order, filesRead, findings, ct);
+    }
+
+    public Task<TimeSpan> RunningTimeAsync(string jobId, CancellationToken ct) => store.RunningTimeAsync(jobId, ct);
+
+    public async Task<ReviewPreflight?> PreflightAsync(string jobId, CancellationToken ct)
+    {
+        if (BeforePreflight is not null)
+        {
+            await BeforePreflight();
+        }
+
+        return await store.PreflightAsync(jobId, ct);
+    }
 
     public Task NotCoveredAsync(string jobId, int order, IReadOnlyList<string> filesRead, string reason, CancellationToken ct) =>
         store.NotCoveredAsync(jobId, order, filesRead, reason, ct);
@@ -178,7 +212,53 @@ internal static class Kernels
             findings = findings.Select(f => new { id = f.Id, severity = "block", title = f.Title, path = f.Path, line = 12, why = "Why.", fix = "Fix." }),
         }) + "\n```";
 
-    public static Kernel Audit(Func<KernelArguments, string>? snapshot = null, Action? conventionsRead = null, Func<string, Task<string>>? read = null)
+    /// <summary>A review's block as <c>present_review_findings</c> attaches it: no kind, the pull request's number and its head commit.</summary>
+    public static string ReviewBlock(int number, string verdict, params (string Id, string Title, string Path)[] findings) =>
+        "```scout-findings\n" + System.Text.Json.JsonSerializer.Serialize(new
+        {
+            repository = "acme/shop",
+            number,
+            commit = "abc1234",
+            verdict,
+            findings = findings.Select(f => new { id = f.Id, severity = "fix", title = f.Title, path = f.Path, line = 3, why = "Why.", fix = "Fix." }),
+        }) + "\n```";
+
+    /// <summary>A review batch's model that presents an empty list for acme/shop#12 at abc1234: a batch read with no findings.</summary>
+    public static readonly Func<ChatHistory, Kernel, int, Task> PresentingAnEmptyReview = (_, kernel, _) => PresentReviewAsync(kernel, ReviewBlock(12, "ready to merge"));
+
+    /// <summary>The model presenting <paramref name="block"/>, with the repository and the number the block names as the call's arguments.</summary>
+    public static Task PresentReviewAsync(Kernel kernel, string block)
+    {
+        using var named = System.Text.Json.JsonDocument.Parse(block[(block.IndexOf('\n', StringComparison.Ordinal) + 1)..block.LastIndexOf("```", StringComparison.Ordinal)]);
+        return kernel.InvokeAsync("GitHub", "present_review_findings", new KernelArguments
+        {
+            ["block"] = block,
+            ["repository"] = named.RootElement.GetProperty("repository").GetString(),
+            ["number"] = named.RootElement.TryGetProperty("number", out var number) ? number.GetInt32() : null,
+        });
+    }
+
+    /// <summary>
+    /// What <c>present_review_findings</c> attaches when the review job calls it with its own arguments: the block with no
+    /// kind for the repository, number and commit given, the verdict, the read line and the findings as given.
+    /// </summary>
+    public static string ReviewCard(KernelArguments arguments)
+    {
+        var block = "```scout-findings\n" + System.Text.Json.JsonSerializer.Serialize(new
+        {
+            repository = arguments["repository"]?.ToString(),
+            number = int.Parse(arguments["number"]!.ToString()!, System.Globalization.CultureInfo.InvariantCulture),
+            commit = arguments.TryGetValue("commit", out var commit) ? commit?.ToString() : null,
+            verdict = arguments["verdict"]?.ToString(),
+            read = arguments.TryGetValue("read", out var read) ? read?.ToString() : null,
+            findings = System.Text.Json.JsonDocument.Parse(arguments["findings_json"]!.ToString()!).RootElement,
+        }) + "\n```";
+        TurnAttachments.Attach(block);
+        return "Findings recorded.";
+    }
+
+    public static Kernel Audit(
+        Func<KernelArguments, string>? snapshot = null, Action? conventionsRead = null, Func<string, Task<string>>? read = null, Func<KernelArguments, string>? presentReview = null)
     {
         var kernel = new Kernel();
         kernel.Plugins.Add(KernelPluginFactory.CreateFromFunctions("GitHub",
@@ -187,6 +267,16 @@ internal static class Kernels
             KernelFunctionFactory.CreateFromMethod((string query) => "no hits", "search_code"),
             KernelFunctionFactory.CreateFromMethod((string owner, string repo) => "files", "list_repository_files"),
             KernelFunctionFactory.CreateFromMethod((string block) => { TurnAttachments.Attach(block); return "Findings recorded."; }, "present_audit_findings"),
+            KernelFunctionFactory.CreateFromMethod((KernelArguments arguments) =>
+            {
+                if (arguments.TryGetValue("block", out var block))
+                {
+                    TurnAttachments.Attach((string)block!);
+                    return "Findings recorded.";
+                }
+
+                return (presentReview ?? ReviewCard)(arguments);
+            }, "present_review_findings"),
             KernelFunctionFactory.CreateFromMethod(() => "issues", "list_issues"),
         ]));
         kernel.Plugins.Add(KernelPluginFactory.CreateFromFunctions("GitHubActions",
@@ -310,4 +400,37 @@ internal sealed class FakeEnvironment : IReviewEnvironment
     public Exception? Failure { get; set; }
 
     public bool ContainerRunsOn => Failure is null ? RunsOn : throw Failure;
+}
+
+/// <summary>
+/// The pull request a review reads: the answers in order, the last repeated, one counter for the reads of the files and one
+/// for the reads of the head alone, which go on in the same answers after the reads of the files; a null answer is one GitHub does not find.
+/// <see cref="OnHead"/> runs before each head read answers.
+/// </summary>
+internal sealed class FakePullRequests(params Func<ReviewPullRequest?>[] answers) : IReviewPullRequests
+{
+    public int Reads { get; private set; }
+
+    public int Heads { get; private set; }
+
+    public Func<Task>? OnHead { get; init; }
+
+    public Task<ReviewPullRequest?> ReadAsync(string owner, string repo, int number, CancellationToken ct)
+    {
+        var answer = answers[Math.Min(Reads, answers.Length - 1)];
+        Reads++;
+        return Task.FromResult(answer());
+    }
+
+    public async Task<string?> HeadAsync(string owner, string repo, int number, CancellationToken ct)
+    {
+        var answer = answers[Math.Min(Reads + Heads, answers.Length - 1)];
+        Heads++;
+        if (OnHead is not null)
+        {
+            await OnHead();
+        }
+
+        return answer()?.HeadSha;
+    }
 }

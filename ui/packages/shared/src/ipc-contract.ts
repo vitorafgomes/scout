@@ -1661,6 +1661,16 @@ export interface ReviewFindings {
   readonly tests?: ReviewTests;
   /** True when the pull request's author is the identity that would sign the review, so it cannot be approved. */
   readonly selfAuthored?: boolean;
+  /** On a review job's card, the files Scout's code counted as read of the files the pull request changes. */
+  readonly coverage?: ReviewCoverage;
+  /** On a review job's card, Scout's own sentences, each shown as one line of text. */
+  readonly notes?: readonly string[];
+}
+
+/** The files a review job read of the files a pull request changes, as Scout's code counted them. */
+export interface ReviewCoverage {
+  readonly read: number;
+  readonly of: number;
 }
 
 /** One check of a pull request: GitHub's status (`queued`, `in_progress`, `completed`) and, once completed, its conclusion. */
@@ -1997,7 +2007,8 @@ export type NotificationActionId =
   | 'open-models-transcription'
   | 'open-approvals'
   | 'review-pull-request'
-  | 'cancel-waiting-approval';
+  | 'cancel-waiting-approval'
+  | 'open-chat';
 
 export interface NotificationAction {
   readonly id: NotificationActionId;
@@ -2010,7 +2021,7 @@ export interface NotificationsActRequest {
   readonly action: NotificationActionId;
 }
 
-/** What the owner may ask of a job from its entry: an audit's pause, continue and stop, a test run's stop. */
+/** What the owner may ask of a job from its entry: an audit's or a review's pause, continue and stop, a test run's stop. */
 export type JobControlAction = 'pause' | 'continue' | 'stop';
 
 /**
@@ -2052,14 +2063,15 @@ export interface AppNotification {
 }
 
 /**
- * The controls a job's entry offers: Pause and Stop on a running audit, Continue and Stop on a paused one, Stop on a
- * running test run; none while a click waits for the worker, and none on any other entry.
+ * The controls a job's entry offers: Pause and Stop on a running audit or review job, Continue and Stop on a paused one,
+ * Stop on a running test run; none while a click waits for the worker, and none on any other entry, the mention
+ * review's `review:` entries included.
  */
 export function jobControls(
   n: Pick<AppNotification, 'id' | 'kind' | 'control'>,
 ): readonly JobControlAction[] {
   if (n.control?.phase === 'waiting') return [];
-  if (n.id.startsWith('audit:')) {
+  if (n.id.startsWith('audit:') || n.id.startsWith('reviewjob:')) {
     if (n.kind === 'running') return ['pause', 'stop'];
     return n.kind === 'paused' ? ['continue', 'stop'] : [];
   }

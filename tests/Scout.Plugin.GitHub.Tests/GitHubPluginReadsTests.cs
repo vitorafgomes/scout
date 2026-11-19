@@ -87,7 +87,7 @@ public sealed class GitHubPluginReadsTests
         result.ShouldContain("--- a.cs\n" + big);
         result.ShouldNotContain("--- b.cs");
         result.ShouldContain("--- c.cs\ntiny");
-        result.ShouldContain("\n1 of 3 file(s) had their diff left out to fit the budget and have no section under Diffs; read each with get_pull_request_file.\nDiffs:\n");
+        result.ShouldContain("\n1 of 3 file(s) had their diff left out to fit the budget and have no section under Diffs; to review the whole pull request, start a review job with start_pull_request_review; to read one file, use get_pull_request_file.\nDiffs:\n", customMessage: "a pull request whose diffs were left out names start_pull_request_review, and get_pull_request_file for one file");
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed class GitHubPluginReadsTests
         }
 
         result.ShouldContain("in 127 file(s)\nExtensions: .cs\n");
-        result.ShouldContain("\n67 of 127 file(s) had their diff left out to fit the budget and have no section under Diffs; read each with get_pull_request_file.\nDiffs:\n");
+        result.ShouldContain("\n67 of 127 file(s) had their diff left out to fit the budget and have no section under Diffs; to review the whole pull request, start a review job with start_pull_request_review; to read one file, use get_pull_request_file.\nDiffs:\n");
         result.Split("\n--- ").Length.ShouldBe(61);
         result.ShouldContain("\n--- src/f60.cs\n");
         result.ShouldNotContain("--- src/f61.cs");

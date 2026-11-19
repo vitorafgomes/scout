@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
 
 namespace Scout.Audit;
@@ -11,14 +12,27 @@ internal sealed class AuditSignal
 {
     private readonly Channel<bool> _channel = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
 
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _stopped = new();
+
     public void Wake() => _channel.Writer.TryWrite(true);
+
+    /// <summary>Ask the worker to post the card of a review the owner stopped while it was paused, which no batch loop holds.</summary>
+    public void Stopped(string jobId)
+    {
+        _stopped.Enqueue(jobId);
+        Wake();
+    }
+
+    /// <summary>The next stopped paused review whose card the worker has not posted, each handed out once.</summary>
+    public bool TryTakeStopped(out string jobId) => _stopped.TryDequeue(out jobId!);
 
     public async Task WaitAsync(CancellationToken ct) => await _channel.Reader.ReadAsync(ct).ConfigureAwait(false);
 }
 
 /// <summary>
-/// Runs the running audit jobs, oldest first, leaving a running review as it is, batch after batch, until each is done or the owner pauses or stops it, after
-/// the area in progress: the first
+/// Runs the running jobs, a running review before any audit, each oldest first, batch after batch, until each is done or the
+/// owner pauses or stops it, after the area in progress; an audit goes back to the pick after its batch when a review is
+/// running, with no notice, and a review runs as <see cref="RunReviewAsync"/> says. Of an audit, the first
 /// pending batch is always the next one, so a job Scout closed in the middle resumes there on the next start. A batch with
 /// findings new to the job posts their block into the conversation the job was started from, split into several complete
 /// blocks when one would pass <see cref="MaxPostLength"/> characters; the last post, split the same way, carries the
@@ -31,13 +45,21 @@ internal sealed class AuditSignal
 /// job holds when it is posted, so a job continued from another chat posts there. A turn cut short by shutdown leaves its batch pending; a job that fails on the database or
 /// an unexpected error is logged and waits, still running, for the next start or restart, and the host keeps running.
 /// </summary>
-internal sealed class AuditWorker(
+internal sealed partial class AuditWorker(
     IAuditJobStore store,
     AuditBatchRunner runner,
     IOriginNotifier notifier,
     AuditSignal signal,
-    ILogger<AuditWorker> logger) : BackgroundService
+    IReviewPullRequests pullRequests,
+    ILogger<AuditWorker> logger,
+    IOptions<AuditOptions>? options = null) : BackgroundService
 {
+    /// <summary>The batches of a review that run at once: the configured count, or one when the worker was given no options.</summary>
+    private readonly int _parallel = Math.Max(1, options?.Value.ReviewParallelBatches ?? 1);
+
+    /// <summary>The stopped reviews whose card this worker posted, so a stop that reaches it twice posts one card.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _stoppedCards = new(StringComparer.Ordinal);
+
     /// <summary>Characters of one post at most, under the 32,000 the local chat and the desktop cut a message at.</summary>
     internal const int MaxPostLength = 30_000;
 
@@ -64,7 +86,21 @@ internal sealed class AuditWorker(
             {
                 try
                 {
+                    while (signal.TryTakeStopped(out var stopped))
+                    {
+                        if (await store.JobAsync(stopped, stoppingToken).ConfigureAwait(false) is { Kind: AuditKind.Review, Status: AuditStatus.Stopped } review)
+                        {
+                            await ReviewLeftAsync(review, stoppingToken).ConfigureAwait(false);
+                        }
+                    }
+
                     var running = await store.RunningJobsAsync(stoppingToken).ConfigureAwait(false);
+                    if (running.FirstOrDefault(j => j.Kind == AuditKind.Review) is { } runningReview)
+                    {
+                        await RunReviewAsync(runningReview, stoppingToken).ConfigureAwait(false);
+                        continue;
+                    }
+
                     if (running.FirstOrDefault(j => j.Kind == AuditKind.Audit) is { } audit)
                     {
                         await RunAsync(audit, stoppingToken).ConfigureAwait(false);
@@ -94,6 +130,11 @@ internal sealed class AuditWorker(
         AuditJob? current;
         while ((current = await store.JobAsync(job.Id, ct).ConfigureAwait(false)) is { Status: AuditStatus.Running })
         {
+            if ((await store.RunningJobsAsync(ct).ConfigureAwait(false)).Any(j => j.Kind == AuditKind.Review))
+            {
+                return;
+            }
+
             var (next, count) = await store.NextBatchAsync(job.Id, ct).ConfigureAwait(false);
             if (next is null)
             {

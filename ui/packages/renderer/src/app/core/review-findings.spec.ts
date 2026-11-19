@@ -68,6 +68,10 @@ function reply(block: unknown): string {
   return `## Review of acme/shop\n\nOne blocker.\n\n\`\`\`scout-findings\n${json}\n\`\`\`\n\nAsk me to post it.`;
 }
 
+const fence = (body: Record<string, unknown>): string =>
+  '```scout-findings\n' + JSON.stringify(body) + '\n```';
+const JOB = { repository: 'acme/api', number: 52, verdict: 'ready to merge', findings: [] };
+
 describe('review findings', () => {
   it('parseReviewFindings takes a valid block and leaves the surrounding text, and refuses invalid JSON, a missing field, a bad severity, a bad repository and more than 50 findings', () => {
     expect(parseReviewFindings(reply(review))).toEqual({
@@ -102,7 +106,7 @@ describe('review findings', () => {
       `${reply(review)}\n\n${reply(review)}`,
       'No findings block at all.',
     ];
-    expect(refused.map(parseReviewFindings)).toEqual(refused.map(() => null));
+    expect(refused.map((reply) => parseReviewFindings(reply))).toEqual(refused.map(() => null));
     expect(
       parseReviewFindings(
         reply({
@@ -184,7 +188,7 @@ describe('review findings', () => {
       reply({ ...review, findings: [{ ...total, rule: 7 }] }),
       reply({ ...withoutKnown, kind: 'review' }),
     ];
-    expect(refused.map(parseReviewFindings)).toEqual(refused.map(() => null));
+    expect(refused.map((reply) => parseReviewFindings(reply))).toEqual(refused.map(() => null));
   });
 
   it('issueBody follows the Problem, Evidence, Proposed change shape with the rule and the drafted-by line', () => {
@@ -414,5 +418,120 @@ describe('review findings', () => {
     expect(reviewBody(review, [])).toBe(
       '**Verdict:** merge after the blocking finding\n\n\n\n6 of 6 files read',
     );
+  });
+
+  it("parseReviewFindings keeps a review job's coverage and notes from a notice, and drops a malformed coverage or notes without refusing the review", () => {
+    const kept = parseReviewFindings(
+      fence({
+        ...JOB,
+        coverage: { read: 51, of: 133 },
+        notes: ['82 files not read: the review was stopped.'],
+      }),
+      true,
+    );
+    const badCoverage = parseReviewFindings(
+      fence({ ...JOB, coverage: { read: 140, of: 133 }, notes: ['x'] }),
+      true,
+    );
+    const badNotes = parseReviewFindings(
+      fence({ ...JOB, coverage: { read: 1, of: 2 }, notes: [42] }),
+      true,
+    );
+    const none = parseReviewFindings(fence(JOB), true);
+
+    expect([kept?.review.coverage, kept?.review.notes]).toEqual([
+      { read: 51, of: 133 },
+      ['82 files not read: the review was stopped.'],
+    ]);
+    expect([badCoverage?.review.coverage, badCoverage?.review.notes]).toEqual([
+      undefined,
+      undefined,
+    ]);
+    expect([badNotes?.review.coverage, badNotes?.review.notes]).toEqual([
+      { read: 1, of: 2 },
+      undefined,
+    ]);
+    expect([none?.review.coverage, none?.review.notes]).toEqual([undefined, undefined]);
+  });
+
+  it('coverage and notes are kept from a worker notice and dropped from a reply', () => {
+    const block = fence({ ...JOB, coverage: { read: 50, of: 50 }, notes: ['A note.'] });
+
+    const notice = parseReviewFindings(block, true);
+    const reply = parseReviewFindings(block);
+
+    expect([notice?.review.coverage, notice?.review.notes], 'a notice keeps them').toEqual([
+      { read: 50, of: 50 },
+      ['A note.'],
+    ]);
+    expect(
+      [reply?.review.coverage, reply?.review.notes, reply?.review.repository],
+      'a reply drops them and keeps the review',
+    ).toEqual([undefined, undefined, 'acme/api']);
+  });
+
+  it('a review with 20 notes of 300 characters each keeps them all', () => {
+    const notes = Array.from({ length: 20 }, (_, i) => String(i).padEnd(300, 'n'));
+
+    const parsed = parseReviewFindings(
+      fence({ ...JOB, coverage: { read: 3, of: 4 }, notes }),
+      true,
+    );
+
+    expect(parsed?.review.notes, 'notes at the bound are kept').toEqual(notes);
+  });
+
+  it('an audit block never carries coverage or notes, even in a notice', () => {
+    const parsed = parseReviewFindings(
+      fence({
+        kind: 'audit',
+        repository: 'acme/api',
+        verdict: 'sound',
+        findings: [
+          { id: 'a', severity: 'fix', title: 'T', path: 'src/A.cs', line: 1, why: 'W', fix: 'F' },
+        ],
+        coverage: { read: 1, of: 2 },
+        notes: ['A note.'],
+      }),
+      true,
+    );
+
+    expect(
+      [
+        parsed?.review.kind,
+        parsed?.review.findings.length,
+        parsed?.review.coverage,
+        parsed?.review.notes,
+      ],
+      'an audit parses without coverage or notes',
+    ).toEqual(['audit', 1, undefined, undefined]);
+  });
+
+  it.each([
+    ['21 notes', Array.from({ length: 21 }, (_, i) => `Note ${i}.`)],
+    ['a note of 301 characters', ['n'.repeat(301)]],
+  ])('a review with %s keeps its coverage and drops its notes', (_case, notes) => {
+    const parsed = parseReviewFindings(
+      fence({ ...JOB, coverage: { read: 3, of: 4 }, notes }),
+      true,
+    );
+
+    expect(
+      [parsed?.review.coverage, parsed?.review.notes],
+      'notes past the bound are dropped',
+    ).toEqual([{ read: 3, of: 4 }, undefined]);
+  });
+
+  it.each([
+    ['read above of', { read: 5, of: 4 }],
+    ['a negative count', { read: -1, of: 4 }],
+    ['a count that is not whole', { read: 1.5, of: 4 }],
+  ])('coverage with %s is dropped, and its notes with it', (_case, coverage) => {
+    const parsed = parseReviewFindings(fence({ ...JOB, coverage, notes: ['A note.'] }), true);
+
+    expect(
+      [parsed?.review.coverage, parsed?.review.notes, parsed?.review.number],
+      'a bad coverage is dropped and the review kept',
+    ).toEqual([undefined, undefined, 52]);
   });
 });

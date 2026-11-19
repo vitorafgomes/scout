@@ -1,9 +1,9 @@
 ---
 title: "Desktop prototype"
-version: "1.18"
+version: "1.19"
 date: 2026-11-07
-updated: 2026-11-15
-changes: "v1.18 (2026-11-15): the GitHub notes artboard draws its templates in a friendlier style."
+updated: 2026-11-19
+changes: "v1.19 (2026-11-19): the Review job group is built."
 page_type: convention
 status: active
 description: "The clickable prototype of Scout Desktop is kept in context/prototypes/desktop, one artboard per screen; every change to a screen, and every new screen, updates or adds its artboard in the same branch, before the code."
@@ -85,5 +85,7 @@ The owner, 2026-11-07, translated: "is there a way to save the prototypes in [th
 2026-11-15: the Features and Main artboards draw, before the code and for the owner's approval, the setting Merge after approving. Features: the GitHub panel's connected state gains the section "After an approval" with the switch, off by default, its help (squash, only on repositories of your own account, cannot be undone), the confirmation "Let Scout merge pull requests it approves?" (Turn on, Cancel) and the switch drawn disabled with its reason while GitHub's writes are not allowed, under the Preview states "GitHub panel: Merge after approving off", "asks first", "on" and "disabled, writes not allowed". Main: a Preview group "Merge after approving" beside "Approve when checks pass" draws the review card with the switch on: "Approve and merge" and "Approve and merge when the checks pass" with the line that it cannot be undone on your own repository, today's labels and "Scout only approves here" on another owner's, "Waiting to approve and merge" with Cancel, "Approved and merged" with the merge commit, and the two "Approved; not merged" outcomes (squash not allowed, GitHub refused the merge, with GitHub's reason); the bell draws the waiting entry with its Cancel and the three outcomes. The existing states are unchanged.
 
 2026-11-15: the GitHub notes artboard draws its 15 templates in a friendlier style, for the owner's approval: each section heading starts with a GitHub emoji shortcode, the author's templates open with a checklist and the kind of change as boxes to tick and carry hints as comments, and the bot's notes open with one summary line and put a status shortcode beside each result word. The file holds the shortcodes as text; the artboard turns them into glyphs when it draws.
+
+2026-11-19: the Main artboard's Review job group, drawn for the owner and approved before the code, is built: its 26 inventory rows each have a spec ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
 
 Related: [[pages/services/desktop-ui]], [[pages/decisions/0047-the-docker-card]], [[pages/decisions/0046-ai-source-usage-on-the-cards]].

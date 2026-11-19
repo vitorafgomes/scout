@@ -1,9 +1,9 @@
 ---
 title: "Audit - history"
-version: "1.2"
+version: "1.5"
 date: 2026-11-08
-updated: 2026-11-15
-changes: "v1.2 (2026-11-15): the notifier is resolved on use, so the worker starts with GitHub and the local chat. v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
+updated: 2026-11-19
+changes: "v1.5 (2026-11-19): the review runs to its end, code first, in waves, with the owner's controls and a pause at 60 minutes. v1.4 (2026-11-18): a batch read only when presented, a card that fits, running time only. v1.3 (2026-11-17): the review job runs its batches and posts one card. v1.2 (2026-11-15): the notifier is resolved on use, so the worker starts with GitHub and the local chat. v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
 page_type: reference
 status: artefact
 description: "What changed in the audit job's project and when."
@@ -21,16 +21,48 @@ reliability: high
 
 > Dated changes to [[pages/services/audit]]; the service page states how it works now.
 
+## 2026-11-19 - The review runs to its end, code first, in waves, with the owner's controls
+
+- **Asked for:** the owner's decisions of 2026-11-19 ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]): no bound on batches; code read before tests, configuration and documentation; several batches at once, 4, and 1 on the local default provider; the progress in the bell of Scout Desktop and one card in the chat; pause, continue and stop from the bell; at 60 minutes of running time a pause that asks.
+- **What changed:**
+  - The plan puts each changed file in a group by `ReadingOrder` and plans the groups in order (`src/Scout.Audit/RepositoryAudits.Reviews.cs:222`, `:112`). The bound of 10 batches is gone.
+  - `RunReviewAsync` runs waves of up to `ReviewParallelBatches` pending batches, read with `PendingBatchesAsync`, each saved as it ends under one lock (`src/Scout.Audit/AuditWorker.Reviews.cs:67`, `:139`). The option is 1 to 8, 4 unless set, and 1 when unset on the local provider (`src/Scout.Audit/AuditServiceCollectionExtensions.cs:47`).
+  - The progress line carries the batches done, the files read, the findings so far and the area being read, and goes to the desktop's local chat only (`src/Scout.Audit/AuditWorker.Reviews.cs:372`, `src/Scout.Audit/AuditWorker.cs:213`).
+  - `IPullRequestReviews.ControlAsync` pauses, continues and stops a review by its pull request number (`src/Scout.Audit/RepositoryAudits.Reviews.cs:300`). The owner's pause notice, or the card of what was read when stopped, is posted once when the worker leaves the review (`src/Scout.Audit/AuditWorker.Reviews.cs:199`).
+  - The files GitHub counts but did not list are one batch kept not read, "GitHub did not list these files", and the start counts them, so the read line counts every changed file and the verdict is never ready to merge (`src/Scout.Audit/RepositoryAudits.Reviews.cs:133`). A stop reads the review again after it, and hands that row to the worker and answers from it, so a review that paused meanwhile still gets its card and a stop with no row read before it does not throw (`:336`). Both found by an outside review of the change.
+  - A closing review of those fixes: a stop whose read after it fails answers that it stopped and still hands the review to the worker by the id read before (`src/Scout.Audit/RepositoryAudits.Reviews.cs:336`); a count of files not listed below zero is taken as none; the progress line's batches leave the files not listed out (`tests/Scout.Audit.Tests/RepositoryReviewsTests.cs:116`, `:873`, `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:366`). 387 tests in the project.
+  - At 60 minutes of running time the review pauses with "it ran for 60 minutes" and nothing is marked not read (`src/Scout.Audit/AuditWorker.Reviews.cs:80`). The running time is the union of the finished batches' intervals since the job's `resumed` time, a column the `JobResumed` migration adds (`src/Scout.Audit/SqliteAuditStore.cs:336`, `src/Scout.Audit/Storage/Migrations/20261119090000_JobResumed.cs`).
+- **Tests:** `tests/Scout.Audit.Tests/RepositoryReviewsTests.cs:698`, `:769`, `:815`; `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:198`, `:221`, `:702`, `:738`, `:781`, `:816`, `:857`, `:883`, `:941`; `tests/Scout.Audit.Tests/SqliteAuditStoreTests.cs:454`, `:484`; `tests/Scout.Audit.Tests/AuditServiceCollectionExtensionsTests.cs:65`; `tests/Scout.Audit.Tests/RepositoryReviewsTests.cs:98`, `:844`, `:859`; `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:366`; 385 tests in the project.
+
+## 2026-11-18 - A batch read only when presented, a card that fits, running time only
+
+- **Found:** a review of the code before release. A review turn that answered in prose, or presented a block for another commit, was saved as a batch read in full and could feed `ready to merge`. The 50 most severe findings went in one block that the plugin refuses past 24,000 characters, so a large review's card carried none. The job was marked done before its card was built, so a failure there lost the card for good. The head was read twice before the first batch. The 60 minutes ran on through a pause.
+- **What changed:**
+  - A review turn with no block accepted for the job is a failed attempt for "the AI model presented no findings for this batch", tried once more and then not covered with no file read; an accepted empty list is a read (`src/Scout.Audit/AuditBatchRunner.cs:118`, `src/Scout.Audit/FindingsBlock.cs:30`).
+  - The card takes the most severe findings that fit 20,000 characters, at most 50, and the note counts the rest; the plain sentence names the findings kept (`src/Scout.Audit/AuditWorker.Reviews.cs:236`).
+  - The card is built before the job is marked done (`:62`).
+  - The first read's head serves the first batch (`:75`).
+  - The 60 minutes count the batches' turns only, read from the rows by the store's `RunningTimeAsync` (`:147`, `src/Scout.Audit/SqliteAuditStore.cs:331`), as the owner decided on 2026-11-17; the worker no longer takes a clock.
+  - `BatchOutcome.UnreadReason`, read by nothing, is gone ([[pages/decisions/0061-the-pull-request-review-job-as-built]]).
+  - Found by an outside review the same day: a batch could read another repository the token reaches, later batches were told no earlier titles, and a card at the budget could still be refused for the checks and test run the plugin adds. Now every read of a review or audit batch is held to the job's repository (`src/Scout.Audit/AuditBatchRunner.cs:436`); a review batch is told the job's titles so far, at most 100 (`src/Scout.Audit/AuditWorker.Reviews.cs:122`); a refused card is presented again with half as many findings (`:209`).
+- **Tests:** `tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs:530`, `:544`; `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:223`, `:538`, `:555`, `:579`; `tests/Scout.Audit.Tests/SqliteAuditStoreTests.cs:433`; `tests/Scout.Host.Console.Tests/HostAuditTurnTests.cs:398`, `:424`; `tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs:581`, `:597`, `:609`; `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:610`, `:622`, `:637`; 322 tests in the project.
+
+## 2026-11-17 - The review job runs its batches and posts one card
+
+- **What it was:** a review job could be started and planned, and the worker left a running review as it was while it ran the audits.
+- **What changed:** the worker picks a running review before any audit, and an audit yields after its batch (`src/Scout.Audit/AuditWorker.cs:70`, `:105`). A review batch is one turn offered the five reads and `present_review_findings` only, held to the job's pull request, with each file's patch as one line of JSON data (`src/Scout.Audit/AuditBatchRunner.cs:67`, `:204`, `:412`). The changed files are read once per run and only the head commit before each batch, through `IReviewPullRequests` (`src/Scout.Audit/AuditWorker.Reviews.cs:79`); a moved head, a GitHub read that fails, 10 batches and 60 minutes each end or pause the run, and a job stopped during the head read runs no turn (`:94`, `:151`). One progress line per batch and one card at the end, with the verdict and the read line computed by code (`:194`, `:260`). A store failure on a batch's save now reaches the worker, which logs it and waits, instead of running the same batch again. The start plans by the patch's length as sent, keeps a patch larger than one batch and a path with a control character not read, and wakes the worker (`src/Scout.Audit/RepositoryAudits.Reviews.cs:94`, `:123`, `:160`). The review service and its records are public for the host adapter.
+- **Tests:** `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs`, the review tests of `tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs` from `:404`, `tests/Scout.Audit.Tests/AuditWorkerTests.cs:1028`, `tests/Scout.Audit.Tests/RepositoryReviewsTests.cs:533` to `:627`, `tests/Scout.Audit.Tests/SqliteAuditStoreTests.cs:415`.
+
 ## 2026-11-15 - The worker starts again with GitHub connected and the desktop's local chat
 
 - **Found:** since the resume line of 2026-11-14 the worker never reported ready when GitHub was connected and the desktop's local chat was on: the audit service asked for the notifier while it was being built, the notifier's local poster needs the local chat adapter, whose live translator needs the kernel, whose GitHub plugin needs the audit service again. The desktop killed the worker after 45 seconds and started it again, without end.
-- **What changed:** the audit service takes the notifier as a function and resolves it when a resume posts, as it already did the kernel (`src/Scout.Audit/AuditServiceCollectionExtensions.cs:62`).
-- **Tests:** `Scout.Host.Console.Tests`, a host with GitHub connected and the local chat on builds its kernel and its chat adapter (`tests/Scout.Host.Console.Tests/HostAuditTurnTests.cs:214`); without the change the test never ends.
+- **What changed:** the audit service takes the notifier as a function and resolves it when a resume posts, as it already did the kernel (`src/Scout.Audit/AuditServiceCollectionExtensions.cs:63`).
+- **Tests:** `Scout.Host.Console.Tests`, a host with GitHub connected and the local chat on builds its kernel and its chat adapter (`tests/Scout.Host.Console.Tests/HostAuditTurnTests.cs:216`); without the change the test never ends.
 
 ## 2026-11-14 - Every local area reports, a resume reports, every heading counts the findings
 
 - **Asked for:** the bell's audit entry as `Main.dc.html` draws it ([[pages/roadmap/prototype-migration]]), with the owner's decisions of 2026-11-14: the extra lines only for a job held by the desktop's local chat, Discord, Slack and Teams unchanged apart from the count in the heading.
-- **What changed:** every batch heading reads `Audit of owner/repo, area (i of n, f findings so far)`, counted in the 30,000-character budget (`src/Scout.Audit/AuditWorker.cs:217`); a local job's area with no new findings posts `...: no new findings.` (`:142`, `:221`); a resume, from the desktop or a chat, posts `Audit of owner/repo resumed: area k of n done, f findings so far.` to a local job before the worker is woken (`src/Scout.Audit/RepositoryAudits.cs:291`), a failed post logged and the resume kept. The local test is one place, the `local:` origin prefix (`src/Scout.Audit/AuditWorker.cs:53`). `RepositoryAudits` takes the origin notifier.
+- **What changed:** every batch heading reads `Audit of owner/repo, area (i of n, f findings so far)`, counted in the 30,000-character budget (`src/Scout.Audit/AuditWorker.cs:230`); a local job's area with no new findings posts `...: no new findings.` (`:155`, `:234`); a resume, from the desktop or a chat, posts `Audit of owner/repo resumed: area k of n done, f findings so far.` to a local job before the worker is woken (`src/Scout.Audit/RepositoryAudits.cs:291`), a failed post logged and the resume kept. The local test is one place, the `local:` origin prefix (`src/Scout.Audit/AuditWorker.cs:55`). `RepositoryAudits` takes the origin notifier.
 - **Tests:** `Scout.Audit.Tests` 235 to 239: a Discord-origin audit posts no line for an area with none, three resume tests (local posts, Discord does not, a failing post keeps the resume); the worker tests that list posts now include the local lines.
 
 ## 2026-11-13 - The checks before a review starts, first part

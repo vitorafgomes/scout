@@ -41,7 +41,7 @@ internal sealed partial class GitHubPlugin
     /// <param name="ct">Cancels the underlying GitHub requests.</param>
     /// <returns>The pull request's metadata, file list and bounded diffs, or a clean message when not found or on failure.</returns>
     [KernelFunction("get_pull_request")]
-    [Description("Read one pull request for a code review: title, description, author, branches, the extensions of the files it touches, every changed file with its status and line counts (all of them are read, past the first hundred, up to the 3,000 GitHub lists; a very long list names the first files and counts the rest), and each file's unified diff while the diffs fit a budget. The answer says how many diffs were left out, and how many files GitHub sent no diff for (binary or too large), naming up to 100; neither gets a section under Diffs; read each with get_pull_request_file. Use before reviewing or summarising a pull request.")]
+    [Description("Read one pull request for a code review: title, description, author, branches, the extensions of the files it touches, every changed file with its status and line counts (all of them are read, past the first hundred, up to the 3,000 GitHub lists; a very long list names the first files and counts the rest), and each file's unified diff while the diffs fit a budget. The answer says how many diffs were left out, and how many files GitHub sent no diff for (binary or too large), naming up to 100; neither gets a section under Diffs; to review a pull request whose diffs were left out, start a review job with start_pull_request_review; to read one file, use get_pull_request_file. Use before reviewing or summarising a pull request.")]
     public async Task<string> GetPullRequestAsync(
         [Description("Repository owner or organization login, e.g. octocat.")] string owner,
         [Description("Repository name, e.g. hello-world.")] string repo,
@@ -545,30 +545,16 @@ internal sealed partial class GitHubPlugin
         }
 
         var diffs = new StringBuilder("\nDiffs:");
-        var budget = PatchBudget;
-        var leftOut = 0;
-        var noDiff = new List<string>();
-        foreach (var file in pr.Files)
+        var (fitting, leftOut) = FitPatchBudget(pr.Files);
+        foreach (var file in fitting)
         {
-            if (file.Patch is null)
-            {
-                noDiff.Add(file.Path);
-                continue;
-            }
-
-            if (file.Patch.Length > budget)
-            {
-                leftOut++;
-                continue;
-            }
-
             diffs.Append("\n--- ").Append(file.Path).Append('\n').Append(file.Patch);
-            budget -= file.Patch.Length;
         }
 
+        var noDiff = pr.Files.Where(f => f.Patch is null).Select(f => f.Path).ToList();
         if (leftOut > 0)
         {
-            text.Append(CultureInfo.InvariantCulture, $"\n{leftOut} of {pr.Files.Count} file(s) had their diff left out to fit the budget and have no section under Diffs; read each with get_pull_request_file.");
+            text.Append(CultureInfo.InvariantCulture, $"\n{leftOut} of {pr.Files.Count} file(s) had their diff left out to fit the budget and have no section under Diffs; to review the whole pull request, start a review job with start_pull_request_review; to read one file, use get_pull_request_file.");
         }
 
         if (noDiff.Count > 0)
@@ -578,6 +564,35 @@ internal sealed partial class GitHubPlugin
         }
 
         return text.Append(diffs).ToString();
+    }
+
+    /// <summary>
+    /// The changed files whose diff fits <see cref="PatchBudget"/>, in their order, and how many diffs were left out to fit
+    /// it; a file GitHub sent no diff for is neither. The one rule for what a pull request's answer leaves out.
+    /// </summary>
+    internal static (IReadOnlyList<ChangedFile> Fitting, int LeftOut) FitPatchBudget(IReadOnlyList<ChangedFile> files)
+    {
+        var budget = PatchBudget;
+        var fitting = new List<ChangedFile>();
+        var leftOut = 0;
+        foreach (var file in files)
+        {
+            if (file.Patch is null)
+            {
+                continue;
+            }
+
+            if (file.Patch.Length > budget)
+            {
+                leftOut++;
+                continue;
+            }
+
+            fitting.Add(file);
+            budget -= file.Patch.Length;
+        }
+
+        return (fitting, leftOut);
     }
 
     internal static string FormatIssue(IssueDetails issue)
