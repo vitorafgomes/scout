@@ -14,6 +14,7 @@ import {
   issuesAsk,
   parseReviewFindings,
   reviewBody,
+  testsLine,
   verdictRequest,
   verdictTestsLine,
 } from './review-findings';
@@ -21,6 +22,8 @@ import {
 const RED = '\u{1F534}';
 const YELLOW = '\u{1F7E1}';
 const GREEN = '\u{1F7E2}';
+const UNRUNNABLE =
+  '122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.';
 
 const total: ReviewFinding = {
   id: 'total',
@@ -296,6 +299,36 @@ describe('review findings', () => {
     ).toEqual({ ran: false, reason: 'Docker is not installed.' });
   });
 
+  it('parseReviewFindings keeps unrunnable of a failed container run, and drops it on a passing run and when it is not text', () => {
+    const run = { ran: true, command: 'dotnet test', exitCode: 1, durationSeconds: 12 };
+    const tests = (extra: Record<string, unknown>) =>
+      parseReviewFindings(reply({ ...review, tests: { ...run, ...extra } }))?.review.tests;
+
+    expect(
+      tests({ unrunnable: UNRUNNABLE }),
+      'a failed run keeps the sentence that says its failed tests could not run',
+    ).toEqual({ ...run, unrunnable: UNRUNNABLE });
+    expect(
+      [
+        tests({ exitCode: 0, unrunnable: UNRUNNABLE }),
+        tests({ unrunnable: 3 }),
+        tests({ unrunnable: '  ' }),
+        parseReviewFindings(
+          reply({
+            ...review,
+            tests: { ran: false, reason: 'Docker is not installed.', unrunnable: UNRUNNABLE },
+          }),
+        )?.review.tests,
+      ],
+      'unrunnable is read only on a failed run and only as text',
+    ).toEqual([
+      { ...run, exitCode: 0 },
+      run,
+      run,
+      { ran: false, reason: 'Docker is not installed.' },
+    ]);
+  });
+
   it('verdictRequest is the verdict pinned to the reviewed commit, with the review body, the chosen findings as comments in order and the tests line; none on an audit or a review without a commit', () => {
     const chosen = [
       { finding: naming, body: 'Edited by the owner' },
@@ -400,6 +433,34 @@ describe('review findings', () => {
       }),
       verdictTestsLine(review),
     ]).toEqual(['Tests did not run: Docker is not installed.', 'Checks: build passed', '']);
+  });
+
+  it('testsLine and verdictTestsLine say the tests could not run with the sentence, never Tests failed', () => {
+    const tests = {
+      ran: true,
+      command: 'dotnet test',
+      exitCode: 1,
+      durationSeconds: 12,
+      unrunnable: UNRUNNABLE,
+    };
+    const passed: ReviewCheck = {
+      name: 'build',
+      status: 'completed',
+      conclusion: 'success',
+      url: '',
+    };
+    const lines = [testsLine(tests), verdictTestsLine({ ...review, checks: [passed], tests })];
+
+    expect(
+      lines,
+      'a run whose failed tests could not run says so with the worker sentence, after the checks',
+    ).toEqual([
+      `Tests could not run: ${UNRUNNABLE}`,
+      `Checks: build passed\nTests could not run: ${UNRUNNABLE}`,
+    ]);
+    expect(lines.join('\n'), 'an unrunnable run is never called a failure').not.toContain(
+      'Tests failed',
+    );
   });
 
   it('a review with no finding parses and an audit with none is refused; a clean review posts its verdict, No findings. and what was read, with no blank gap, and the all-dismissed body is unchanged', () => {

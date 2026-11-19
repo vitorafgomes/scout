@@ -1304,6 +1304,59 @@ describe('review findings cards', () => {
     expect(el(skipped, 'tests-output')).toBeNull();
   });
 
+  it('a container run that could not run its tests shows a neutral chip with the sentence, keeps Last output, and Approve stays offered when every check passed', async () => {
+    const unrunnable =
+      '122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.';
+    const bridge = makeBridge();
+    const fixture = await render(bridge, {
+      ...reviewed,
+      checks: PASSED_CHECKS,
+      tests: {
+        ran: true,
+        command: 'dotnet test',
+        exitCode: 1,
+        durationSeconds: 95,
+        output: 'Cannot connect to the Docker daemon',
+        unrunnable,
+      },
+    });
+    const offered = {
+      approve: all(fixture, 'approve').length,
+      approveWhenGreen: all(fixture, 'approve-when-green').length,
+      checkLine: el(fixture, 'check-line'),
+    };
+    const run = el(fixture, 'tests-run');
+    const card = {
+      chip: text(run),
+      tone: run?.className.replace('chip', '').trim(),
+      icon: run?.querySelector('path')?.getAttribute('d'),
+      line: text(el(fixture, 'tests-unrunnable')),
+      summary: text(el(fixture, 'tests-output')?.querySelector('summary') ?? null),
+      output: el(fixture, 'tests-output')?.querySelector('pre')?.textContent,
+    };
+    await click(fixture, el(fixture, 'approve'));
+
+    expect(
+      offered,
+      'an unrunnable run does not block the approval: Approve is offered when every check passed',
+    ).toEqual({ approve: 1, approveWhenGreen: 0, checkLine: null });
+    expect(
+      bridge.githubGiveVerdict.mock.calls.map(([request]) => request.testsLine),
+      'the approval posts that the tests could not run, with the sentence',
+    ).toEqual([`Checks: build passed, lint passed\nTests could not run: ${unrunnable}`]);
+    expect(
+      card,
+      'the card says the tests could not run in the neutral tone, never tests failed, with the sentence under the chips',
+    ).toEqual({
+      chip: 'Tests could not run',
+      tone: 'notrun',
+      icon: 'M5 12h14',
+      line: unrunnable,
+      summary: 'Last output',
+      output: 'Cannot connect to the Docker daemon',
+    });
+  });
+
   it('as the artboard draws them, Yes to all and Post share a row, and Approve and Request changes sit in a Verdict group under it on a review and never on an audit; Approve is hidden when the owner wrote the pull request', async () => {
     const buttons = (fixture: Fixture) => {
       const root = fixture.nativeElement as HTMLElement;
@@ -1973,6 +2026,14 @@ const CARD_STATES: readonly CardStateRow[] = [
     name: 'the pull request was closed while waiting: Not approved, no approve button',
     act: (bridge, fixture) => pushWaiting(fixture, bridge, waitingStatus('ended', 'closed')),
     drawing: { ...NOT_APPROVED, ended: 'Not approved: the pull request was closed.' },
+  },
+  {
+    name: 'the pull request has conflicts while waiting: Not approved says so, no approve button',
+    act: (bridge, fixture) => pushWaiting(fixture, bridge, waitingStatus('ended', 'conflict')),
+    drawing: {
+      ...NOT_APPROVED,
+      ended: 'Not approved: the pull request has conflicts with its base branch.',
+    },
   },
   {
     name: 'the approval given once the checks passed says so under Approved on PR #5',

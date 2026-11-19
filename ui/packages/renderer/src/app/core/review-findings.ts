@@ -100,9 +100,13 @@ export function checksOutcome(checks: readonly ReviewCheck[] | undefined): {
   };
 }
 
-/** The line the container run reads as: passed with its time and command, failed with its exit code, or why it did not run. */
+/**
+ * The line the container run reads as: passed with its time and command, failed with its exit code, could not run with
+ * the worker's sentence, or why it did not run.
+ */
 export function testsLine(tests: ReviewTests): string {
   if (!tests.ran) return `Tests did not run: ${tests.reason}`;
+  if (tests.unrunnable !== undefined) return `Tests could not run: ${tests.unrunnable}`;
   return tests.exitCode === 0
     ? `Tests passed in ${Math.round(tests.durationSeconds ?? 0)}s (${tests.command})`
     : `Tests failed (exit ${tests.exitCode})`;
@@ -250,7 +254,7 @@ function toChecks(data: unknown): { checks?: readonly ReviewCheck[] } {
 
 function toTests(data: unknown): { tests?: ReviewTests } {
   if (!isRecord(data)) return {};
-  const { ran, reason, image, command, exitCode, durationSeconds, output } = data;
+  const { ran, reason, image, command, exitCode, durationSeconds, output, unrunnable } = data;
   if (ran === false) {
     return isText(reason) ? { tests: { ran, reason: reason as string } } : {};
   }
@@ -272,6 +276,7 @@ function toTests(data: unknown): { tests?: ReviewTests } {
       durationSeconds,
       ...(isText(image) ? { image: image as string } : {}),
       ...(typeof output === 'string' ? { output: output.slice(-MAX_OUTPUT_CHARS) } : {}),
+      ...(exitCode !== 0 && isText(unrunnable) ? { unrunnable: unrunnable as string } : {}),
     },
   };
 }

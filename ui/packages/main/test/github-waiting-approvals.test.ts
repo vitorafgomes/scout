@@ -35,8 +35,14 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
   return () => new Response(JSON.stringify(body), { status, headers });
 }
 
-function pull(sha = HEAD, state = 'open'): Reply {
-  return json({ state, head: { sha } });
+const MERGEABLE = { mergeable: true, mergeable_state: 'clean' } as const;
+
+function pull(
+  sha = HEAD,
+  state = 'open',
+  mergeability: Record<string, unknown> = MERGEABLE,
+): Reply {
+  return json({ state, head: { sha }, ...mergeability });
 }
 
 function runs(checks: readonly Check[], total = checks.length): Reply {
@@ -344,6 +350,94 @@ describe('an approval that waits for the checks', () => {
     ]);
     expect([...closed.given, ...gone.given]).toEqual([]);
   });
+
+  it.each([
+    ['GitHub says it cannot be merged', { mergeable: false }, PASSED],
+    ['only its mergeable state is dirty', { mergeable: true, mergeable_state: 'dirty' }, PASSED],
+    [
+      'it conflicts while its checks still run',
+      { mergeable: false, mergeable_state: 'dirty' },
+      runs([['build', 'in_progress', null]]),
+    ],
+  ] as const)(
+    'a pull request with conflicts with its base branch (%s) ends as conflict at once and gives nothing',
+    async (_name, mergeability, checks) => {
+      const t = setup();
+      t.github.pull = pull(HEAD, 'open', mergeability);
+      t.github.runs = checks;
+
+      t.waiting.start(REQUEST);
+      await t.tick();
+
+      expect(t.given, 'a conflict cancels the approval').toEqual([]);
+      expect(
+        t.waiting.statusFor(KEY),
+        'the approval ends as conflict at the first read that shows it',
+      ).toEqual({
+        ...KEY,
+        state: 'ended',
+        running: 0,
+        reason: 'conflict',
+        detail: null,
+        askedAt: 1_000,
+      });
+      expect(t.recorded.at(-1), 'the bell says the approval ended for the conflict').toEqual({
+        id: ENTRY_ID,
+        kind: 'failed',
+        title: 'Not approved: acme/shop#5 has conflicts with its base branch',
+        detail: 'Scout approves only a pull request that can be merged',
+        source: 'verdict',
+      });
+      expect(
+        t.fetched.map((f) => f.url),
+        'no check is read once the pull request conflicts',
+      ).toEqual([PULL_URL]);
+      expect(t.timers, 'nothing is read after the approval ended').toEqual([]);
+      expect(t.saves.at(-1)).toBe('[]');
+    },
+  );
+
+  it.each([
+    ['null', { mergeable: null, mergeable_state: 'unknown' }],
+    ['absent', {}],
+    ['not a boolean', { mergeable: 'true', mergeable_state: 'clean' }],
+  ] as const)(
+    'keeps waiting while GitHub has not said whether the pull request can be merged (mergeable %s), gives at the next read once it has, and ends after two hours',
+    async (_name, unknown) => {
+      const t = setup();
+      t.github.pull = pull(HEAD, 'open', unknown);
+      const late = setup();
+      late.github.pull = pull(HEAD, 'open', unknown);
+
+      t.waiting.start(REQUEST);
+      late.waiting.start(REQUEST);
+      await t.tick();
+      await late.tick();
+      const unsaid = { given: [...t.given], state: state(t), next: t.timers.map((x) => x.ms) };
+      t.github.pull = pull();
+      await t.tick();
+      late.advance(WAIT_MAX_MS + 1);
+      await late.tick();
+
+      expect(
+        unsaid,
+        'Scout gives nothing while GitHub has not said the pull request can be merged, and reads again',
+      ).toEqual({
+        given: [],
+        state: { state: 'waiting', reason: null },
+        next: [WAIT_POLL_MS],
+      });
+      expect(
+        t.given,
+        'the approval is given at the next read once GitHub says it can be merged',
+      ).toEqual([REQUEST]);
+      expect(state(late), 'an answer that never comes ends the wait after two hours').toEqual({
+        state: 'ended',
+        reason: 'timed-out',
+      });
+      expect(late.given).toEqual([]);
+    },
+  );
 
   it('ends as timed-out after two hours', async () => {
     const t = setup();
