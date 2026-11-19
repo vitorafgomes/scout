@@ -121,8 +121,9 @@ function classify(runsBody: Record<string, unknown>, statusBody: Record<string, 
 /**
  * The approvals the owner asked Scout to give once every check of the reviewed commit passed, at most 20 at once.
  * Every minute, oldest first, main reads the pull request and its checks with GETs to api.github.com: a moved head,
- * a closed pull request, a failed check or two hours end the approval and give nothing; once every check passed it
- * gives exactly the request the owner clicked. A read that fails keeps it waiting; the waiting approvals are saved
+ * a closed pull request, a conflict with the base branch, a failed check or two hours end the approval and give
+ * nothing; once every check passed and GitHub says the pull request can be merged it gives exactly the request the
+ * owner clicked. A read that fails keeps it waiting; the waiting approvals are saved
  * without any token and come back after a restart with the time the owner asked.
  */
 export class WaitingApprovals {
@@ -339,6 +340,10 @@ export class WaitingApprovals {
       this.end(key, 'new-commit');
       return null;
     }
+    if (pull.body['mergeable'] === false || pull.body['mergeable_state'] === 'dirty') {
+      this.end(key, 'conflict');
+      return null;
+    }
     const commitUrl = `${API_URL}/repos/${repository}/commits/${head.toLowerCase()}`;
     const runs = await this.get(
       `${commitUrl}/check-runs?per_page=${PER_PAGE}`,
@@ -357,7 +362,7 @@ export class WaitingApprovals {
         entry.running = checks.running;
         this.announce(entry);
       }
-    } else {
+    } else if (pull.body['mergeable'] === true) {
       await this.approve(key, entry);
     }
     return null;

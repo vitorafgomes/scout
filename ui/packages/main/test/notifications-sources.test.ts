@@ -482,6 +482,17 @@ describe('an approval that waits for the checks', () => {
         source: 'verdict',
       },
     ],
+    [
+      'ended for a conflict: the pull request has conflicts with its base branch, and Scout approves only one that can be merged',
+      waiting('ended', 'conflict'),
+      {
+        id: ID,
+        kind: 'failed',
+        title: 'Not approved: acme/shop#5 has conflicts with its base branch',
+        detail: 'Scout approves only a pull request that can be merged',
+        source: 'verdict',
+      },
+    ],
     ['a cancel removes the entry', waiting('ended', 'cancelled'), null],
     [
       'an approval handed to the verdict removes the entry, the verdict tells the rest',

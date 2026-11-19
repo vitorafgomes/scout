@@ -23,6 +23,12 @@ reliability: medium
 
 ## Entries
 
+### A waiting approval GitHub never calls mergeable ends as timed out (2026-11-19)
+
+- **Gap:** with every check passed and GitHub's `mergeable` still not said, an approval that waits for the checks keeps waiting, and after two hours it ends as `timed-out`, so the bell says the checks did not finish although they did ([[pages/services/desktop-github/verdict-from-the-review-card]]).
+- **Blocker:** none.
+- **Unblocks with:** a reason of its own for a wait that ended without GitHub's answer on mergeability, with its bell sentence and a spec row.
+
 The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]]; its findings are not repeated here.
 
 ### A review stopped while paused loses its card when the host restarts first (2026-11-19)
@@ -221,13 +227,13 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:273`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1673`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:225`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:273`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1695`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:255`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
 ### The review card keeps only the end of a failed run's output (2026-11-13)
 
-- **Gap:** a failed sandbox run's result leads with the lines that name the failure, then the last 4,000 characters ([[pages/services/sandbox]]); `run_pull_request_tests` answers the model both, but the run kept for the review's card is cut to its last 4,000 (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:249`), and the desktop's parser cuts to the last 4,000 again (`ui/packages/renderer/src/app/core/review-findings.ts:245`), so a failure the model saw in the failure section can be absent from the card ([[pages/services/plugin-github]]).
+- **Gap:** a failed sandbox run's result leads with the lines that name the failure, then the last 4,000 characters ([[pages/services/sandbox]]); `run_pull_request_tests` answers the model both, but the run kept for the review's card is cut to its last 4,000 (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:249`), and the desktop's parser cuts to the last 4,000 again (`ui/packages/renderer/src/app/core/review-findings.ts:278`), so a failure the model saw in the failure section can be absent from the card ([[pages/services/plugin-github]]).
 - **Blocker:** the kept output counts toward the 24,000-character findings block, and the card is a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** the kept run carrying the failure section within a bound the findings block allows, the parser keeping it, and the card's tests line showing it, with the artboard updated and a spec row per state.
 
@@ -410,26 +416,14 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A review reads every non-zero exit as "Tests failed" (2026-11-10)
 
-- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:100`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
+- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:107`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
 - **Unblocks with:** `testsLine` reading "Tests could not be started: <reason>" when `ran` is true and `reason` is set, with rows for a restore failure, exits 126 and 127, an exit 1 without a reason and a pass; no contract change, the field is already in the block. Exit 2 from a line `sh` cannot parse stays "Tests failed".
-
-### The review card and the verdict's tests line call an unrunnable run failed (2026-11-15)
-
-- **Gap:** a run whose failed tests all needed a Docker daemon carries `unrunnable` in `run_pull_request_tests`' answer and in the review's `tests` object ([[pages/services/plugin-github/the-pull-request-s-checks-and-its-tests-in-a-con]]), but the desktop's parser does not read it, so the card and the tests line posted with a verdict still say "Tests failed (exit 1)" (`ui/packages/renderer/src/app/core/review-findings.ts:104`, used by `verdictTestsLine` at `:112`).
-- **Blocker:** a UI change of its own, artboard first.
-- **Unblocks with:** `unrunnable` on the TypeScript `ReviewTests`, its parser, the card's chip and `testsLine`, with a spec row per state.
 
 ### A project that mixes passing tests with tests that need Docker is reported as failed (2026-11-15)
 
 - **Gap:** a run is unrunnable only when every assembly that failed passed no test and every failed test's block names a missing Docker daemon ([[pages/services/sandbox/public-contract]]), so a test project where some tests pass and others need a Docker daemon is reported as failed; and the rule reads VSTest's output of `dotnet test` only, its `Failed <test>` blocks and `Passed!`/`Failed!` summary lines (`src/Scout.Sandbox/DockerSandboxRunner.cs:314`, `:317`), so Node, Python, Go, Java and a .NET run on the Microsoft Testing Platform report such tests as failed.
 - **Blocker:** a per-test reading needs each runner's output read test by test; leaving tests out by a name from the snapshot was rejected, because a pull request's author controls that name ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]).
 - **Unblocks with:** per runner, the failed tests counted from their own blocks, and the passing ones kept apart, each with a unit row.
-
-### A waiting approval retries a conflict refusal until its time limit (2026-11-15)
-
-- **Gap:** an approval the desktop keeps while the checks run is given again every minute ([[pages/decisions/0059-approve-when-the-checks-pass]]); since an approval over a conflict, or before GitHub computed mergeability, is refused ([[pages/decisions/0058-an-approval-needs-every-check-passed]]), a conflicted pull request is retried each minute until the two-hour limit, and the card shows no reason.
-- **Blocker:** a desktop change of its own, with the card that reads `unrunnable`.
-- **Unblocks with:** the waiting approval ending on the conflict refusal and showing its sentence, with a spec row.
 
 ### A test host that crashes without a summary line is reported as failed (2026-11-15)
 
@@ -510,7 +504,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### What is left of the review turn nothing builds (2026-11-10)
 
-- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1575`, `:1623`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
+- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1585`, `:1633`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
 - **Unblocks with:** deleting the flag, the marker, the two tags and their specs in one change; the compiler names every use.
 
 ### The conductor's own failure write is not bounded (2026-11-10)

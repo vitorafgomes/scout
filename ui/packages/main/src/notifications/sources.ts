@@ -428,8 +428,8 @@ export function waitingApprovalId(status: GitHubWaitingApproval): string {
 
 /**
  * The entry of an approval that waits for the checks: running with Cancel while it waits, failed with the reason once
- * a check failed, a new commit arrived, two hours passed or the pull request was closed; null once cancelled or
- * approved, when the entry is removed and the verdict's own entry tells the rest.
+ * a check failed, a new commit arrived, two hours passed, the pull request was closed or has conflicts with its base
+ * branch; null once cancelled or approved, when the entry is removed and the verdict's own entry tells the rest.
  */
 export function waitingApprovalNotification(
   status: GitHubWaitingApproval,
@@ -466,6 +466,11 @@ export function waitingApprovalNotification(
       return failed('Not approved: the checks did not finish within 2 hours', pr);
     case 'closed':
       return failed(`Not approved: ${pr} was closed`);
+    case 'conflict':
+      return failed(
+        `Not approved: ${pr} has conflicts with its base branch`,
+        'Scout approves only a pull request that can be merged',
+      );
     default:
       return null;
   }

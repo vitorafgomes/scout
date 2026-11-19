@@ -1080,6 +1080,7 @@ describe('the verdict on a pull request', () => {
       exitCode: true,
       durationSeconds: true,
       output: true,
+      unrunnable: true,
     };
     const bare: ReviewFindings = { repository: 'acme/shop', number: 5, verdict: 'v', findings: [] };
 
@@ -1109,6 +1110,7 @@ describe('the verdict on a pull request', () => {
       'exitCode',
       'durationSeconds',
       'output',
+      'unrunnable',
     ]);
     expect(Object.keys(bare)).not.toContain('selfAuthored');
   });

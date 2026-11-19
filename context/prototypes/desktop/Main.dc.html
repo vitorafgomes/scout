@@ -971,6 +971,7 @@ class Component extends DCLogic {
       awCheckFailed: { ...failed, title: 'Not approved: a check failed on acme/api#44', detail: 'lint did not pass' },
       awNewCommit: { ...failed, title: 'Not approved: acme/api#44 changed after the review' },
       awTimedOut: { ...failed, title: 'Not approved: the checks did not finish within 2 hours', detail: 'acme/api#44' },
+      awConflict: { ...failed, title: 'Not approved: acme/api#44 has conflicts with its base branch', detail: 'Scout approves only a pull request that can be merged' },
       mgWaiting: { ...failed, kind: 'running', glyph: '', path: 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2', tone: 'accent', title: 'Waiting to approve and merge acme/api#44', detail: '2 checks still running', indeterminate: true, controls: [{ label: 'Cancel the approval and merge of acme/api#44', path: 'M7 7h10v10H7z', act: () => this.setState({ aw: 'mgOwnPending' }) }] },
       mgMerged: { ...failed, kind: 'done', glyph: '✓', tone: 'ok', title: 'Approved and merged acme/api#44', detail: 'Squash merge commit 9c41e07 · Signed as Bot (scout[bot])', action: 'Open on GitHub' },
       mgNoSquash: { ...failed, tone: 'warn', title: 'Approved acme/api#44; not merged: this repository does not allow squash merges', action: 'Open on GitHub' },
@@ -980,22 +981,23 @@ class Component extends DCLogic {
   }
   awVals(t) {
     const aw = this.awState();
-    const tones = { passed: [t.okBg, t.ok, 'M20 6L9 17l-5-5'], pending: [t.warnBg, t.warn, 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2'], failed: [t.errBg, t.err, 'M6 6l12 12M18 6L6 18'] };
+    const tones = { passed: [t.okBg, t.ok, 'M20 6L9 17l-5-5'], pending: [t.warnBg, t.warn, 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2'], failed: [t.errBg, t.err, 'M6 6l12 12M18 6L6 18'], notrun: [t.surface2, t.fg2, 'M5 12h14'] };
     const merges = ['mgOwnPending', 'mgWaiting'].includes(aw);
-    const marks = ['awApproved', 'awRefused', 'mgOwn', 'mgOther', 'mgMerged', 'mgNoSquash', 'mgRefused'].includes(aw) ? ['passed', 'passed', 'passed'] : ['awCheckFailed', 'awFailedAtReview'].includes(aw) ? ['passed', 'passed', 'failed'] : ['passed', 'pending', 'pending'];
+    const marks = ['awApproved', 'awRefused', 'awTestsUnrunnable', 'awConflict', 'mgOwn', 'mgOther', 'mgMerged', 'mgNoSquash', 'mgRefused'].includes(aw) ? ['passed', 'passed', 'passed'] : ['awCheckFailed', 'awFailedAtReview'].includes(aw) ? ['passed', 'passed', 'failed'] : ['passed', 'pending', 'pending'];
     const chip = (label, title, mark) => ({ label, title, bg: tones[mark][0], fg: tones[mark][1], icon: tones[mark][2] });
-    const checkLine = { awPending: '2 checks are still running. Scout approves only when every check passed.', mgOwnPending: '2 checks are still running. Scout approves only when every check passed.', awFailedAtReview: 'lint did not pass. Scout approves only when every check passed.' }[aw] || '';
+    const checkLine = { awPending: '2 checks are still running. Scout approves only when every check passed.', mgOwnPending: '2 checks are still running. Scout approves only when every check passed.', awFailedAtReview: 'lint did not pass. Scout approves only when every check passed.', awTestsUnrunnable: '122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.' }[aw] || '';
     const alert = {
       awCheckFailed: 'Not approved: lint did not pass. Review it again once it is fixed.',
       awNewCommit: 'Not approved: a new commit arrived after the review. Review it again.',
       awTimedOut: 'Not approved: the checks did not finish within 2 hours.',
+      awConflict: 'Not approved: the pull request has conflicts with its base branch.',
       awRefused: 'Scout approves only when every check of the commit passed: 1 still running (build).',
     }[aw] || '';
-    const states = [['off', 'Off'], ['awPending', 'Checks pending: Approve when the checks pass'], ['awWaiting', 'Waiting for the checks'], ['awApproved', 'Approved after the checks passed'], ['awCheckFailed', 'Not approved: a check failed'], ['awNewCommit', 'Not approved: a new commit'], ['awTimedOut', 'Not approved: waited 2 hours'], ['awFailedAtReview', 'Checks failed at review time'], ['awRefused', "Approval refused by GitHub's state"]];
+    const states = [['off', 'Off'], ['awPending', 'Checks pending: Approve when the checks pass'], ['awWaiting', 'Waiting for the checks'], ['awApproved', 'Approved after the checks passed'], ['awCheckFailed', 'Not approved: a check failed'], ['awNewCommit', 'Not approved: a new commit'], ['awTimedOut', 'Not approved: waited 2 hours'], ['awConflict', 'Not approved: conflicts with the base branch'], ['awFailedAtReview', 'Checks failed at review time'], ['awTestsUnrunnable', 'Tests could not run'], ['awRefused', "Approval refused by GitHub's state"]];
     const drawn = { card: 'review', picks: {}, cardPreview: false, mention: 'off', mr: {}, bell: 'entries', bellTab: 'all', reply: 'done', conversation: 'turns' };
-    const inBell = ['awWaiting', 'awApproved', 'awCheckFailed', 'awNewCommit', 'awTimedOut', 'mgWaiting', 'mgMerged', 'mgNoSquash', 'mgRefused'];
+    const inBell = ['awWaiting', 'awApproved', 'awCheckFailed', 'awNewCommit', 'awTimedOut', 'awConflict', 'mgWaiting', 'mgMerged', 'mgNoSquash', 'mgRefused'];
     return {
-      ...(aw === 'off' ? {} : { chatTestChips: [...['build', 'e2e', 'lint'].map((name, i) => chip(name + ' ' + marks[i], 'Details of ' + name, marks[i])), chip('tests passed in 41 s (dotnet test)', '', 'passed')] }),
+      ...(aw === 'off' ? {} : { chatTestChips: [...['build', 'e2e', 'lint'].map((name, i) => chip(name + ' ' + marks[i], 'Details of ' + name, marks[i])), aw === 'awTestsUnrunnable' ? chip('Tests could not run', '', 'notrun') : chip('tests passed in 41 s (dotnet test)', '', 'passed')] }),
       awStates: states.map(([id, label]) => ({
         label, pressed: aw === id ? 'true' : 'false', bg: aw === id ? t.surface2 : 'transparent', fg: aw === id ? t.fg : t.muted,
         pick: () => this.setState(id === 'off' ? { aw: id } : { ...drawn, aw: id, bellOpen: inBell.includes(id) }),
@@ -1003,7 +1005,7 @@ class Component extends DCLogic {
       awHasCheckLine: checkLine !== '',
       awCheckLine: checkLine,
       awShowVerdict: !['awWaiting', 'mgWaiting'].includes(aw),
-      awPlainApprove: ['off', 'mgOwn', 'mgOther'].includes(aw),
+      awPlainApprove: ['off', 'mgOwn', 'mgOther', 'awTestsUnrunnable'].includes(aw),
       awOffersWait: ['awPending', 'awTimedOut', 'awRefused', 'mgOwnPending'].includes(aw),
       awArm: () => this.setState({ aw: merges ? 'mgWaiting' : 'awWaiting', bellOpen: true, bellTab: 'all' }),
       awWaiting: ['awWaiting', 'mgWaiting'].includes(aw),
@@ -1557,7 +1559,7 @@ class Component extends DCLogic {
       replyIsReview: reply === 'done',
       replyInterrupted: reply === 'interrupted',
       replyNotRunning: reply === 'notRunning',
-      replyText: reply === 'notRunning' ? 'Scout is not running. Start it from the tray or the app.' : reply === 'done' && (this.state.card || 'review').startsWith('audit') ? 'Six findings on acme/shop at ec7f951. Choose the ones to open as issues.' : reply === 'interrupted' ? 'Two findings on acme/shop#5. The checks passed;' : this.awState() !== 'off' ? 'Two findings on acme/api#44. The tests ran in a container and passed in 41 s.' : (this.state.card === 'reviewClean' ? 'No findings' : 'Two findings') + ' on acme/shop#5. The checks passed; the tests ran in a container and passed in 41 s.',
+      replyText: reply === 'notRunning' ? 'Scout is not running. Start it from the tray or the app.' : reply === 'done' && (this.state.card || 'review').startsWith('audit') ? 'Six findings on acme/shop at ec7f951. Choose the ones to open as issues.' : reply === 'interrupted' ? 'Two findings on acme/shop#5. The checks passed;' : this.awState() === 'awTestsUnrunnable' ? 'Two findings on acme/api#44. The checks passed; the tests could not run in the container.' : this.awState() !== 'off' ? 'Two findings on acme/api#44. The tests ran in a container and passed in 41 s.' : (this.state.card === 'reviewClean' ? 'No findings' : 'Two findings') + ' on acme/shop#5. The checks passed; the tests ran in a container and passed in 41 s.',
       replyColor: reply === 'notRunning' ? t.err : t.fg2,
       dictationStates: seg([['off', 'Off'], ['holding', 'Holding the microphone'], ['nothing', 'Nothing heard'], ['readAloud', 'Read aloud failed'], ['refused', 'Question refused']], dictation, 'dictation'),
       holding: dictation === 'holding',

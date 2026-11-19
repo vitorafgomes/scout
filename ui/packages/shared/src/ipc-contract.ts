@@ -1382,9 +1382,19 @@ export interface GitHubWaitingApproval extends GitHubVerdictKey {
   readonly state: 'waiting' | 'ended';
   /** How many checks were still running at the last read. */
   readonly running: number;
-  /** Why it ended, null while waiting; `approved` once the approval was handed to the verdict. */
+  /**
+   * Why it ended, null while waiting; `conflict` once GitHub said the pull request conflicts with its base branch,
+   * `approved` once the approval was handed to the verdict.
+   */
   readonly reason:
-    null | 'check-failed' | 'new-commit' | 'timed-out' | 'cancelled' | 'closed' | 'approved';
+    | null
+    | 'check-failed'
+    | 'new-commit'
+    | 'timed-out'
+    | 'cancelled'
+    | 'closed'
+    | 'conflict'
+    | 'approved';
   /** The name of the check that failed, one line of at most 60 characters; null for any other reason. */
   readonly detail: string | null;
   /** When the owner clicked, in milliseconds since the epoch; the two hours count from here. */
@@ -1690,6 +1700,8 @@ export interface ReviewTests {
   readonly exitCode?: number;
   readonly durationSeconds?: number;
   readonly output?: string;
+  /** On a failed run, the worker's sentence that its failed tests could not run in the container; then the run did not fail. */
+  readonly unrunnable?: string;
 }
 
 /** Asks the worker to read the text on a screenshot, the same JPEG shape an ask carries. */

@@ -1,9 +1,9 @@
 ---
 title: "Desktop prototype"
-version: "1.19"
+version: "1.20"
 date: 2026-11-07
 updated: 2026-11-19
-changes: "v1.19 (2026-11-19): the Review job group is built."
+changes: "v1.20 (2026-11-19): two states of the Approve when checks pass group, Tests could not run and Not approved for a conflict. v1.19 (2026-11-19): the Review job group is built."
 page_type: convention
 status: active
 description: "The clickable prototype of Scout Desktop is kept in context/prototypes/desktop, one artboard per screen; every change to a screen, and every new screen, updates or adds its artboard in the same branch, before the code."
@@ -87,5 +87,7 @@ The owner, 2026-11-07, translated: "is there a way to save the prototypes in [th
 2026-11-15: the GitHub notes artboard draws its 15 templates in a friendlier style, for the owner's approval: each section heading starts with a GitHub emoji shortcode, the author's templates open with a checklist and the kind of change as boxes to tick and carry hints as comments, and the bot's notes open with one summary line and put a status shortcode beside each result word. The file holds the shortcodes as text; the artboard turns them into glyphs when it draws.
 
 2026-11-19: the Main artboard's Review job group, drawn for the owner and approved before the code, is built: its 26 inventory rows each have a spec ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
+
+2026-11-19: the Main artboard's Preview group "Approve when checks pass" gains two states, both built in the same change. "Tests could not run" (`awTestsUnrunnable`): the run's chip reads "Tests could not run" on the neutral not-run tone beside the passed checks, the worker's sentence sits under the chips, the reply says the tests could not run in the container, and the Verdict group keeps the plain Approve ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]). "Not approved: conflicts with the base branch" (`awConflict`): the bell's failed entry "Not approved: acme/api#44 has conflicts with its base branch" over "Scout approves only a pull request that can be merged", and the card's alert "Not approved: the pull request has conflicts with its base branch." ([[pages/decisions/0059-approve-when-the-checks-pass]]).
 
 Related: [[pages/services/desktop-ui]], [[pages/decisions/0047-the-docker-card]], [[pages/decisions/0046-ai-source-usage-on-the-cards]].

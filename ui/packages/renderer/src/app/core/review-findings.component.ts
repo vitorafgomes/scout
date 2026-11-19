@@ -112,6 +112,9 @@ export class ReviewFindingsPipe implements PipeTransform {
           <p class="check-line" data-test="check-line">{{ line }}</p>
         }
         @if (review().tests; as tests) {
+          @if (tests.unrunnable) {
+            <p class="check-line" data-test="tests-unrunnable">{{ tests.unrunnable }}</p>
+          }
           @if (tests.ran && tests.exitCode !== 0 && tests.output) {
             <details class="output" data-test="tests-output">
               <summary>Last output</summary>
@@ -1291,6 +1294,8 @@ export class ReviewFindingsComponent {
         return 'Not approved: the checks did not finish within 2 hours.';
       case 'closed':
         return 'Not approved: the pull request was closed.';
+      case 'conflict':
+        return 'Not approved: the pull request has conflicts with its base branch.';
       default:
         return null;
     }
@@ -1370,12 +1375,13 @@ export class ReviewFindingsComponent {
   protected readonly alert = ALERT;
 
   protected runTone(tests: ReviewTests): 'passed' | 'failed' | 'notrun' {
-    if (!tests.ran) return 'notrun';
+    if (!tests.ran || tests.unrunnable !== undefined) return 'notrun';
     return tests.exitCode === 0 ? 'passed' : 'failed';
   }
 
   protected runChip(tests: ReviewTests): string {
     if (!tests.ran) return `tests did not run: ${tests.reason}`;
+    if (tests.unrunnable !== undefined) return 'Tests could not run';
     return tests.exitCode === 0
       ? `tests passed in ${Math.round(tests.durationSeconds ?? 0)} s (${tests.command})`
       : `tests failed (exit ${tests.exitCode})`;
