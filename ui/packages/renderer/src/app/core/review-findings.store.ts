@@ -113,7 +113,7 @@ export class ReviewFindingsStore {
   private readonly verdicts = signal<Readonly<Record<string, VerdictView>>>({});
   private readonly waitings = signal<Readonly<Record<string, GitHubWaitingApproval>>>({});
   private readonly previews = signal<Readonly<Record<string, NotePreview>>>({});
-  private readonly previewAsked = new Map<string, string>();
+  private readonly previewAsked = new Map<string, { readonly request: string }>();
   private readonly previewTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly lookedUp = new Set<string>();
 
@@ -266,9 +266,9 @@ export class ReviewFindingsStore {
    * checks are read again each time. Nothing is sent to GitHub.
    */
   preview(turnId: string, request: GitHubVerdictRequest): void {
-    const asked = JSON.stringify(request);
-    if (this.previewAsked.get(turnId) === asked) return;
-    const first = !this.previewAsked.has(turnId);
+    const asked = { request: JSON.stringify(request) };
+    const before = this.previewAsked.get(turnId);
+    if (before?.request === asked.request) return;
     this.previewAsked.set(turnId, asked);
     clearTimeout(this.previewTimers.get(turnId));
     const keep = (preview: NotePreview) => {
@@ -283,15 +283,19 @@ export class ReviewFindingsStore {
         (err: unknown) => keep({ verdict: request.verdict, error: readIpcError(err).message }),
       );
     };
-    if (first) send();
+    if (before === undefined) send();
     else this.previewTimers.set(turnId, setTimeout(send, PREVIEW_QUIET_MS));
   }
 
-  /** Drops the preview of a card that left the view: its waiting request is never sent, and its next one is asked at once. */
+  /**
+   * Drops the preview of a card that left the view: its note is no longer shown, its waiting request is never sent,
+   * an answer still on its way is dropped, and its next request is asked at once.
+   */
   forgetPreview(turnId: string): void {
     clearTimeout(this.previewTimers.get(turnId));
     this.previewTimers.delete(turnId);
     this.previewAsked.delete(turnId);
+    this.previews.update(({ [turnId]: _dropped, ...rest }) => rest);
   }
 
   /** The last note the worker composed for a card's preview, or why it could not; null before the first answer. */

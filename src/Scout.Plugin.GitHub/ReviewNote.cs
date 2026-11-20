@@ -253,7 +253,7 @@ internal static class ReviewNote
                 string.Empty,
                 "| Check | Result | Link |",
                 "|---|---|---|",
-                .. checks.Select(c => $"| {Cell(c.Name)} | {CheckResult(c)} | {(string.IsNullOrWhiteSpace(c.Url) ? string.Empty : $"[job]({c.Url})")} |"),
+                .. checks.Select(c => $"| {Cell(c.Name)} | {CheckResult(c)} | {JobLink(c.Url)} |"),
                 string.Empty,
                 "</details>",
             ]);
@@ -261,6 +261,15 @@ internal static class ReviewNote
 
         return Section("vertical_traffic_light", "Checks on the commit", [.. lines]);
     }
+
+    /// <summary>
+    /// The link to a check's job, only for an absolute http or https address; a parenthesis or a pipe, which would end
+    /// the link or the cell, is percent-encoded. Any other address leaves the cell empty.
+    /// </summary>
+    private static string JobLink(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? $"[job]({uri.AbsoluteUri.Replace("(", "%28", StringComparison.Ordinal).Replace(")", "%29", StringComparison.Ordinal).Replace("|", "%7C", StringComparison.Ordinal)})"
+            : string.Empty;
 
     private static string CheckResult(PullRequestCheck check) =>
         !Completed(check) ? ":hourglass_flowing_sand: Running"

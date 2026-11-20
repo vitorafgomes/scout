@@ -2626,6 +2626,52 @@ describe('review findings store: a burst of preview changes', () => {
   beforeEach(() => TestBed.resetTestingModule());
   afterEach(() => vi.useRealTimers());
 
+  it('a preview that was closed shows no note when it opens again, and drops the answer asked before it closed', async () => {
+    const bridge = makeBridge();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+      ],
+    });
+    const store = TestBed.inject(ReviewFindingsStore);
+    const request: GitHubVerdictRequest = {
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'approve',
+      findings: [total],
+      commit: 'ec7f951',
+      testsLine: '',
+    };
+    const note = (body: string) => ({ body, comments: [], dropped: [] as string[] });
+    const answers: ((value: ReturnType<typeof note>) => void)[] = [];
+    bridge.githubPreviewVerdict.mockImplementation(
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+
+    store.preview('f-1', request);
+    answers[0]!(note('first'));
+    await Promise.resolve();
+    expect(store.notePreview('f-1')?.note?.body).toBe('first');
+
+    store.forgetPreview('f-1');
+    expect(store.notePreview('f-1'), 'a closed preview keeps no note').toBeNull();
+
+    store.preview('f-1', request);
+    store.forgetPreview('f-1');
+    store.preview('f-1', request);
+    answers[1]!(note('asked before it closed'));
+    await Promise.resolve();
+    expect(
+      store.notePreview('f-1'),
+      'an answer asked before the preview closed is not shown after it opens again',
+    ).toBeNull();
+
+    answers[2]!(note('current'));
+    await Promise.resolve();
+    expect(store.notePreview('f-1')?.note?.body).toBe('current');
+  });
+
   it('asks at once when the preview opens, then sends a burst as its last request after 400 ms of quiet', async () => {
     const bridge = makeBridge();
     TestBed.configureTestingModule({

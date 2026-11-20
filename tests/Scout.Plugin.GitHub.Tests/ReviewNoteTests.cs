@@ -316,6 +316,15 @@ public sealed partial class ReviewNoteTests
             .ShouldBe(":white_check_mark: 2 passed, :x: 2 failed, :fast_forward: 1 skipped, of 5 on `4f2a9c1`.", "success and neutral pass, skipped is skipped, any other conclusion failed");
     }
 
+    [Theory]
+    [InlineData("https://ci/1) and [more](https://evil", "[job](https://ci/1%29%20and%20[more]%28https://evil)")]
+    [InlineData("https://ci/a|b", "[job](https://ci/a%7Cb)")]
+    [InlineData("javascript:alert(1)", "")]
+    [InlineData("ci/1", "")]
+    public void A_Check_Address_Cannot_End_Its_Link_Or_Its_Cell(string url, string cell) =>
+        Section(Input(checks: [new("build", "completed", "success", url)]), "#### :vertical_traffic_light: Checks on the commit")!
+            .ShouldContain($"| build | :white_check_mark: Passed | {cell} |", customMessage: "only an http or https address is linked, with the characters that end a link or a cell encoded");
+
     [Fact]
     public void Each_Check_Is_A_Row_With_Its_Result_And_Link() =>
         Section(Input(checks: FourChecks), "#### :vertical_traffic_light: Checks on the commit")!.Split('\n')[2..].ShouldBe(
