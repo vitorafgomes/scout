@@ -663,6 +663,269 @@ public sealed class AuditBatchRunnerTests
         data.RootElement.EnumerateArray().Select(e => e.GetString()).ShouldBe(titles, "each title comes back verbatim when the line is read as JSON");
     }
 
+    private const string Breaking = "\n```\n" + Injected + "\u2028" + Injected + "\u2029" + Injected + "\u0085" + Injected;
+
+    private static readonly ReviewRules NoRuleFiles = new([], [], Unreadable: false);
+
+    private static readonly ReviewRemoved NothingRemoved = new([], 0, 0, false);
+
+    private static async Task<string[]> ReviewLinesAsync(ReviewInputs? inputs)
+    {
+        var chat = new ScriptedChat(Kernels.PresentingAnEmptyReview);
+        await Kernels.Runner(Kernels.Audit(), chat).RunReviewAsync(Review, "instructions", Billing, 3, [], BillingPatches, CancellationToken.None, inputs);
+        return chat.Turns.ShouldHaveSingleItem().Request.ReplaceLineEndings("\n").Split('\n');
+    }
+
+    private static void NoLineBreaksOut(string[] lines) =>
+        lines.ShouldNotContain(
+            line => line.StartsWith("```", StringComparison.Ordinal) || line.StartsWith(Injected, StringComparison.Ordinal) || line.StartsWith('+'),
+            "no fence, injected sentence or patch line starts a line of the request");
+
+    [Fact]
+    public async Task A_review_batch_carries_the_purpose_as_one_line_of_data_that_a_description_cannot_break()
+    {
+        var purpose = new ReviewPurpose("Tax \"rounded\"" + Breaking, "Fixes #7." + Breaking, 7, "Issue" + Breaking, "Body" + Breaking, DescriptionCut: true);
+
+        var lines = await ReviewLinesAsync(new ReviewInputs(purpose, NoRuleFiles, NothingRemoved));
+
+        lines.Length.ShouldBe(9, "the purpose is one line, whatever line breaks, fences or line separators its texts carry");
+        (lines[0], lines[2], lines[5], lines[6]).ShouldBe(
+            (AuditBatchRunner.PurposeIsData, AuditBatchRunner.NoRuleFiles, AuditBatchRunner.ReviewScopeSentence, AuditBatchRunner.PatchesAreData),
+            "the purpose's sentence and line open the request, before the batch's header, the scope and the patches");
+        NoLineBreaksOut(lines);
+        System.Text.Json.JsonSerializer.Deserialize<ReviewPurpose>(lines[1], System.Text.Json.JsonSerializerOptions.Web).ShouldBe(
+            purpose, "the title, the description and the issue come back verbatim when the line is read as JSON");
+        lines[1].ShouldContain("\"descriptionCut\":true", Case.Sensitive, customMessage: "the line carries the cut flag the sentence names");
+    }
+
+    [Fact]
+    public async Task A_review_batch_carries_the_rule_files_as_one_line_of_data_that_a_rule_file_cannot_break()
+    {
+        var rules = new ReviewRules(
+            [new("AGENTS.md", "Every write is declared." + Breaking, Cut: true, ChangedHere: true)], [".claude/rules/orders" + Breaking + ".md"], Unreadable: false, NotIncludedMore: 3);
+
+        var lines = await ReviewLinesAsync(new ReviewInputs(null, rules, NothingRemoved));
+
+        lines.Length.ShouldBe(10, "the rule files are one line, whatever line breaks, fences or line separators their texts and paths carry");
+        (lines[0], lines[1], lines[3], lines[7]).ShouldBe(
+            (AuditBatchRunner.NoPurpose, AuditBatchRunner.RulesAreData, "3 more rule files did not fit and are not named.", AuditBatchRunner.PatchesAreData),
+            "the rules' sentence and line open the request after the purpose's, then the count of the rule files not named");
+        NoLineBreaksOut(lines);
+        using var data = System.Text.Json.JsonDocument.Parse(lines[2]);
+        var file = data.RootElement.GetProperty("files").EnumerateArray().ShouldHaveSingleItem();
+        (file.GetProperty("path").GetString(), file.GetProperty("text").GetString(), file.GetProperty("cut").GetBoolean(), file.GetProperty("changedHere").GetBoolean()).ShouldBe(
+            ("AGENTS.md", "Every write is declared." + Breaking, true, true), "a rule file's path, text and marks come back verbatim when the line is read as JSON");
+        data.RootElement.GetProperty("notIncluded").EnumerateArray().Select(e => e.GetString()).ShouldBe(
+            [".claude/rules/orders" + Breaking + ".md"], "a path not included comes back verbatim");
+    }
+
+    [Fact]
+    public async Task A_review_batch_carries_what_was_removed_as_one_line_of_data_that_a_path_cannot_break()
+    {
+        var removed = new ReviewRemoved(
+        [
+            new("tests/Billing.Tests/InvoiceTests.cs", RemovedEntry.TestFileDeleted, ["src/Billing/Invoice.cs", "src/Old" + Breaking + ".cs"], 0, 0),
+            new("src/Legacy/Export.cs", RemovedEntry.FileDeleted, [], 0, 0),
+        ], 0, 0, false);
+
+        var lines = await ReviewLinesAsync(new ReviewInputs(null, NoRuleFiles, removed));
+
+        lines.Length.ShouldBe(12, "what was removed is one line, whatever line breaks, fences or line separators its paths carry");
+        lines[..2].ShouldBe([AuditBatchRunner.NoPurpose, AuditBatchRunner.NoRuleFiles], "the job's constant lines open the request");
+        lines[5..11].ShouldBe(
+        [
+            "The pull request deletes 2 files, 1 of them a test file.",
+            "1 deleted or emptied test file leaves code named like it in the repository.",
+            AuditBatchRunner.RemovedIsData,
+            lines[8],
+            AuditBatchRunner.PatchesAreData,
+            lines[10],
+        ], "after the scope, Scout's counts of the removals, then the removals of this batch's files under their sentence, come before the patches");
+        NoLineBreaksOut(lines);
+        using var data = System.Text.Json.JsonDocument.Parse(lines[8]);
+        var entry = data.RootElement.EnumerateArray().ShouldHaveSingleItem("only the removal of the code this batch holds is handed to it");
+        (entry.GetProperty("path").GetString(), entry.GetProperty("what").GetString()).ShouldBe(("tests/Billing.Tests/InvoiceTests.cs", RemovedEntry.TestFileDeleted));
+        entry.GetProperty("stillPresent").EnumerateArray().Select(e => e.GetString()).ShouldBe(
+            ["src/Billing/Invoice.cs", "src/Old" + Breaking + ".cs"], "each path comes back verbatim when the line is read as JSON");
+    }
+
+    [Fact]
+    public void Two_batches_of_one_job_start_with_the_same_text_up_to_the_batch_header()
+    {
+        var inputs = new ReviewInputs(
+            new ReviewPurpose("Tax rate", "Doubles the rate."),
+            new ReviewRules([new("AGENTS.md", "Every write is declared.", false, false)], [], false),
+            new ReviewRemoved([new("src/Billing/Tax.cs", RemovedEntry.FileDeleted, [], 0, 0)], 0, 0, false));
+        var constant = AuditBatchRunner.ConstantBlock(inputs);
+        var other = Billing with { Order = 3, Files = ["src/Orders/Checkout.cs"] };
+
+        var first = AuditBatchRunner.ReviewRequest(Review, Billing, 3, [], BillingPatches, inputs, constant);
+        var second = AuditBatchRunner.ReviewRequest(Review, other, 3, [], [new("src/Orders/Checkout.cs", "@@ -1 +1 @@\n+x")], inputs, constant);
+
+        var header = first.IndexOf("Review pull request", StringComparison.Ordinal);
+        header.ShouldBeGreaterThan(0, "the constant block comes before the batch's header");
+        second[..header].ShouldBe(first[..header], "two batches of one job start with the same text, character for character, up to the header");
+        second.IndexOf("Review pull request", StringComparison.Ordinal).ShouldBe(header, "the header follows the same constant block in every batch");
+        first[..header].ShouldNotContain(AuditBatchRunner.RemovedIsData, Case.Sensitive, "what depends on the batch stays after its header");
+    }
+
+    [Fact]
+    public async Task The_rules_sentence_asks_for_the_rule_field_and_a_finding_with_its_rule_is_kept()
+    {
+        var block = "```scout-findings\n" + System.Text.Json.JsonSerializer.Serialize(new
+        {
+            repository = "acme/shop",
+            number = 12,
+            commit = "abc1234",
+            verdict = "needs rework",
+            findings = new[] { new { id = "rate", severity = "fix", title = "Tax rate doubled", path = "src/Billing/Tax.cs", line = 3, why = "Why.", fix = "Fix.", rule = "AGENTS.md: every rate is read from configuration" } },
+        }) + "\n```";
+        var chat = new ScriptedChat((_, kernel, _) => Kernels.PresentReviewAsync(kernel, block));
+        var rules = new ReviewRules([new("AGENTS.md", "Every rate is read from configuration.", Cut: false, ChangedHere: false)], [], Unreadable: false);
+
+        var outcome = await Kernels.Runner(Kernels.Audit(), chat)
+            .RunReviewAsync(Review, "instructions", Billing, 3, [], BillingPatches, CancellationToken.None, new ReviewInputs(null, rules, NothingRemoved));
+
+        AuditBatchRunner.RulesAreData.ShouldContain(
+            "A finding that rests on one names it in its rule field, by the file's path and the rule's own words.", Case.Sensitive, customMessage: "the rules' sentence asks for the rule field");
+        chat.Turns.ShouldHaveSingleItem().Request.ShouldContain(AuditBatchRunner.RulesAreData, Case.Sensitive);
+        outcome.Findings.ShouldHaveSingleItem().Rule.ShouldBe("AGENTS.md: every rate is read from configuration", "a finding that names its rule keeps it");
+    }
+
+    [Fact]
+    public async Task The_removed_sentence_says_the_counts_come_from_patch_lines_and_a_moved_test_counts_as_removed()
+    {
+        var removed = new ReviewRemoved([new("src/Billing/Tax.cs", RemovedEntry.FileDeleted, [], 0, 0)], 0, 0, false);
+
+        var lines = await ReviewLinesAsync(new ReviewInputs(null, NoRuleFiles, removed));
+
+        AuditBatchRunner.RemovedIsData.ShouldEndWith(
+            "The counts come from the lines of the patches, not from parsing the language: a test that moved to another file counts as removed here.",
+            customMessage: "the batch is told how the removals were counted and what that misses");
+        lines.ShouldContain(AuditBatchRunner.RemovedIsData, "a batch with a removal of its own files is given the sentence");
+    }
+
+    [Theory]
+    [InlineData("no purpose")]
+    [InlineData("no rule file")]
+    [InlineData("rules unreadable")]
+    public async Task A_batch_is_told_in_one_sentence_each_that_no_purpose_was_given_no_rule_file_exists_or_the_rules_could_not_be_read(string missing)
+    {
+        var purpose = missing == "no purpose" ? null : new ReviewPurpose("Tax rate", "Doubles the rate.");
+        var rules = missing == "rules unreadable"
+            ? new ReviewRules([], [], Unreadable: true)
+            : missing == "no rule file" ? NoRuleFiles : new ReviewRules([new("AGENTS.md", "Every write is declared.", false, false)], [], false);
+        var told = missing switch
+        {
+            "no purpose" => AuditBatchRunner.NoPurpose,
+            "no rule file" => AuditBatchRunner.NoRuleFiles,
+            _ => AuditBatchRunner.RulesUnreadable,
+        };
+
+        var lines = await ReviewLinesAsync(new ReviewInputs(purpose, rules, NothingRemoved));
+
+        lines.Count(line => line == told).ShouldBe(1, $"a batch with {missing} is told so in one sentence");
+        (AuditBatchRunner.NoPurpose, AuditBatchRunner.NoRuleFiles, AuditBatchRunner.RulesUnreadable).ShouldBe(
+            (
+                "The pull request's title and description were not given to this review.",
+                "The repository has none of the rule files Scout looks for at the reviewed commit.",
+                "The project's rule files could not be read; judge against the conventions profile and what the files show."
+            ),
+            "each sentence says what is missing in Scout's words");
+        lines.Length.ShouldBe(9, "a missing input is one sentence and no line of data");
+        lines.ShouldNotContain(missing == "no purpose" ? AuditBatchRunner.PurposeIsData : AuditBatchRunner.RulesAreData, "a missing input has no sentence of data");
+    }
+
+    [Fact]
+    public async Task The_review_scope_sentence_judges_against_the_purpose_the_rules_and_what_was_removed()
+    {
+        var lines = await ReviewLinesAsync(null);
+
+        AuditBatchRunner.ReviewScopeSentence.ShouldBe(
+            "The scope is these files and nothing else: report findings only in these files. Judge the changes their patches show against what the pull request says it does, the project's own rules and what the pull request removed, each given below as data when Scout has it.",
+            "the scope sentence names the three things the changes are judged against");
+        lines[2].ShouldBe(AuditBatchRunner.ReviewScopeSentence, "the request carries the scope sentence after the header");
+    }
+
+    [Fact]
+    public async Task A_review_request_without_inputs_adds_no_line()
+    {
+        var lines = await ReviewLinesAsync(null);
+
+        lines.ShouldBe(
+        [
+            "Review pull request acme/shop#12 at head commit abc1234def (batch 2 of 3).",
+            "When a patch is not enough, read the code around it with get_file_contents(owner \"acme\", repo \"shop\", path, reference \"abc1234def\").",
+            AuditBatchRunner.ReviewScopeSentence,
+            AuditBatchRunner.PatchesAreData,
+            lines[4],
+            "Call present_review_findings once with repository \"acme/shop\", number 12 and commit \"abc1234def\", with [] when these files have no findings; Scout computes the verdict, so the one you give is not used.",
+        ], "a review that kept no inputs, one started before them, is asked as before but for the scope sentence");
+    }
+
+    private static void SnapshotText(TempFolder folder, string relative, string text)
+    {
+        var full = Path.Combine(folder.Path, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, text);
+    }
+
+    [Theory]
+    [InlineData("\u0001")]
+    [InlineData("\"\\")]
+    public void A_review_request_with_every_input_at_its_bound_stays_within_the_patches_and_34500_characters(string fill)
+    {
+        string Filled(int length) => string.Concat(Enumerable.Repeat(fill, (length / fill.Length) + 1))[..length];
+        using var snapshot = new TempFolder();
+        SnapshotText(snapshot, "AGENTS.md", Filled(7_000));
+        SnapshotText(snapshot, "CLAUDE.md", Filled(7_000));
+        SnapshotText(snapshot, "CONTRIBUTING.md", Filled(7_000));
+        foreach (var n in Enumerable.Range(1, 400))
+        {
+            SnapshotText(snapshot, $".claude/rules/{n:000}{Filled(200)}.md", Filled(500));
+        }
+
+        var purpose = ReviewInputs.Bound(new ReviewPurpose(Filled(400), Filled(5_000), 7, Filled(400), Filled(5_000)));
+        var rules = ReviewRules.Read(snapshot.Path, []);
+        var removed = new ReviewRemoved(
+            [.. Enumerable.Range(1, 200).Select(n => new RemovedEntry($"tests/{n:000}{Filled(200)}/InvoiceTests.cs", RemovedEntry.TestFileDeleted, [Filled(200), Filled(200), Filled(200)], 0, 0))],
+            0, 0, false);
+        var without = AuditBatchRunner.ReviewRequest(Review, Billing, 3, [], BillingPatches);
+
+        var with = AuditBatchRunner.ReviewRequest(Review, Billing, 3, [], BillingPatches, new ReviewInputs(purpose, rules, removed));
+
+        var lines = with.ReplaceLineEndings("\n").Split('\n');
+        string After(string sentence) => lines[Array.IndexOf(lines, sentence) + 1];
+        (After(AuditBatchRunner.PurposeIsData).Length, After(AuditBatchRunner.RulesAreData).Length, After(AuditBatchRunner.RemovedIsData).Length).ShouldSatisfyAllConditions(
+            "each line of data is bounded by its length as sent, whatever its texts escape to",
+            sizes => sizes.Item1.ShouldBeLessThanOrEqualTo(AuditBatchRunner.MaxPurposeSent),
+            sizes => sizes.Item2.ShouldBeLessThanOrEqualTo(AuditBatchRunner.MaxRulesSent),
+            sizes => sizes.Item3.ShouldBeLessThanOrEqualTo(AuditBatchRunner.MaxRemovedSent));
+        var sentences = with.Length - without.Length - After(AuditBatchRunner.PurposeIsData).Length - After(AuditBatchRunner.RulesAreData).Length - After(AuditBatchRunner.RemovedIsData).Length;
+        sentences.ShouldBeLessThanOrEqualTo(2_500, "Scout's own sentences and line ends add at most 2500 characters (1916 measured: the scope sentence's growth, the three data sentences, the removal counts and the not-named and not-listed counts)");
+        (with.Length - without.Length).ShouldBeLessThanOrEqualTo(34_500, "the inputs add at most 10000 + 18000 + 4000 characters of data and 2500 of Scout's own sentences to the patches' request");
+    }
+
+    [Fact]
+    public void A_description_of_quotes_and_backslashes_is_cut_by_its_sent_length_and_says_so()
+    {
+        var description = string.Concat(Enumerable.Repeat("\"\\", 2_000));
+        var purpose = new ReviewPurpose("Checkout total", description, 7, "Totals are negative", new string('b', 4_000));
+
+        var request = AuditBatchRunner.ReviewRequest(Review, Billing, 3, [], BillingPatches, new ReviewInputs(purpose, NoRuleFiles, NothingRemoved));
+
+        var lines = request.ReplaceLineEndings("\n").Split('\n');
+        var line = lines[Array.IndexOf(lines, AuditBatchRunner.PurposeIsData) + 1];
+        line.Length.ShouldBeLessThanOrEqualTo(AuditBatchRunner.MaxPurposeSent, "a description that escapes to twice its length is cut by the length it is sent at");
+        var sent = System.Text.Json.JsonSerializer.Deserialize<ReviewPurpose>(line, System.Text.Json.JsonSerializerOptions.Web).ShouldNotBeNull("the cut line is still valid JSON");
+        sent.ShouldSatisfyAllConditions(
+            "the description is cut to a prefix of itself and says so; the shorter issue body is kept whole",
+            p => description.ShouldStartWith(p.Description!, Case.Sensitive),
+            p => p.Description!.Length.ShouldBeLessThan(description.Length),
+            p => p.DescriptionCut.ShouldBeTrue(),
+            p => (p.IssueBody, p.IssueBodyCut).ShouldBe((new string('b', 4_000), false)));
+    }
+
     [Theory]
     [InlineData("another repository", "acme/other", "12", 0)]
     [InlineData("another pull request", "acme/shop", "13", 0)]

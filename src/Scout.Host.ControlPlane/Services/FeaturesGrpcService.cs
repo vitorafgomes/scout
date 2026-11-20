@@ -299,7 +299,8 @@ public sealed class FeaturesGrpcService(
         {
             ActionId = (await _verdicts.GiveAsync(
                     PullRequestVerdictRequest.FromCard(
-                        request.Repository, request.Number, request.Verdict, request.Body, request.CommentsJson, request.Commit, request.TestsLine),
+                        request.Repository, request.Number, request.Verdict, request.FindingsJson, request.Commit, request.TestsLine,
+                        request.HasFilesRead ? request.FilesRead : null, request.HasFilesChanged ? request.FilesChanged : null, [.. request.Notes]),
                     context.CancellationToken)
                 .ConfigureAwait(false)).Id,
         });

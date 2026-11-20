@@ -68,6 +68,13 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
     private readonly ILogger<LocalChatAdapter> _logger;
     private readonly ILiveTranscriber? _live;
     private readonly IScreenTextReader? _reader;
+    private readonly IReviewNotePreview? _preview;
+
+    /// <summary>The answer to a <c>note</c> when no previewer is registered.</summary>
+    internal const string NoPreviewReply = "Review previews are not available in this Scout.";
+
+    /// <summary>The answer to a <c>note</c> that carries no verdict.</summary>
+    internal const string NoNoteReply = "A preview needs the verdict to compose.";
     private readonly ILiveTranslator? _translator;
     private readonly Func<CancellationToken, Task<string?>>? _mandateLanguage;
     private readonly IMeetingStore? _meetings;
@@ -105,8 +112,9 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         IConversationMemoryStore? memory = null,
         IConversationKeyProvider? keys = null,
         ISpeechSynthesizer? speech = null,
-        ICarriedSkills? carried = null)
-        : this(Console.OpenStandardInput, Console.Out, logger, live, reader, translator, mandateLanguage, meetings, renderMeeting, memory, keys, speech, carried)
+        ICarriedSkills? carried = null,
+        IReviewNotePreview? preview = null)
+        : this(Console.OpenStandardInput, Console.Out, logger, live, reader, translator, mandateLanguage, meetings, renderMeeting, memory, keys, speech, carried, preview)
     {
     }
 
@@ -123,7 +131,8 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         IConversationMemoryStore? memory = null,
         IConversationKeyProvider? keys = null,
         ISpeechSynthesizer? speech = null,
-        ICarriedSkills? carried = null)
+        ICarriedSkills? carried = null,
+        IReviewNotePreview? preview = null)
     {
         _openInput = openInput ?? throw new ArgumentNullException(nameof(openInput));
         _writer = new LocalEventWriter(output ?? throw new ArgumentNullException(nameof(output)));
@@ -138,6 +147,7 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         _keys = keys;
         _speech = speech;
         _carried = carried;
+        _preview = preview;
     }
 
     /// <inheritdoc />
@@ -366,6 +376,9 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
                 return;
             case "read":
                 Read(id, request.Image, cancellationToken);
+                return;
+            case "note":
+                Preview(id, request.Note, cancellationToken);
                 return;
             case "speak":
                 Speak(id, request.Text, new SpeechChoice(request.ProviderVoice, request.LocalVoice, request.LocalOnly is true), cancellationToken);
@@ -733,6 +746,49 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         Track(() => ReadTextAsync(id, _reader, jpeg, cancellationToken));
     }
 
+    private void Preview(string id, JsonElement? note, CancellationToken cancellationToken)
+    {
+        if (_preview is null)
+        {
+            _logger.LogInformation("Refused local note {Id}: no previewer is registered.", id);
+            Refuse(id, NoPreviewReply);
+            return;
+        }
+
+        if (note is not { ValueKind: JsonValueKind.Object } verdict)
+        {
+            _logger.LogInformation("Refused local note {Id}: it carries no verdict.", id);
+            Refuse(id, NoNoteReply);
+            return;
+        }
+
+        var request = verdict.GetRawText();
+        _logger.LogInformation("Local note {Id} accepted (requestLen={Length}).", id, request.Length);
+        Track(() => PreviewAsync(id, _preview, request, cancellationToken));
+    }
+
+    /// <summary>What a note request answers when the preview failed with no sentence Scout wrote for the owner.</summary>
+    internal const string PreviewFailed = "Scout could not compose the preview.";
+
+    private async Task PreviewAsync(string id, IReviewNotePreview preview, string request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var answer = await preview.PreviewAsync(request, cancellationToken).ConfigureAwait(false);
+            _writer.Write(id, "note", answer);
+            _logger.LogInformation("Local note {Id} answered (requestLen={RequestLength}, answerLen={Length}).", id, request.Length, answer.Length);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("Local note {Id} ended with the adapter.", id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Local note {Id} failed ({ExceptionType}, requestLen={Length}).", id, ex.GetType().Name, request.Length);
+            Refuse(id, ex is WriteFailedException ? ex.Message : PreviewFailed);
+        }
+    }
+
     private async Task ReadTextAsync(string id, IScreenTextReader reader, byte[] jpeg, CancellationToken cancellationToken)
     {
         try
@@ -899,6 +955,8 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
 
     internal IScreenTextReader? ScreenTextReader => _reader;
 
+    internal IReviewNotePreview? NotePreview => _preview;
+
     internal ILiveTranslator? Translator => _translator;
 
     internal Func<CancellationToken, Task<string?>>? MandateLanguage => _mandateLanguage;
@@ -929,7 +987,8 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         string? KeepKey = null,
         string? ProviderVoice = null,
         string? LocalVoice = null,
-        bool? LocalOnly = null);
+        bool? LocalOnly = null,
+        JsonElement? Note = null);
 
     private sealed record LocalMeeting(
         DateTimeOffset? StartedAt,

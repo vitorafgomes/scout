@@ -24,8 +24,17 @@ const VERDICT: GitHubVerdictRequest = {
   repository: 'acme/shop',
   number: 5,
   verdict: 'approve',
-  body: '**Verdict:** merge',
-  comments: [{ path: 'src/Cart.cs', line: 12, body: 'Lock the move' }],
+  findings: [
+    {
+      id: 'lock',
+      severity: 'block',
+      title: 'Move has no lock',
+      path: 'src/Cart.cs',
+      line: 12,
+      why: 'Two moves lose an item.',
+      fix: 'Take the lock.',
+    },
+  ],
   commit: '3f2a9c1d4b5e6f708192a3b4c5d6e7f809a1b2c3',
   testsLine: 'Tests: 42 passed in the container (dotnet test).',
 };
@@ -47,7 +56,7 @@ function status(
   reason: string | null = null,
   actionId = 'act-1',
 ): GitHubVerdictProgress {
-  return { actionId, state, url, reason, signedAs: null, testsLine: null };
+  return { actionId, state, url, reason, signedAs: null, testsLine: null, verdict: null };
 }
 
 function full(
@@ -185,20 +194,17 @@ describe('GitHub verdict IPC', () => {
     expect(t.given).toEqual([VERDICT]);
   });
 
-  it('a click on Post goes to the control plane once as the approved verdict comment, a second click answers the same action, and the posted review reaches every window with its link', async () => {
+  it('a click on Post goes to the control plane as the approved verdict comment, a second click while it is sent is the same action, and the posted review reaches every window with its link', async () => {
     const t = setup([status('given', REVIEW_URL)]);
     const post: GitHubVerdictRequest = { ...VERDICT, verdict: 'comment', testsLine: '' };
 
-    const first = await t.invoke(CHANNEL.githubGiveVerdict, post);
-    const second = await t.invoke(CHANNEL.githubGiveVerdict, post);
-    await t.tick();
-    const afterPosted = await t.invoke(CHANNEL.githubGiveVerdict, post);
-
-    expect([first, second, afterPosted]).toEqual([
-      { actionId: 'act-1' },
-      { actionId: 'act-1' },
-      { actionId: 'act-1' },
+    const [first, second] = await Promise.all([
+      t.invoke(CHANNEL.githubGiveVerdict, post),
+      t.invoke(CHANNEL.githubGiveVerdict, post),
     ]);
+    await t.tick();
+
+    expect([first, second]).toEqual([{ actionId: 'act-1' }, { actionId: 'act-1' }]);
     expect(t.given).toEqual([post]);
     expect(t.pushed.at(-1)).toEqual({
       ...KEY,
@@ -275,9 +281,21 @@ describe('GitHub verdict IPC', () => {
     ['a verdict that is not approve, request_changes or comment', { ...VERDICT, verdict: 'merge' }],
     ['a pull request number of 0', { ...VERDICT, number: 0 }],
     ['a commit that is not a sha', { ...VERDICT, commit: 'main' }],
-    ['comments that are not a list', { ...VERDICT, comments: 'none' }],
-    ['a comment without a body', { ...VERDICT, comments: [{ path: 'a.cs', line: 1 }] }],
-    ['a body over 65,000 characters', { ...VERDICT, body: 'x'.repeat(65_001) }],
+    ['findings that are not a list', { ...VERDICT, findings: 'none' }],
+    [
+      'a finding without a fix',
+      { ...VERDICT, findings: [{ ...VERDICT.findings[0]!, fix: undefined }] },
+    ],
+    [
+      'a finding whose why is over 4,000 characters',
+      { ...VERDICT, findings: [{ ...VERDICT.findings[0]!, why: 'x'.repeat(4_001) }] },
+    ],
+    [
+      'a finding of an unknown severity',
+      { ...VERDICT, findings: [{ ...VERDICT.findings[0]!, severity: 'major' }] },
+    ],
+    ['a coverage reading more than it counts', { ...VERDICT, coverage: { read: 3, of: 2 } }],
+    ['21 notes', { ...VERDICT, notes: Array.from({ length: 21 }, () => 'n') }],
     ['no tests line', { ...VERDICT, testsLine: undefined }],
   ])('refuses %s before reaching the control plane', async (_case, request) => {
     const t = setup();
@@ -320,26 +338,43 @@ describe('GitHub verdict IPC', () => {
     ).toHaveLength(1);
   });
 
-  it('a second click on the same pull request and commit answers the same action while it is queued, running or given', async () => {
+  it('a different verdict on a commit that has one is sent to the control plane', async () => {
     const t = setup([status('running'), status('given', REVIEW_URL)]);
 
     const first = await t.invoke(CHANNEL.githubGiveVerdict, VERDICT);
-    const whileQueued = await t.invoke(CHANNEL.githubGiveVerdict, VERDICT);
     await t.tick();
-    const whileRunning = await t.invoke(CHANNEL.githubGiveVerdict, {
+    const other = await t.invoke(CHANNEL.githubGiveVerdict, {
       ...VERDICT,
       verdict: 'request_changes',
     });
-    await t.tick();
-    const onceGiven = await t.invoke(CHANNEL.githubGiveVerdict, VERDICT);
+    const otherFindings = await t.invoke(CHANNEL.githubGiveVerdict, {
+      ...VERDICT,
+      findings: [{ ...VERDICT.findings[0]!, why: 'Edited by the owner.' }],
+    });
 
-    expect([first, whileQueued, whileRunning, onceGiven]).toEqual([
-      { actionId: 'act-1' },
-      { actionId: 'act-1' },
-      { actionId: 'act-1' },
-      { actionId: 'act-1' },
-    ]);
-    expect(t.given).toHaveLength(1);
+    expect(
+      [first, other, otherFindings],
+      'main sends each one; the control plane decides what is identical',
+    ).toEqual([{ actionId: 'act-1' }, { actionId: 'act-2' }, { actionId: 'act-3' }]);
+    expect(t.given.map((g) => g.verdict)).toEqual(['approve', 'request_changes', 'approve']);
+  });
+
+  it('the status carries the verdict the control plane reports', async () => {
+    const t = setup([{ ...status('given', REVIEW_URL), verdict: 'request_changes' }]);
+
+    await t.invoke(CHANNEL.githubGiveVerdict, VERDICT);
+    await t.tick();
+
+    expect(t.pushed.at(-1), 'the card names what is on GitHub, not the button clicked').toEqual({
+      ...KEY,
+      verdict: 'request_changes',
+      actionId: 'act-1',
+      state: 'given',
+      url: REVIEW_URL,
+      reason: null,
+      signedAs: null,
+      testsLine: null,
+    });
   });
 
   it('a click after the verdict failed gives a new one, and another commit is its own verdict', async () => {
@@ -444,9 +479,9 @@ describe('GitHub verdict IPC', () => {
     expect(t.given, 'nothing is given before the checks pass').toEqual([]);
   });
 
-  it('an approval does not wait for the checks once a verdict or a review was sent on that commit, and it may wait again after one that failed', async () => {
+  it('an approval does not wait for the checks once an approval was sent on that commit, and may wait after a failed one', async () => {
     const sent = setup([status('given', REVIEW_URL)]);
-    await sent.invoke(CHANNEL.githubGiveVerdict, { ...VERDICT, verdict: 'comment' });
+    await sent.invoke(CHANNEL.githubGiveVerdict, VERDICT);
     const refused = await sent.invoke(CHANNEL.githubApproveWhenChecksPass, VERDICT).then(
       () => ({ code: 'none', message: 'none' }),
       (err: unknown) => readIpcError(err),
@@ -462,6 +497,32 @@ describe('GitHub verdict IPC', () => {
     ]);
     expect(sent.started).toEqual([]);
     expect(failed.started).toEqual([VERDICT]);
+  });
+
+  it('an approval waits for the checks after a commenting review on the commit', async () => {
+    const t = setup([status('given', REVIEW_URL)]);
+    await t.invoke(CHANNEL.githubGiveVerdict, { ...VERDICT, verdict: 'comment', testsLine: '' });
+    await t.tick();
+
+    await t.invoke(CHANNEL.githubApproveWhenChecksPass, VERDICT);
+
+    expect(t.started, 'a review that only comments never stops an approval from waiting').toEqual([
+      VERDICT,
+    ]);
+  });
+
+  it('a verdict the control plane cannot take is relayed as its error', async () => {
+    const t = setup();
+    t.failGive(
+      new Error(
+        '[scout:github/invalid-verdict] findings: The findings must be a JSON array of at most 50 findings.',
+      ),
+    );
+
+    const message = await refusal(t.invoke(CHANNEL.githubGiveVerdict, VERDICT));
+
+    expect(message).toBe('findings: The findings must be a JSON array of at most 50 findings.');
+    expect(t.pushed).toEqual([]);
   });
 
   it('a verdict or a review the owner sends from the card ends the approval that waited on that commit', async () => {

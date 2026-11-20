@@ -1,8 +1,8 @@
 ---
 title: "Skills: Four review criteria (2026-11-11)"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Split out of the Skills service page."
+changes: "v1.1 (2026-11-20): the review judges removals, the purpose and the written rules (ADR 0064). Split out of the Skills service page."
 page_type: service
 status: active
 description: "Read when a change touches: Four review criteria (2026-11-11)."
@@ -20,3 +20,5 @@ An audit Scout ran over a repository answered 83 findings, of which 17 repeated 
 - **Signal over volume.** Where each skill states its cap, unchanged (ten for the review, `src/Scout.Skills/skills/code-review.md:57`; 50 for the audit, `src/Scout.Skills/skills/code-audit.md:52`): a finding not confirmed by reading the cited line is not reported, and when the code is sound the answer is no findings, said plainly, never a list padded with tastes.
 
 `code-review` also rates two failure modes: defensive work that buys nothing, a guard for a case the types or the data model already prevent, is a nit at most (`src/Scout.Skills/skills/code-review.md:37`); an optimisation that removes a guarantee nobody named (a filter widened, a re-read skipped, a transactional value cached) is a blocking finding when the diff shows the guarantee was relied on (`:53`). The tests assert each phrase inside the section it belongs to: `tests/Scout.Skills.Tests/BundledSkillsTests.cs:492` (the guard, both skills), `:505` (the error reported as success), `:513` and `:523` (the intended behaviour, and `known_json` in the audit), `:530` (the open issues and the functions line), `:542` (the cited line and no findings, with the cap) and `:552` (the review's two failure modes).
+
+2026-11-20: `code-review`'s "What to look for, in any language" (`src/Scout.Skills/skills/code-review.md:33`) also judges what the pull request removes and what it says it does, and counts the project's own written rules as the conventions profile counts: a departure is a finding that names the rule in `rule`, and a rule the pull request changes is judged, not relied on. Its tests section (`:49`) makes a test deleted or emptied while its code stays a finding at line 1, and its feedback section (`:57`) allows that anchor on a deleted file ([[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]).

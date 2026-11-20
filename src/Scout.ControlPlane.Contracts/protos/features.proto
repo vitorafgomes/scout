@@ -148,13 +148,17 @@ message PendingAction {
 }
 
 message GiveVerdictRequest {
+  reserved 4, 5;
+  reserved "body", "comments_json";
   string repository = 1;
   int32 number = 2;
   string verdict = 3;
-  string body = 4;
-  string comments_json = 5;
   string commit = 6;
   string tests_line = 7;
+  string findings_json = 8;
+  optional int32 files_read = 9;
+  optional int32 files_changed = 10;
+  repeated string notes = 11;
 }
 
 message GiveVerdictResponse {

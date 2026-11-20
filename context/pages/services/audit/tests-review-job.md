@@ -1,9 +1,9 @@
 ---
 title: "Audit: Tests: Review job"
-version: "1.0"
+version: "1.1"
 date: 2026-11-19
-updated: 2026-11-19
-changes: "v1.0: the review job's tests, moved from the Tests page, with the waves, the order of reading, the owner's controls and the pause at 60 minutes"
+updated: 2026-11-20
+changes: "v1.1 (2026-11-20): the tests of the review notes and review inputs. v1.0: the review job's tests, moved from the Tests page, with the waves, the order of reading, the owner's controls and the pause at 60 minutes"
 page_type: service
 status: active
 description: "Read when a change touches the tests of the pull request review job."
@@ -39,3 +39,15 @@ reliability: high
 - The review batch turn: patches as data, the five reads and `present_review_findings` only, its own block never an audit one, files read when the turn ends, reads of another repository refused and of its own at another reference run, a turn presenting no block retried then not covered, an empty list read, a provider failure twice, earlier titles as data, another repository or pull request refused (`tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs:404` to `:671`).
 - The store: a planned batch with a failure kept not covered (`tests/Scout.Audit.Tests/SqliteAuditStoreTests.cs:398`); the running time from the batches and never a pause (`:433`), from the last resume (`:454`), every batch for a file migrated before `resumed` existed (`:473`), batches that ran at once counted once (`:484`).
 - The option: four at a time, one on the local provider unless set (`tests/Scout.Audit.Tests/AuditServiceCollectionExtensionsTests.cs:65`); outside 1 to 8 rejected at the host's start (`:79`).
+## Review inputs (2026-11-20, ADR 0064)
+
+| Test class | What it holds |
+|---|---|
+| `ReviewInputsTests` (new) | the purpose's bounds, the rule files' order and bounds, `changedHere`, the removals told apart, test declarations from patch lines, the code left behind, a snapshot not listed, the 200 bound, a batch's removals, the notes and their number, the 20 paths named |
+| `SqliteAuditStoreTests` | the inputs read back, the migration adding the column, an unreadable value |
+| `AuditBatchRunnerTests` | each input as one line of data a fence, a line break or a line separator cannot break; the fallback sentences; the scope sentence; no inputs, no line; the sent-length bounds; a description of quotes and backslashes cut by its sent length |
+| `RepositoryReviewsTests` | the start keeps the inputs, starts with unreadable rules, and a resume keeps the first ones |
+| `AuditWorkerReviewTests` | the same inputs after a pause and a new worker, each batch its own removals, the card's notes, a refused read |
+
+`Scout.Audit.Tests`: 427 passed, 0 skipped.
+

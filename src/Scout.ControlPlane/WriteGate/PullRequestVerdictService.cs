@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Scout.ControlPlane.Actions;
@@ -6,37 +7,50 @@ using Scout.ControlPlane.Features;
 
 namespace Scout.ControlPlane.WriteGate;
 
-/// <summary>One comment of a verdict, anchored to a line of the pull request's diff.</summary>
+/// <summary>One finding of a verdict, from which the worker composes the note and the comment on its line.</summary>
+/// <param name="Id">The finding's id, unique in the verdict.</param>
+/// <param name="Severity"><c>block</c>, <c>fix</c> or <c>nit</c>.</param>
+/// <param name="Title">What the finding names.</param>
 /// <param name="Path">Repository-relative path of the changed file.</param>
 /// <param name="Line">Line number in the file after the change.</param>
-/// <param name="Body">The comment text.</param>
-public sealed record VerdictComment(string Path, int Line, string Body);
+/// <param name="Context">Why it matters, or null.</param>
+/// <param name="Why">What is wrong.</param>
+/// <param name="Fix">The proposed fix.</param>
+/// <param name="Rule">The rule or document it departs from, or null.</param>
+public sealed record VerdictFinding(string Id, string Severity, string Title, string Path, int Line, string? Context, string Why, string Fix, string? Rule);
 
 /// <summary>A verdict the owner gave on a review card: what to send to GitHub once, pinned to the commit reviewed.</summary>
 /// <param name="Owner">Repository owner or organization login.</param>
 /// <param name="Repo">Repository name.</param>
 /// <param name="Number">Pull request number.</param>
 /// <param name="Verdict"><c>approve</c>, <c>request_changes</c>, or <c>comment</c> for the card's Post: a review that only comments.</param>
-/// <param name="Body">The review's summary.</param>
-/// <param name="Comments">The comments the owner kept.</param>
+/// <param name="Findings">The findings the owner kept, with the text the owner edited.</param>
 /// <param name="Commit">The head commit the review read; an approval or a request for changes is refused when the pull request moved past it.</param>
 /// <param name="TestsLine">The line on the tests posted on the pull request's conversation after the verdict; null for none.</param>
+/// <param name="FilesRead">The files a review job read, measured by code; null when not measured.</param>
+/// <param name="FilesChanged">The files the pull request changes, as the review job counted them; null when not measured.</param>
+/// <param name="Notes">The review job's sentences on what it did not read; null for none.</param>
+/// <param name="Content">The digest of what the verdict sends, set when it is queued; two requests with the same digest send the same note.</param>
 public sealed record PullRequestVerdictRequest(
     string Owner,
     string Repo,
     int Number,
     string Verdict,
-    string Body,
-    IReadOnlyList<VerdictComment>? Comments,
+    IReadOnlyList<VerdictFinding>? Findings,
     string Commit,
-    string? TestsLine)
+    string? TestsLine,
+    int? FilesRead = null,
+    int? FilesChanged = null,
+    IReadOnlyList<string>? Notes = null,
+    string? Content = null)
 {
     /// <summary>
-    /// The verdict as a review card sends it: the repository as <c>owner/repo</c> and the comments as a JSON array of
-    /// <c>{"path", "line", "body"}</c>; comments that are not such an array are null, which validation refuses.
+    /// The verdict as a review card sends it: the repository as <c>owner/repo</c> and the findings as the JSON array the
+    /// card holds; findings that are not such an array are null, which validation refuses.
     /// </summary>
     public static PullRequestVerdictRequest FromCard(
-        string? repository, int number, string? verdict, string? body, string? commentsJson, string? commit, string? testsLine)
+        string? repository, int number, string? verdict, string? findingsJson, string? commit, string? testsLine,
+        int? filesRead = null, int? filesChanged = null, IReadOnlyList<string>? notes = null)
     {
         var parts = (repository ?? string.Empty).Split('/');
         return new PullRequestVerdictRequest(
@@ -44,15 +58,17 @@ public sealed record PullRequestVerdictRequest(
             parts.Length == 2 ? parts[1] : string.Empty,
             number,
             verdict ?? string.Empty,
-            body ?? string.Empty,
-            ParseComments(commentsJson),
+            ParseFindings(findingsJson),
             commit ?? string.Empty,
-            string.IsNullOrWhiteSpace(testsLine) ? null : testsLine);
+            string.IsNullOrWhiteSpace(testsLine) ? null : testsLine,
+            filesRead,
+            filesChanged,
+            notes is { Count: > 0 } ? notes : null);
     }
 
-    private static readonly JsonSerializerOptions CommentsJson = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions FindingsJson = new(JsonSerializerDefaults.Web);
 
-    private static List<VerdictComment>? ParseComments(string? json)
+    private static List<VerdictFinding>? ParseFindings(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
@@ -61,7 +77,7 @@ public sealed record PullRequestVerdictRequest(
 
         try
         {
-            return JsonSerializer.Deserialize<List<VerdictComment>>(json, CommentsJson);
+            return JsonSerializer.Deserialize<List<VerdictFinding>>(json, FindingsJson);
         }
         catch (JsonException)
         {
@@ -95,11 +111,12 @@ public sealed class WriteNotGrantedException(string message) : Exception(message
 /// <summary>
 /// The owner's click on a review card's Approve, Request changes or Post: the click is the owner's approval of that one
 /// action, so the verdict, or for Post the review that only comments, is queued already approved, on its own catalog row,
-/// with what the worker needs to send it as the action's payload, and the approval goes to the write log. One commit of
-/// one pull request gets one such action: asking again, with any of the three,
-/// answers the action already there, queued, running or given, from a card or approved from chat, unless it was rejected,
-/// failed, or asked before the owner's current GitHub grant, which no worker will run and which reads failed; an approved
-/// verdict of that kind is rejected, and logged, when the next card verdict is given. A chat
+/// with the findings and what code measured as the action's payload, and the approval goes to the write log. A different
+/// verdict, or other content, at a commit that already has one is its own action, approved and logged on its own; an
+/// identical request, the same commit, verdict and content digest, answers the action already there, queued, running
+/// or given, unless it was rejected, failed, or asked before the owner's current GitHub grant, which no worker will run
+/// and which reads failed; an approved verdict of that kind is rejected, and logged, when the next card verdict is given.
+/// An action with no content digest, asked in chat or queued before the digest existed, is never identical. A chat
 /// verdict on the same commit still waiting for the owner is rejected, replaced by the card's, so what runs is exactly
 /// what the card showed. Nothing is queued while the owner has not allowed GitHub writes.
 /// </summary>
@@ -146,10 +163,15 @@ public sealed partial class PullRequestVerdictService(IFeatureStateStore states,
     {
         ArgumentNullException.ThrowIfNull(request);
         var errors = Validate(request);
+        if (errors.Count == 0)
+        {
+            request = request with { Content = ContentOf(request) };
+        }
+
         var payload = JsonSerializer.Serialize(request, Json);
         if (payload.Length > PendingAction.MaxPayloadLength)
         {
-            errors["payload"] = $"The verdict is over {PendingAction.MaxPayloadLength.ToString(CultureInfo.InvariantCulture)} characters; keep fewer comments.";
+            errors["payload"] = $"The verdict is over {PendingAction.MaxPayloadLength.ToString(CultureInfo.InvariantCulture)} characters; keep fewer findings.";
         }
 
         if (errors.Count > 0)
@@ -327,16 +349,79 @@ public sealed partial class PullRequestVerdictService(IFeatureStateStore states,
             errors["commit"] = "The commit reviewed must be a commit SHA.";
         }
 
-        if (request.Comments is null || request.Comments.Any(c => c is null || string.IsNullOrWhiteSpace(c.Path) || c.Line <= 0 || string.IsNullOrWhiteSpace(c.Body)))
+        if (request.Findings is null || request.Findings.Count > MaxFindings)
         {
-            errors["comments"] = "Every comment needs a path, a positive line and a body.";
+            errors["findings"] = "The findings must be a JSON array of at most 50 findings.";
+        }
+        else if (request.Findings.Any(f => f is null
+                     || string.IsNullOrWhiteSpace(f.Id)
+                     || f.Severity is not ("block" or "fix" or "nit")
+                     || string.IsNullOrWhiteSpace(f.Title)
+                     || string.IsNullOrWhiteSpace(f.Path)
+                     || f.Line <= 0
+                     || string.IsNullOrWhiteSpace(f.Why)
+                     || string.IsNullOrWhiteSpace(f.Fix)))
+        {
+            errors["findings"] = "Every finding needs an id, a severity of block, fix or nit, a title, a path, a positive line, a why and a fix.";
+        }
+        else if (request.Findings.Select(f => f.Id).Distinct(StringComparer.Ordinal).Count() != request.Findings.Count)
+        {
+            errors["findings"] = DuplicateFindingIds;
+        }
+
+        if (request.FilesRead.HasValue != request.FilesChanged.HasValue || request.FilesRead < 0 || request.FilesRead > request.FilesChanged)
+        {
+            errors["files"] = "The files read and the files changed come together, the files read from 0 to the files changed.";
+        }
+
+        if (request.Notes is { } notes && (notes.Count > MaxNotes || notes.Any(n => string.IsNullOrWhiteSpace(n) || n.Length > MaxNoteLength)))
+        {
+            errors["notes"] = "At most 20 notes, each of 1 to 300 characters.";
         }
 
         return errors;
     }
 
+    /// <summary>Why a verdict whose findings repeat an id is refused before it is queued.</summary>
+    internal const string DuplicateFindingIds = "Each finding needs its own id; two findings share one.";
+
+    private const int MaxFindings = 50;
+    private const int MaxNotes = 20;
+    private const int MaxNoteLength = 300;
+
+    /// <summary>The SHA-256, in hexadecimal, of what the verdict sends: the verdict, the findings, the counts and the notes.</summary>
+    private static string ContentOf(PullRequestVerdictRequest request) =>
+        Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+            new { request.Verdict, request.Findings, request.FilesRead, request.FilesChanged, request.Notes }, Json)));
+
+    /// <summary>
+    /// An action the request repeats: not waiting for the owner, at the same commit, the same verdict and the same content
+    /// digest. An action with no digest is never the same.
+    /// </summary>
     private static bool Same(PendingAction action, PullRequestVerdictRequest request) =>
-        action.Status != PendingActionStatus.Pending && SameKey(action, request);
+        action.Status != PendingActionStatus.Pending
+        && SameKey(action, request)
+        && string.Equals(Key(action.Payload).Verdict, request.Verdict, StringComparison.Ordinal)
+        && ContentOf(action.Payload) is { Length: > 0 } content
+        && string.Equals(content, request.Content, StringComparison.Ordinal);
+
+    private static string ContentOf(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            return document.RootElement.ValueKind == JsonValueKind.Object ? Text(document.RootElement, "content") : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
 
     /// <summary>
     /// A verdict, or a review that carries the commit it read as a card's Post does; a review the model asked for in chat

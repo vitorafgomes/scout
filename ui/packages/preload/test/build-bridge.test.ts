@@ -134,6 +134,7 @@ describe('buildBridge', () => {
       'githubBotRemove',
       'githubBotSetWrites',
       'githubGiveVerdict',
+      'githubPreviewVerdict',
       'githubVerdictStatus',
       'githubVerdictFor',
       'onGitHubVerdict',
@@ -1117,6 +1118,26 @@ describe('buildBridge', () => {
     expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.theme, handler);
   });
 
+  it('githubPreviewVerdict reaches main only through its own channel with the verdict it would compose', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const request = {
+      repository: 'acme/api',
+      number: 7,
+      commit: 'abc1234',
+      verdict: 'request_changes' as const,
+      findings: [],
+      testsLine: '',
+    };
+
+    await bridge.githubPreviewVerdict(request);
+
+    expect(
+      (ipc.invoke as ReturnType<typeof mock>).mock.calls,
+      'a preview goes on its own channel',
+    ).toEqual([[CHANNEL.githubPreviewVerdict, request]]);
+  });
+
   it('the waiting approval methods reach main only through their own channels with their request, and onGitHubWaitingApproval forwards what main pushes and unsubscribes the same handler', async () => {
     const ipc = makeFakeIpc();
     const bridge = buildBridge(ipc);
@@ -1124,8 +1145,7 @@ describe('buildBridge', () => {
     const request = {
       ...key,
       verdict: 'approve' as const,
-      body: 'Looks good.',
-      comments: [],
+      findings: [],
       testsLine: '',
     };
     const status = {

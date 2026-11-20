@@ -25,6 +25,7 @@ Read one when your change touches what its title names.
 - [[pages/decisions/0038-code-quality-assistant-on-the-write-gate|ADR 0038 - The code quality assistant: GitHub reads and writes on the write gate, CodeQA superseded by Knowledge]]
 - [[pages/decisions/0058-an-approval-needs-every-check-passed|ADR 0058 - Scout approves a pull request only when every check of the commit passed]] - an approval also needs a pull request without conflicts whose mergeability GitHub computed
 - [[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run|ADR 0060 - A run that could not run its tests is not a failed run]] - the `unrunnable` field of `run_pull_request_tests` and of the review's tests
+- [[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates|ADR 0063 - What Scout writes on a pull request follows the templates, composed by code]] - the note composed by code from the findings, never a body from the model, and a different verdict at a commit that already has one
 - [[pages/conventions/testing|Testing]]
 
 ## What to read for a change
@@ -36,6 +37,7 @@ Find the row your change matches and read that page. Read one or two rows, not t
 | Public contract | `context/pages/services/plugin-github/public-contract.md` |
 | How it works | `context/pages/services/plugin-github/how-it-works.md` |
 | The writes (ADR 0038 v1.3, ADR 0043, 2026-11-07) | `context/pages/services/plugin-github/the-writes.md` |
+| The review note; ReviewNote; findings_json; the note preview | `context/pages/services/plugin-github/the-review-note.md` |
 | The pull request's checks and its tests in a container (ADR 0043, 2026-11-07) | `context/pages/services/plugin-github/the-pull-request-s-checks-and-its-tests-in-a-con.md` |
 | The audit as a job (ADR 0042, 2026-11-07) | `context/pages/services/plugin-github/the-audit-as-a-job.md` |
 | The conventions profile (ADR 0038 phase 4, 2026-11-06) | `context/pages/services/plugin-github/the-conventions-profile.md` |

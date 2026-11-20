@@ -1,14 +1,20 @@
 ---
 title: "Control plane contracts"
-version: "1.2"
+version: "1.3"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-20
+changes: "v1.3 (2026-11-20): the verdict request carries findings. v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-20 - The verdict request carries findings
+
+- **What it was:** `GiveVerdictRequest` carried the note's `body` and `comments_json`.
+- **What it is:** it carries `findings_json`, `files_read`, `files_changed` and `notes`; fields 4 and 5 are reserved (`src/Scout.ControlPlane.Contracts/protos/features.proto:150`). `GetVerdictResponse` answers the recorded `verdict` ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **Tests:** the control plane's verdict tests above, through the generated contract.
 
 ## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
 

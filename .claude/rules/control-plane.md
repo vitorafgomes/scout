@@ -24,6 +24,7 @@ Read one when your change touches what its title names.
 
 - [[pages/invariants/no-executive-writes|Scout performs descriptive writes only]]
 - [[pages/decisions/0032-per-feature-write-permissions|ADR 0032 - Features declare what they write, and the owner grants each one]]
+- [[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates|ADR 0063 - What Scout writes on a pull request follows the templates, composed by code]] - a verdict request carries findings, and a different verdict or different comments at a commit that already has one is its own approved action
 - [[pages/decisions/0033-channel-operator-architecture|ADR 0033 - Channel operator architecture: state in the control plane, pipeline in Scout.Operator, media through the connected AI Source, progress back to the originating channel]]
 - [[pages/decisions/0035-screenshot-attached-to-a-question|ADR 0035 - A screenshot attached to a question: one JPEG on the ask line, an image part for a provider that can see, a plain sentence otherwise]] - the desktop feature's reads
 - [[pages/invariants/secrets-never-in-source|Secrets never live in source]]

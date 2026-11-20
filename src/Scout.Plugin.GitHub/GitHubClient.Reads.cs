@@ -87,7 +87,7 @@ internal sealed partial class GitHubClient
     {
         var reviews = await NewestFirstAsync<ReviewDto>($"repos/{owner}/{repo}/pulls/{number}/reviews", ReviewPages, ct).ConfigureAwait(false);
         return reviews?
-            .Select(r => new PullRequestReview(r.Id, Login(r.User), r.State ?? string.Empty, r.CommitId ?? string.Empty, r.HtmlUrl ?? string.Empty))
+            .Select(r => new PullRequestReview(r.Id, Login(r.User), r.State ?? string.Empty, r.CommitId ?? string.Empty, r.HtmlUrl ?? string.Empty, r.Body ?? string.Empty))
             .ToList();
     }
 
@@ -397,7 +397,8 @@ internal sealed partial class GitHubClient
         [property: JsonPropertyName("user")] UserDto? User,
         [property: JsonPropertyName("state")] string? State,
         [property: JsonPropertyName("commit_id")] string? CommitId,
-        [property: JsonPropertyName("html_url")] string? HtmlUrl);
+        [property: JsonPropertyName("html_url")] string? HtmlUrl,
+        [property: JsonPropertyName("body")] string? Body = null);
 
     private sealed record RefDto(
         [property: JsonPropertyName("ref")] string? Ref,

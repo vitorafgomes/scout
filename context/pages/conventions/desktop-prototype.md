@@ -1,9 +1,9 @@
 ---
 title: "Desktop prototype"
-version: "1.20"
+version: "1.25"
 date: 2026-11-07
 updated: 2026-11-19
-changes: "v1.20 (2026-11-19): two states of the Approve when checks pass group, Tests could not run and Not approved for a conflict. v1.19 (2026-11-19): the Review job group is built."
+changes: "v1.25 (2026-11-20): the second verdict and note preview states are built. v1.24 (2026-11-20): the closed pull request state of a waiting approval is drawn. v1.23 (2026-11-20): the stopped tests sentence takes the app's words in every artboard. v1.22 (2026-11-19): the review card draws the states of a second verdict at the same commit and the note preview, for the owner, not built. v1.21 (2026-11-19): the Main artboard draws the review job's pauses and the review card's editor, rule line, known list and last output as the app shows them. v1.20 (2026-11-19): two states of the Approve when checks pass group, Tests could not run and Not approved for a conflict. v1.19 (2026-11-19): the Review job group is built."
 page_type: convention
 status: active
 description: "The clickable prototype of Scout Desktop is kept in context/prototypes/desktop, one artboard per screen; every change to a screen, and every new screen, updates or adds its artboard in the same branch, before the code."
@@ -89,5 +89,15 @@ The owner, 2026-11-07, translated: "is there a way to save the prototypes in [th
 2026-11-19: the Main artboard's Review job group, drawn for the owner and approved before the code, is built: its 26 inventory rows each have a spec ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
 
 2026-11-19: the Main artboard's Preview group "Approve when checks pass" gains two states, both built in the same change. "Tests could not run" (`awTestsUnrunnable`): the run's chip reads "Tests could not run" on the neutral not-run tone beside the passed checks, the worker's sentence sits under the chips, the reply says the tests could not run in the container, and the Verdict group keeps the plain Approve ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]). "Not approved: conflicts with the base branch" (`awConflict`): the bell's failed entry "Not approved: acme/api#44 has conflicts with its base branch" over "Scout approves only a pull request that can be merged", and the card's alert "Not approved: the pull request has conflicts with its base branch." ([[pages/decisions/0059-approve-when-the-checks-pass]]).
+
+2026-11-19: the Main artboard draws what the app already showed, waiting for the owner's approval: the Review job group's "Pausing after this batch" and its three pauses that are not the owner's (60 minutes, GitHub could not be read, the AI Source's limit), and on the review card the finding editor, the "Rule:" line, "Already documented, not raised again" and the failed tests' "Last output" (state "Review: tests failed, with their last output"). The Mention review group's started title names who asked, and its ready entry carries the artboard's sentence and Open in the chat ([[pages/roadmap/prototype-migration]]).
+
+2026-11-19: the Main artboard's review card draws, before the code and for the owner's approval, the states a second verdict at the same commit needs, and nothing of them is built: the given verdict above the card that still offers Approve, Request changes and Post ("Review: verdict given, the Verdict group still offered"), the same request again with nothing sent, a second verdict whose given line names the newer one, the note the worker composed shown as the preview with the verdict it previews named above it, and "The preview could not be composed: ..." with a refusal sentence of the send.
+
+2026-11-20: a stopped test run's bell entry reads "The tests gave no result." in every artboard, the app's words, because "The container was removed" was not always true; the review card's note preview shows a sample note for its own pull request, PR #5 at ec7f951, with its two findings ([[pages/roadmap/prototype-migration]]).
+
+2026-11-20: the Main artboard's "Approve when checks pass" group draws the waiting approval that ended because the pull request was closed, as the app shows it: the bell's "Not approved: acme/api#44 was closed" and the card's "Not approved: the pull request was closed." (state "Not approved: the pull request was closed").
+
+2026-11-20: the review card's states of a second verdict at the same commit and of the note preview are built; the failed preview's line takes the form of the other, "Preview of the note for Approve, as Scout would post it on PR #5", since both name the verdict the card offers first.
 
 Related: [[pages/services/desktop-ui]], [[pages/decisions/0047-the-docker-card]], [[pages/decisions/0046-ai-source-usage-on-the-cards]].

@@ -387,6 +387,7 @@ const verdictWires: Record<string, Record<string, unknown>> = {
     url: 'https://github.com/acme/shop/pull/5#pullrequestreview-1',
     signedAs: 'scout[bot]',
     testsLine: 'notPosted',
+    verdict: 'request_changes',
   },
   'act-running': { state: 'running' },
 };
@@ -439,6 +440,7 @@ async function startFeaturesServer(
       () => ({ ...pendingWire, status: 'rejected' }),
       decideStatus,
     ),
+    GiveVerdict: handler('GiveVerdict', () => ({ actionId: 'act-new' })),
     ListWrites: handler('ListWrites', () => ({
       entries: [writeWire, unapprovedWriteWire, controlWriteWire, unknownControlWriteWire],
     })),
@@ -759,6 +761,7 @@ describe('createControlPlaneClient features', () => {
         reason: null,
         signedAs: 'scout[bot]',
         testsLine: 'notPosted',
+        verdict: 'request_changes',
       },
       {
         actionId: 'act-running',
@@ -767,12 +770,67 @@ describe('createControlPlaneClient features', () => {
         reason: null,
         signedAs: null,
         testsLine: null,
+        verdict: null,
       },
     ]);
     expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
       { method: 'GetVerdict', request: { actionId: 'act-given' } },
       { method: 'GetVerdict', request: { actionId: 'act-running' } },
     ]);
+  });
+
+  it('giveVerdict sends the findings as JSON with the measured coverage and the notes, and never a body', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: FeaturesCall[] = [];
+    server = await startFeaturesServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+    const finding = {
+      id: 'lock',
+      severity: 'block',
+      title: 'Move has no lock',
+      path: 'src/Cart.cs',
+      line: 12,
+      why: 'Two moves lose an item.',
+      fix: 'Take the lock.',
+    } as const;
+
+    const given = await client.giveVerdict({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'request_changes',
+      findings: [finding],
+      coverage: { read: 51, of: 133 },
+      notes: ['82 files not read: the review was stopped.'],
+      commit: '0123456789abcdef0123456789abcdef01234567',
+      testsLine: '',
+    });
+
+    expect(given).toEqual({ actionId: 'act-new' });
+    const sent = calls.find((c) => c.method === 'GiveVerdict')!.request as Record<string, unknown>;
+    expect(
+      {
+        findings: JSON.parse(sent['findingsJson'] as string) as unknown,
+        filesRead: sent['filesRead'],
+        filesChanged: sent['filesChanged'],
+        notes: sent['notes'],
+        verdict: sent['verdict'],
+      },
+      'the findings travel as JSON with the measured counts and the notes',
+    ).toEqual({
+      findings: [finding],
+      filesRead: 51,
+      filesChanged: 133,
+      notes: ['82 files not read: the review was stopped.'],
+      verdict: 'request_changes',
+    });
+    expect(Object.keys(sent), 'a verdict carries no body and no comments').not.toEqual(
+      expect.arrayContaining(['body']),
+    );
   });
 
   it('a second decision on an action the control plane already decided rejects as Already decided, for approve and reject', async () => {

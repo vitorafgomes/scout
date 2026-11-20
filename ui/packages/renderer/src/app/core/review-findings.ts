@@ -21,10 +21,11 @@ const MAX_OUTPUT_CHARS = 4000;
 const HTTPS_URL = /^https:\/\/[^\s]+$/;
 const PASSING_CONCLUSIONS: ReadonlySet<string | null> = new Set(['success', 'neutral', 'skipped']);
 
+/** The GitHub shortcode an issue opens its problem with, by severity; GitHub draws it, no file holds the character. */
 const MARKS: Readonly<Record<ReviewFinding['severity'], string>> = {
-  block: '\u{1F534}',
-  fix: '\u{1F7E1}',
-  nit: '\u{1F7E2}',
+  block: ':no_entry:',
+  fix: ':wrench:',
+  nit: ':bulb:',
 };
 
 /** A finding the owner chose to post, with the comment or issue body it goes with. */
@@ -57,20 +58,6 @@ export function parseReviewFindings(
   const before = reply.slice(0, block.index).trimEnd();
   const after = reply.slice(block.index + block[0].length).trimStart();
   return { review, markdown: `${before}\n\n${after}`.trim() };
-}
-
-/** The comment a finding becomes on the pull request: the mark and title, the context, why, and the fix. */
-export function commentBody(finding: ReviewFinding): string {
-  const context = finding.context ? `${finding.context}\n\n` : '';
-  return `${MARKS[finding.severity]} ${finding.title}\n\n${context}${finding.why}\n\n**Fix:** ${finding.fix}`;
-}
-
-/** The review's own body: the verdict, one line per selected finding or "No findings." when the review has none, then what was read. */
-export function reviewBody(review: ReviewFindings, selected: readonly ReviewFinding[]): string {
-  const lines = selected.map((f) => `- ${MARKS[f.severity]} ${f.title} · \`${f.path}:${f.line}\``);
-  const read = review.read ? `\n\n${review.read}` : '';
-  const list = review.findings.length === 0 ? 'No findings.' : lines.join('\n');
-  return `**Verdict:** ${review.verdict}\n\n${list}${read}`;
 }
 
 /** How a check reads on the card: passed, failed, or still pending. */
@@ -136,11 +123,9 @@ export function verdictRequest(
     repository: review.repository,
     number: review.number,
     verdict,
-    body: reviewBody(
-      review,
-      selected.map((s) => s.finding),
-    ),
-    comments: selected.map((s) => ({ path: s.finding.path, line: s.finding.line, body: s.body })),
+    findings: selected.map((s) => s.finding),
+    ...(review.coverage === undefined ? {} : { coverage: review.coverage }),
+    ...(review.notes === undefined ? {} : { notes: review.notes }),
     commit: review.commit,
     testsLine: verdict === 'comment' ? '' : verdictTestsLine(review),
   };

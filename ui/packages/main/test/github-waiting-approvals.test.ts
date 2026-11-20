@@ -17,8 +17,17 @@ const REQUEST: GitHubVerdictRequest = {
   repository: 'acme/shop',
   number: 5,
   verdict: 'approve',
-  body: '**Verdict:** merge',
-  comments: [{ path: 'src/Cart.cs', line: 12, body: 'Lock the move' }],
+  findings: [
+    {
+      id: 'lock',
+      severity: 'block',
+      title: 'Move has no lock',
+      path: 'src/Cart.cs',
+      line: 12,
+      why: 'Two moves lose an item.',
+      fix: 'Take the lock.',
+    },
+  ],
   commit: HEAD,
   testsLine: 'Tests: 42 passed in the container (dotnet test).',
 };
@@ -514,6 +523,33 @@ describe('an approval that waits for the checks', () => {
       state: 'ended',
       reason: 'timed-out',
     });
+  });
+
+  it('a saved approval in the old shape is dropped and nothing is given', async () => {
+    const { findings: _findings, ...rest } = REQUEST;
+    const saved = JSON.stringify([
+      {
+        request: {
+          ...rest,
+          body: '**Verdict:** merge',
+          comments: [{ path: 'src/Cart.cs', line: 12, body: 'Lock the move' }],
+        },
+        askedAt: 1_000,
+      },
+    ]);
+    const t = setup(saved);
+    t.github.runs = runs([['build', 'completed', 'success']]);
+
+    await t.waiting.resume();
+    t.advance(WAIT_POLL_MS);
+    await t.tick();
+
+    expect(
+      t.waiting.statusFor(KEY),
+      'an approval saved with a body and comments is not resumed',
+    ).toBeNull();
+    expect(t.given, 'nothing is given from it').toEqual([]);
+    expect(t.fetched, 'and nothing is read for it').toEqual([]);
   });
 
   const failures: readonly [string, Reply | Error, number][] = [

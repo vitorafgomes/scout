@@ -1,9 +1,9 @@
 ---
 title: "ADR 0043 - The verdict on a pull request, with the project's tests in an isolated container"
-version: "1.4"
+version: "1.5"
 date: 2026-11-07
-updated: 2026-11-14
-changes: "v1.4 (2026-11-14): the tests line's outcome is in the verdict's row."
+updated: 2026-11-20
+changes: "v1.5 (2026-11-20): amendment, a different verdict or other comments at a commit are sent and an identical request is not; the note is composed by code (ADR 0063). v1.4 (2026-11-14): the tests line's outcome is in the verdict's row."
 page_type: adr
 status: accepted
 description: "Scout comments on pull requests and issues, replies to review comments, and approves a pull request or requests changes as a declared write the owner approves per action, and the verdict carries the project's tests: the pull request's check runs first, then the project's own test command run in a disposable container on the owner's machine under fixed isolation rules."
@@ -32,7 +32,7 @@ Updated: 2026-11-07. Gap plan G8, the next deliverable after G3 ([[pages/roadmap
 
 ## Context
 
-The owner on 2026-11-07: "Scout has to be able to approve or reject a PR, that is the goal, to validate everything"; "it has to run the necessary tests, so sometimes it has to have the minimum on the machine to do that"; "the user having a Docker where Scout runs everything isolated"; and "our next deliverable has to do all of this". Today the review is a commenting review only: `submit_review` posts `pulls/{n}/reviews` with the event `COMMENT` (`src/Scout.Plugin.GitHub/GitHubWriteClient.cs:10`, `:29`, the event at `:67`), declared as a write on the `github` feature (`src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:93`), and the skill says "You never edit files, commit, merge or approve anything yourself" (`src/Scout.Skills/skills/code-review.md:79`). Scout reads nothing about the pull request's checks, and runs nothing: the vision ([[pages/overview/vision]] v1.2) now says a project's tests run only in isolation, never on the host.
+The owner on 2026-11-07: "Scout has to be able to approve or reject a PR, that is the goal, to validate everything"; "it has to run the necessary tests, so sometimes it has to have the minimum on the machine to do that"; "the user having a Docker where Scout runs everything isolated"; and "our next deliverable has to do all of this". Today the review is a commenting review only: `submit_review` posts `pulls/{n}/reviews` with the event `COMMENT` (`src/Scout.Plugin.GitHub/GitHubWriteClient.cs:10`, `:30`, the event at `:67`), declared as a write on the `github` feature (`src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:93`), and the skill says "You never edit files, commit, merge or approve anything yourself" (`src/Scout.Skills/skills/code-review.md:79`). Scout reads nothing about the pull request's checks, and runs nothing: the vision ([[pages/overview/vision]] v1.2) now says a project's tests run only in isolation, never on the host.
 
 Three facts shape the decision:
 
@@ -80,6 +80,15 @@ Found on issue 372: Scout's own repository did not run green in Scout's own sand
 - **Unchanged.** A repository without the trait gets the same command byte for byte; the test run stays `--network none` under the same isolation rules; no new call leaves the process; the new reads are files inside the snapshot copy.
 - **Accepted risk.** A pull request can hide a failing test by marking it `Category=Docker`; the note states the left-out on every run and the diff shows the trait. The review card does not show the note yet ([[pages/roadmap/followups]]).
 - **Enforcement.** `tests/Scout.Sandbox.Tests/SandboxDotNetTests.cs`: `A_repository_that_marks_tests_Category_Docker_runs_without_them`, `A_source_file_that_cannot_be_read_or_is_a_symbolic_link_declares_nothing`; `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs`: `The_note_says_which_tests_were_left_out`, `A_callers_command_leaves_nothing_out_and_the_note_does_not_say_so`; `tests/Scout.Sandbox.Tests/DockerEndToEndTests.cs`: `A_dotnet_project_with_a_failing_test_marked_Category_Docker_runs_green_without_it_and_says_so`; the commands without the trait locked by `tests/Scout.Sandbox.Tests/SandboxStacksTests.cs`.
+
+## Amendment v1.5 (2026-11-20): more than one verdict at a commit, one composed note
+
+By [[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]], from the owner's decision of 2026-11-19. The text above stays as it was decided.
+
+- **Replaces, in the amendment of 2026-11-09 under v1.1,** the sentence "one pull request at one commit still gets one action from the card, whichever of the three buttons was clicked." It now reads: "A different verdict, or other content, at a commit that already has one is its own action, approved and logged on its own; an identical request, the same commit, verdict and content digest, answers the action already there."
+- **Replaces, under v1.1,** the sentence "The card's verdict state comes from the action (queued, running, given with its link, failed), keyed on repository, number, commit and verdict, so one click is one action". It now reads: "The card's verdict state comes from the action, keyed on repository, number and commit; the given line names the verdict the control plane reports, and the card still offers the Verdict group and Post after one was given."
+- **Where it holds:** `src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:116`; the note and its marker, `src/Scout.Plugin.GitHub/ReviewNote.cs:92`, matched before a send at `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:401`; the card, `ui/packages/renderer/src/app/core/review-findings.component.ts`.
+- **How it is held:** `tests/Scout.ControlPlane.Tests/WriteGate/PullRequestVerdictServiceTests.cs:127`, `:155`; `tests/Scout.Plugin.GitHub.Tests/GitHubReviewNoteWritesTests.cs:117`; `ui/packages/renderer/src/app/core/review-findings.component.spec.ts:2426`, `:2461`.
 
 ## Consequences
 

@@ -16,15 +16,17 @@ public sealed class VerdictGrpcTests
     private const string Sha = "0123456789abcdef0123456789abcdef01234567";
     private const string ReviewUrl = "https://github.com/octocat/hello/pull/42#pullrequestreview-88";
 
-    private static GiveVerdictRequest Approve(string body = "Ready to merge.") => new()
+    private static GiveVerdictRequest Approve(string title = "c is new") => new()
     {
         Repository = "octocat/hello",
         Number = 42,
         Verdict = "approve",
-        Body = body,
-        CommentsJson = """[{"path":"src/Checkout.cs","line":3,"body":"c is new"}]""",
+        FindingsJson = $$"""[{"id":"a","severity":"fix","title":"{{title}}","path":"src/Checkout.cs","line":3,"why":"Why.","fix":"Fix."}]""",
         Commit = Sha,
         TestsLine = "Tests: 3 checks passed.",
+        FilesRead = 5,
+        FilesChanged = 7,
+        Notes = { "2 files not read: the review was stopped." },
     };
 
     private static Task<Feature> GrantAsync(GrpcFeatures.FeaturesClient features) =>
@@ -60,7 +62,8 @@ public sealed class VerdictGrpcTests
         (queued.State, running.State, done.State, done.Url, done.Reason).ShouldBe(("queued", "running", "given", ReviewUrl, ""));
         (done.Repository, done.Number, done.Commit, done.Verdict).ShouldBe(("octocat/hello", 42, Sha, "approve"));
         claimed.Action.Id.ShouldBe(given.ActionId);
-        claimed.Payload.ShouldContain("\"body\":\"Ready to merge.\"");
+        claimed.Payload.ShouldContain("\"title\":\"c is new\"", customMessage: "the worker gets the findings");
+        claimed.Payload.ShouldContain("\"filesRead\":5,\"filesChanged\":7,\"notes\":[\"2 files not read: the review was stopped.\"]", customMessage: "the review job's counts and notes reach the worker");
         claimed.Payload.ShouldContain("\"commit\":\"" + Sha + "\"");
         claimed.Payload.ShouldContain("\"testsLine\":\"Tests: 3 checks passed.\"");
         var action = (await host.Services.GetRequiredService<IActionQueue>().FindAsync(given.ActionId, CancellationToken.None)).ShouldNotBeNull();
@@ -152,15 +155,15 @@ public sealed class VerdictGrpcTests
         var notGranted = await Should.ThrowAsync<RpcException>(() => features.GiveVerdictAsync(Approve()).ResponseAsync);
         await GrantAsync(features);
         var oversized = await Should.ThrowAsync<RpcException>(() => features.GiveVerdictAsync(Approve(new string('x', 200_001))).ResponseAsync);
-        var badComments = await Should.ThrowAsync<RpcException>(() => features.GiveVerdictAsync(new GiveVerdictRequest(Approve()) { CommentsJson = "not json" }).ResponseAsync);
+        var badComments = await Should.ThrowAsync<RpcException>(() => features.GiveVerdictAsync(new GiveVerdictRequest(Approve()) { FindingsJson = "not json" }).ResponseAsync);
         var badRepository = await Should.ThrowAsync<RpcException>(() => features.GiveVerdictAsync(new GiveVerdictRequest(Approve()) { Repository = "octocat" }).ResponseAsync);
         var unknown = await Should.ThrowAsync<RpcException>(() => features.GetVerdictAsync(new GetVerdictRequest { ActionId = "nope" }).ResponseAsync);
 
         notGranted.StatusCode.ShouldBe(StatusCode.FailedPrecondition);
         notGranted.Status.Detail.ShouldBe("The owner has not allowed github to write; allow it on the Features screen of Scout Desktop.");
         oversized.StatusCode.ShouldBe(StatusCode.InvalidArgument);
-        oversized.Status.Detail.ShouldBe("payload: The verdict is over 200000 characters; keep fewer comments.");
-        badComments.Status.Detail.ShouldBe("comments: Every comment needs a path, a positive line and a body.");
+        oversized.Status.Detail.ShouldBe("payload: The verdict is over 200000 characters; keep fewer findings.");
+        badComments.Status.Detail.ShouldBe("findings: The findings must be a JSON array of at most 50 findings.");
         badRepository.Status.Detail.ShouldStartWith("repository: ");
         unknown.StatusCode.ShouldBe(StatusCode.NotFound);
     }
@@ -174,7 +177,7 @@ public sealed class VerdictGrpcTests
         var features = new GrpcFeatures.FeaturesClient(desktopChannel);
         var gate = new WorkerGate.WorkerGateClient(workerChannel);
         await GrantAsync(features);
-        const string arguments = """{"commit":"0123456","number":"42","owner":"octocat","repo":"hello","verdict":"request_changes"}""";
+        const string arguments = """{"commit":"0123456","findings_json":"[]","number":"42","owner":"octocat","repo":"hello","verdict":"request_changes"}""";
 
         var queued = await gate.RequestWriteAsync(new RequestWriteRequest
         {

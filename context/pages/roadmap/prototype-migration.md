@@ -1,9 +1,9 @@
 ---
 title: "Prototype migration: the desktop screens brought to the approved artboards"
-version: "1.7"
+version: "1.8"
 date: 2026-11-08
-updated: 2026-11-15
-changes: "v1.7 (2026-11-15): the owner settled six differences: the Kubernetes warning only while nobody is allowed, the 40 px confirmation dialog, the theme's values where the artboards disagreed, Remove the bot asking first, the Docker detail line's fuller form, and the voice button already on the strong accent; the artboards follow. v1.6 (2026-11-14): the verdict's detail is done; nothing of the bell's job entry stays owed. v1.5 (2026-11-14): See the issues on an entry for issues opened from the findings is done; the verdict's detail stays owed. v1.4 (2026-11-14): the test run's command, elapsed time and bar are done, with the owner's choice of an indeterminate bar. v1.3 (2026-11-14): the four owed items of the bell's audit entry, the findings so far, the progress of an area with no findings, the entry running on Continue and the cards line, are done. v1.2 (2026-11-14): the four owed Assembly items, the assembly, save and confirmation times and the thumbnail's alt text, are done. v1.1 (2026-11-14): the two owed Docker items, the logs of the runs in the work folder line and the command on the Stack tile, are done. v1.0: initial initiative page: the visual audit of the built desktop against the 17 artboards, and the migration plan, one version per screen"
+updated: 2026-11-19
+changes: "v1.8 (2026-11-19): the Main artboard draws the review job's pauses and the review card's editor, rule line, known list and last output as the app shows them; the bell's Mention review group gets its started and ready words, the rest owed. v1.7 (2026-11-15): the owner settled six differences: the Kubernetes warning only while nobody is allowed, the 40 px confirmation dialog, the theme's values where the artboards disagreed, Remove the bot asking first, the Docker detail line's fuller form, and the voice button already on the strong accent; the artboards follow. v1.6 (2026-11-14): the verdict's detail is done; nothing of the bell's job entry stays owed. v1.5 (2026-11-14): See the issues on an entry for issues opened from the findings is done; the verdict's detail stays owed. v1.4 (2026-11-14): the test run's command, elapsed time and bar are done, with the owner's choice of an indeterminate bar. v1.3 (2026-11-14): the four owed items of the bell's audit entry, the findings so far, the progress of an area with no findings, the entry running on Continue and the cards line, are done. v1.2 (2026-11-14): the four owed Assembly items, the assembly, save and confirmation times and the thumbnail's alt text, are done. v1.1 (2026-11-14): the two owed Docker items, the logs of the runs in the work folder line and the command on the Stack tile, are done. v1.0: initial initiative page: the visual audit of the built desktop against the 17 artboards, and the migration plan, one version per screen"
 page_type: roadmap
 status: active
 description: "A screen-by-screen audit of the built Scout Desktop against the approved prototype artboards, with each difference's severity and component, and the order in which the screens migrate to the artboards and to Angular Material, one version per screen."
@@ -100,14 +100,23 @@ S1 and S8 are bug fixes that go before version 1; S3 to S7 are fixed once, in th
   - Done 2026-11-14: the test run's command and elapsed time ("npm test in a container · running for 2 min 14 s"), read from the sandbox's running record, and its bar, an indeterminate sweep by the owner's choice, as the artboard now draws it ([[pages/services/desktop-ui]], Pause, Continue and Stop on a running job).
   - Done 2026-11-14: "See the issues" on an entry for issues opened from the findings, "3 issues opened on acme/shop" with "From the audit findings you chose" and the "I" icon, recorded by main when an issues turn ends done with links to issues of its repository (`ui/packages/main/src/notifications/sources.ts:329`; [[pages/services/desktop-ui]], Theme and notices).
   - Done 2026-11-14: the verdict's detail, from the account `GetVerdict` now answers and where the tests line went: "Signed as Bot (scout[bot]) · the tests line was posted as a comment", or "was not posted", the signer alone when no tests line was asked for (`ui/packages/main/src/notifications/sources.ts:212`; [[pages/decisions/0043-the-verdict-on-a-pull-request]]). The signer reads by the Review page's rule, "Bot (<login>)" or "Owner (<login>)": the owner chose on 2026-11-14 that the bell and the Review page say the same, and the artboard was redrawn to it. Nothing else of the bell's job entry is owed.
-- **Recorded as untrue in the artboard, for the owner:** a stopped test run's "The container was removed; the tests gave no result." The stop cancels the run's token, and the sandbox kills the container (`src/Scout.Sandbox/DockerSandboxRunner.cs:150`) started with `--rm` (`:192`), but the kill ignores its exit code and swallows a failure or a 30-second timeout (`:251`), and a stop that comes before the container exists, while the pull request's head or snapshot is read (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:101`), has no container to remove. The app keeps "The tests gave no result."
+- **Recorded as untrue in the artboard, for the owner:** a stopped test run's "The container was removed; the tests gave no result." The stop cancels the run's token, and the sandbox kills the container (`src/Scout.Sandbox/DockerSandboxRunner.cs:150`) started with `--rm` (`:192`), but the kill ignores its exit code and swallows a failure or a 30-second timeout (`:251`), and a stop that comes before the container exists, while the pull request's head or snapshot is read (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:101`), has no container to remove. The app keeps "The tests gave no result." Closed 2026-11-20: the artboards were corrected to "The tests gave no result.", because their sentence was not always true.
 - **Added to the artboard, waiting for the owner's approval** (the app has them and `Main.dc.html` did not):
   - 2026-11-12, the bell's job entry, under Bell: Asking (the controls at half opacity, inactive), Pausing after this area, Continuing, Stop on a paused audit ("Stopping"), Stopping the tests, the note lines (no answer from the control plane, not confirmed, not reported, Scout stopped, dropped after two minutes), the five other pause reasons in the sentences above, the area named in the detail ("Area 3 of 8 done: src/orders", as the app shows it), the audit done with its verdict ("A" on the ok pair), the tests finished ("T" on the ok pair) and not finished ("T" on the error pair, the failed kind), and Scout restarting (the app's clock drawing) and not restarting ("!" on the error pair). Done now lists the failed entries too, as the app does.
   - Empty and No AI Source, under Conversation (from version 1).
   - Read answers aloud in the top bar, after Clear: the round 40 px icon button of `Components.dc.html` (the bell's pattern), on `--sc-surface-2` while pressed. Its failure shows as an alert over the composer.
   - Streaming, under Answer: the text so far below the question with no card, and the line saying what Scout is doing with the speaker at its right.
   - Under Reply: Interrupted (the partial reply with "Interrupted" under it) and Scout not running ("Scout is not running. Start it from the tray or the app." in the error colour, with Start Scout).
+  - 2026-11-19, in the app's words: the Review job group's Pausing after this batch, Paused at 60 minutes ("It ran for 60 minutes with 11 batches left. Continue to give it 60 more minutes."), Paused: GitHub could not be read ("GitHub could not be read. Continue to try again.") and Paused: the AI Source limit; on the review card, Edit with its editor (What is wrong, Fix, the count, "Use this text and mark Yes", Cancel), "Rule: ...", "Already documented, not raised again" on an audit, and "Last output" under failed tests.
   - Under Hold to talk and alerts: Holding the microphone ("Listening. Release to send." and the microphone on the error pair), Nothing heard ("No speech heard; nothing was sent."), Read aloud failed ("Scout could not read that aloud; see Scout logs.") and Question refused ("Type a question of 1 to 4000 characters.").
+- **The bell's Mention review group, 2026-11-19.** Built: the started entry reads "Reviewing acme/api#44, asked by @owner", the ready entry "Nothing is posted on GitHub before you approve it in the chat." with Open in the chat (`ui/packages/main/src/notifications/mention-review.ts`). Owed, each needing more than words:
+  - The started detail "Reading 12 files · running the tests in a container": main knows no file count when the turn starts; it needs the review's own progress from the worker.
+  - "@acme-dev is not on your allowed users, so Scout waits for you." and a review started by an allowed user's mention: the app starts only the owner's own mention and keeps no list of allowed users for it; it needs that setting and its grant.
+  - The ready title "ready for your ok: 3 comments, Request changes" or "no comments, Approve", and its warn tone: main does not read the review's findings or verdict when the turn ends, and a done entry has the ok tone; it needs the findings counted in main and a kind for an entry waiting for the owner.
+  - Posting and posted ("Posting the review on acme/api#44", "Review posted on acme/api#44: Approved", the comment count): the app shows these as the Verdict group's entries ("Verdict on acme/api#44", "Verdict given: ..."), which every verdict shares; the owner chooses which words win.
+  - Rejected ("Review of acme/api#44 rejected", "Nothing was posted on GitHub."): no entry is recorded when the owner rejects a review; it needs the rejection to reach main.
+  - Shown by the app, not drawn: the mention's own detail once its review was asked, "Review started by the mention. The answer is in the chat.", and the review that stopped before its answer, "Review of acme/api#44 did not finish" with "It stopped before the answer. Review it asks again." (`ui/packages/main/src/notifications/mention-review.ts`).
+  - The dedicated mention card (the origin line, files read and left out, the diff, keep or drop per comment, reject with a reason): a new component and data the review does not return.
 
 ### Quick ask (`QuickAsk.dc.html`)
 
@@ -410,6 +419,75 @@ S1 and S8 are bug fixes that go before version 1; S3 to S7 are fixed once, in th
 ### Components (`Components.dc.html`)
 
 This artboard is the reference sheet, not a screen: buttons, status chips, page header, card, empty and loading, form field, slide toggle, segmented control, tabs, menu, tooltip and badge, progress bar, snackbar, confirm dialog. It is the target for S6 and S7 and for each version's "Material to adopt".
+
+### GitHub notes (`GitHubNotes.dc.html`)
+
+- **Built, 2026-11-20** ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]): 53 of the 100 rows of the four states `approved`, `problems`, `suggestions` and the inline comment, composed by `ReviewNote` ([[pages/services/plugin-github/the-review-note]]).
+- **Built with reduced words, by decision** (the owner's decision of 2026-11-19 that a section or a part nothing measured is left out, not drawn empty):
+  - The summary bar's tests part: the artboard's `tests: {tests_passed} passed, {tests_failed} failed`; built `tests: passed`, `tests: failed` or `tests: could not run`, since a run keeps no test counts.
+  - The commit line: the artboard's parts `{reviewed_at} UTC` and ``reviewed with {ai_source}, model `{ai_model}` `` are not built; the line is ``Commit `{sha}` `` only.
+  - The tests table: built without the artboard's row `Counts | passed, failed, skipped` and its details `Counts per project and the slowest tests`.
+  - The checks table: built without the artboard's `Duration` column, since a check carries none.
+  - "How this review was made": the artboard's table of time taken, AI source and model, Scout version, rule files read, convention pages read and unchanged files read; built with the `Commit` row only. Its third bullet, the artboard's `**Written by the AI source from what it read:** ...` list, is built as `**Written by the AI source from what it read:** the findings.`
+  - The approval's next sentence: the artboard's "Nothing is asked of the author. Merge when the {manual_count} manual cases are ticked. A new commit makes this approval stale: mention @{bot} again."; built without the middle sentence, since there are no manual cases.
+  - The rule line of a comment: the artboard's `**Rule or document:** {rule_source}, "{rule_text}"`; built as the finding's one rule text.
+  - The inline comment's four further lines, `**How to reproduce:**`, the `suggestion` block, `**Test to add:**` and `**Related lines:**`: not built, no data.
+- **Left out, 47 rows, each with what it needs:**
+  - Row 7 (all): Bar part `{requests_total} requests, {requests_not_done} not done`. Needs: Scout extracts no requests.
+  - Row 12 (all): Commit line, part `{reviewed_at} UTC`. Needs: the card keeps no review time.
+  - Row 13 (all): Commit line, part ``reviewed with {ai_source}, model `{ai_model}` ``. Needs: the plugin does not know which provider and model made the review.
+  - Row 14 (all): Heading `#### :balance_scale: Reasons for the verdict`. Needs: no data.
+  - Row 15 (all): Its numbered list `1. {reason}`. Needs: the same as the row above.
+  - Row 16 (all): Heading `#### :dart: What was asked and what was done`. Needs: no data.
+  - Row 17 (all): Sentence `{n} requests: {n} done and covered by tests, ... Requests taken from ...`. Needs: the same as the row above.
+  - Row 18 (all): Table `Asked`, `What was done`, `Tests that cover it`, `Tests to run by hand to prove it`, `Author's claim checked`. Needs: the same as the row above.
+  - Row 19 (all): `**Asked and not done:**` and its list. Needs: the same as the row above.
+  - Row 20 (all): `**Done and not asked:**` and its list. Needs: the same as the row above.
+  - Row 21 (all): Heading `#### :memo: Summary of the change` and its paragraph. Needs: no data.
+  - Row 22 (all): Table `Item`, `Value` (Kind, Linked issue, Areas touched, Size, Public contract touched, Data migration, New dependency). Needs: the same as the row above.
+  - Row 25 (all): Table `Area`, `File`, `What changed`. Needs: no per-file text.
+  - Row 26 (all): Details `The other {n} files read` with the same table. Needs: the same as the row above.
+  - Row 29 (all): Heading `#### :books: Documentation` and its counts sentence. Needs: no data.
+  - Row 30 (all): `**Changed in this pull request:**` list. Needs: the same as the row above.
+  - Row 31 (all): `**Describe the changed code and were not updated:**` list. Needs: the same as the row above.
+  - Row 32 (all): `**Missing:**` list. Needs: the same as the row above.
+  - Row 33 (all): `**Decision record followed:**` line. Needs: the same as the row above.
+  - Row 34 (all): Heading `#### :test_tube: Tests in this pull request` and its counts sentence. Needs: no data.
+  - Row 35 (all): Details `The {n} tests`, table `Test`, `File`, `What it proves`, `State`. Needs: the same as the row above.
+  - Row 36 (all): `**Changed code no test reaches:**` list. Needs: the same as the row above.
+  - Row 43 (all): Row `Counts | passed, failed, skipped`. Needs: not measured.
+  - Row 44 (all): Details `Counts per project and the slowest tests`. Needs: not measured.
+  - Row 46 (all): Heading `#### :raised_hand: Tests for a person to run before merging`, sentence and checklist. Needs: no data.
+  - Row 47 (all): `**Also check for regressions:**` list. Needs: the same as the row above.
+  - Row 51 (all): Column `Duration` of that table. Needs: a check carries no duration (`src/Scout.Plugin.GitHub/Abstractions/PullRequestDetails.cs:69`).
+  - Row 52 (all): `**Not covered by any check:**` list. Needs: no data.
+  - Row 53 (all): Heading `#### :warning: Impact and risk` and details `Who calls the changed code`. Needs: no data.
+  - Row 54 (all): `**Behaviour a user would notice:**` list. Needs: the same as the row above.
+  - Row 55 (all): `**Settings and environment variables:**` table `Name`, `Change`, `Default`. Needs: the same as the row above.
+  - Row 56 (all): `**Dependencies:**` list. Needs: the same as the row above.
+  - Row 57 (all): `**Security:**` three lines. Needs: the same as the row above.
+  - Row 58 (all): `**Performance:**` line. Needs: the same as the row above.
+  - Row 59 (all): Heading `#### :rocket: Release notes` with Deploy, Roll back, Watch. Needs: no data.
+  - Row 67 (all): Heading `#### :bulb: Suggested practices for this repository`, sentence and list. Needs: no data.
+  - Row 70 (all): Row `Time taken`. Needs: not measured.
+  - Row 71 (all): Row `AI source and model`. Needs: same reason as row 13.
+  - Row 72 (all): Row `Scout version`. Needs: the worker reads no version.
+  - Row 73 (all): Row `Rule files read`. Needs: not recorded.
+  - Row 74 (all): Row `Convention pages read`. Needs: the same as the row above.
+  - Row 75 (all): Row `Unchanged files read for context`. Needs: the same as the row above.
+  - Row 90 (approved, note): `Every section is always present. An empty one says so in words`. Needs: the owner's decision 2 leaves an uncomputed section out.
+  - Row 94 (inline): `**How to reproduce:** ...`. Needs: no data.
+  - Row 96 (inline): The `suggestion` block. Needs: no data.
+  - Row 97 (inline): `**Test to add:** ...`. Needs: no data.
+  - Row 99 (inline): `**Related lines:**` list. Needs: no data.
+- **The other eight templates of the artboard, not built:**
+  - Review started: nothing is posted on GitHub; the start's sentence goes to the conversation that asked.
+  - Approval waiting for the checks: nothing is posted; the bell's entry "Waiting to approve <pr>" and the card's waiting line.
+  - Review could not finish: nothing is posted; the review's notice or card goes to the conversation.
+  - A check failed: nothing is posted; the bell's "Not approved: a check failed on <pr>".
+  - Conflicts with the base branch: nothing is posted; the bell's "Not approved: <pr> has conflicts with its base branch".
+  - The two issues: an issue opened from an audit finding posts `issueBody`'s Problem, Evidence and Proposed change; the artboard's layouts are not built.
+  - The reply to a comment: `reply_to_review_comment` posts the text the model wrote.
 
 ## Migration plan
 

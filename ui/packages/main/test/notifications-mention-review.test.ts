@@ -87,7 +87,7 @@ describe('a mention of the Scout bot starts the review by itself', () => {
     expect(h.kept.get(REVIEW_ID)).toEqual({
       id: REVIEW_ID,
       kind: 'running',
-      title: 'Reviewing acme/api#44',
+      title: 'Reviewing acme/api#44, asked by @owner',
       detail: 'Started by your mention of the Scout bot',
       indeterminate: true,
       url: 'https://github.com/acme/api/pull/44#issuecomment-7',
@@ -199,7 +199,8 @@ describe('a mention of the Scout bot starts the review by itself', () => {
       id: REVIEW_ID,
       kind: 'done',
       title: 'Review of acme/api#44 is ready',
-      detail: 'The answer is in the chat.',
+      detail: 'Nothing is posted on GitHub before you approve it in the chat.',
+      actions: [{ id: 'open-chat', label: 'Open in the chat' }],
       url: 'https://github.com/acme/api/pull/44#issuecomment-7',
       source: 'github',
     });

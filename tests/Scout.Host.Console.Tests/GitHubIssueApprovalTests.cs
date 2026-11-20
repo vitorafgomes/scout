@@ -84,8 +84,7 @@ public sealed class GitHubIssueApprovalTests : IDisposable
             ["owner"] = "acme",
             ["repo"] = "shop",
             ["number"] = 7,
-            ["body"] = "Two findings.",
-            ["comments"] = """[{"path":"src/Cart.cs","line":12,"body":"Two moves lose an item."}]""",
+            ["findings_json"] = """[{"id":"a","severity":"fix","title":"Two moves lose an item.","path":"src/Cart.cs","line":12,"why":"Why.","fix":"Fix."}]""",
         })).GetValue<string>();
 
         var waiting = (await _actions.ListPendingAsync(CancellationToken.None)).ShouldHaveSingleItem();
@@ -200,9 +199,8 @@ public sealed class GitHubIssueApprovalTests : IDisposable
         ["comment_id"] = 99L,
         ["title"] = "Cart loses an item",
         ["body"] = "Two moves lose an item.",
-        ["comments"] = """[{"path":"src/Cart.cs","line":3,"body":"Two moves lose an item."}]""",
+        ["findings_json"] = """[{"id":"a","severity":"fix","title":"Two moves lose an item.","path":"src/Cart.cs","line":3,"why":"Why.","fix":"Fix."}]""",
         ["verdict"] = "request_changes",
-        ["comments_json"] = """[{"path":"src/Cart.cs","line":3,"body":"Two moves lose an item."}]""",
         ["commit"] = CountingGitHub.Head,
     };
 
@@ -226,7 +224,7 @@ public sealed class GitHubIssueApprovalTests : IDisposable
         var fromTheModel = (await _actions.ListPendingAsync(CancellationToken.None)).ShouldHaveSingleItem();
         var fromTheCard = await new PullRequestVerdictService(_states, _actions, _writes).GiveAsync(
             new PullRequestVerdictRequest(
-                "acme", "shop", 7, "comment", "Two moves lose an item.", [new VerdictComment("src/Cart.cs", 3, "Two moves lose an item.")], CountingGitHub.Head, null),
+                "acme", "shop", 7, "comment", [new VerdictFinding("a", "fix", "Two moves lose an item.", "src/Cart.cs", 3, null, "Why.", "Fix.", null)], CountingGitHub.Head, null),
             CancellationToken.None);
 
         fromTheModel.Payload.ShouldNotBeNull().ShouldNotContain("commit");
@@ -252,8 +250,7 @@ public sealed class GitHubIssueApprovalTests : IDisposable
             ["repo"] = "shop",
             ["number"] = 7,
             ["verdict"] = "request_changes",
-            ["body"] = "Two moves lose an item.",
-            ["comments_json"] = """[{"path":"src/Cart.cs","line":3,"body":"Two moves lose an item."}]""",
+            ["findings_json"] = """[{"id":"a","severity":"fix","title":"Two moves lose an item.","path":"src/Cart.cs","line":3,"why":"Why.","fix":"Fix."}]""",
             ["commit"] = CountingGitHub.Head,
             ["testsLine"] = "A comment the owner never saw.",
         });

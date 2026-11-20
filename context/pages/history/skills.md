@@ -1,9 +1,9 @@
 ---
 title: "Skills - history"
-version: "1.1"
+version: "1.2"
 date: 2026-10-22
-updated: 2026-11-17
-changes: "v1.1 (2026-11-17): code-review starts a review job when a diff is left out. Initial history note: a failed skill index build is retried instead of cached"
+updated: 2026-11-20
+changes: "v1.2 (2026-11-20): the review judges removals, the purpose and the written rules. v1.1 (2026-11-17): code-review starts a review job when a diff is left out. Initial history note: a failed skill index build is retried instead of cached"
 page_type: reference
 status: artefact
 description: "What changed in the Skills project and when."
@@ -20,6 +20,12 @@ reliability: high
 # Skills - history
 
 > Dated changes to [[pages/services/skills]]; the service page states how it works now.
+
+## 2026-11-20 - The review judges removals, the purpose and the written rules
+
+- **What it was:** `code-review` judged the changes a diff shows against the conventions profile; its write functions took a body.
+- **What it is:** four sentences judge what the pull request removes and what it says it does, count the project's written rules like the profile, make a test deleted while its code stays a finding at line 1, and allow that anchor on a deleted file (`src/Scout.Skills/skills/code-review.md:33`, `:49`, `:57`); the write functions take `findings_json` ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]], [[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]).
+- **Tests:** `tests/Scout.Skills.Tests/BundledSkillsTests.cs:604`, `:613`, `:622`, `:631`.
 
 ## 2026-11-17 - code-review starts a review job when a diff is left out
 

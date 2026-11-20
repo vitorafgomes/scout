@@ -579,6 +579,11 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
         ScoutBridge['githubGiveVerdict']
       >;
     },
+    githubPreviewVerdict(req) {
+      return ipc.invoke(CHANNEL.githubPreviewVerdict, req) as ReturnType<
+        ScoutBridge['githubPreviewVerdict']
+      >;
+    },
     githubVerdictStatus(req) {
       return ipc.invoke(CHANNEL.githubVerdictStatus, req) as ReturnType<
         ScoutBridge['githubVerdictStatus']

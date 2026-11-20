@@ -156,8 +156,19 @@ export const SHOW_MAIN_GUARDS: Readonly<Record<string, ChannelGuard>> = {
   },
 };
 
-/** Quick ask's guarded channels: only the floating button asks for its card. */
+/** The windows that show a review's verdict buttons, the Scout window's Chat screen and quick ask, and the refusal of any other. */
+export const VERDICT_WINDOW_GUARD: ChannelGuard = {
+  allowed: ['main', 'quick-ask'],
+  refusal: () =>
+    new ScoutError(
+      'github/not-verdict-window',
+      'A verdict can be given only from the Scout window or quick ask.',
+    ),
+};
+
+/** Quick ask's guarded channels: only the floating button asks for its card; only the verdict windows preview a note. */
 export const QUICK_ASK_GUARDS: Readonly<Record<string, ChannelGuard>> = {
+  [CHANNEL.githubPreviewVerdict]: VERDICT_WINDOW_GUARD,
   [CHANNEL.localBubbleCard]: {
     allowed: ['floating-button'],
     refusal: () =>

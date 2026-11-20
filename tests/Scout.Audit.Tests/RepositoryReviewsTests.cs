@@ -900,4 +900,178 @@ public sealed class RepositoryReviewsTests : IDisposable
         answer.Applied.ShouldBeFalse();
         answer.Sentence.ShouldBe(sentence == "Invalid repository name." ? RepositoryAudits.InvalidRepository : sentence);
     }
+
+    private void SnapshotFile(string relative, string text)
+    {
+        var full = Path.Combine(_folder.Path, "snapshots", Head, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, text);
+    }
+
+    private static readonly ReviewFile[] WithRemovals =
+    [
+        new("src/A.cs", "@@ -1 +1 @@\n-a\n+b", "modified"),
+        new("tests/Shop.Tests/CartTests.cs", null, "removed"),
+    ];
+
+    [Fact]
+    public async Task A_review_start_keeps_the_purpose_the_rule_files_and_what_was_removed()
+    {
+        SnapshotFile("AGENTS.md", "Every write is declared.");
+        SnapshotFile("src/Shop/Cart.cs", "class Cart {}");
+        var store = Store();
+        var purpose = new ReviewPurpose("Checkout total", new string('d', 5_000), 7, "Totals are negative", "Seen on acme/shop.");
+
+        var start = await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, WithRemovals, 1, 0, Green, CancellationToken.None, purpose);
+
+        start.Started.ShouldBeTrue(start.Sentence);
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        var inputs = (await store.InputsAsync(job.Id, CancellationToken.None)).ShouldNotBeNull("a new review keeps its inputs with the job");
+        inputs.Purpose.ShouldBe(ReviewInputs.Bound(purpose), "the purpose is kept within its bounds, its description cut and marked so");
+        inputs.Rules.Files.Select(f => (f.Path, f.Text, f.Cut, f.ChangedHere)).ShouldBe(
+            [("AGENTS.md", "Every write is declared.", false, false)], "the rule files are read from the snapshot at the reviewed commit");
+        inputs.Removed.Entries.Select(e => (e.Path, e.What, string.Join(",", e.StillPresent))).ShouldBe(
+            [("tests/Shop.Tests/CartTests.cs", RemovedEntry.TestFileDeleted, "src/Shop/Cart.cs")], "what the pull request removed is computed from its files and the snapshot");
+        (inputs.Rules.Unreadable, inputs.Removed.RepositoryNotSearched).ShouldBe((false, false), "the snapshot was read and searched");
+    }
+
+    [Fact]
+    public async Task A_review_whose_rule_files_cannot_be_read_still_starts()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The unreadable file is made with Unix permissions.");
+        }
+
+        SnapshotFile("AGENTS.md", "Every write is declared.");
+        var unreadable = Path.Combine(_folder.Path, "snapshots", Head, "AGENTS.md");
+        File.SetUnixFileMode(unreadable, UnixFileMode.None);
+        try
+        {
+            var store = Store();
+
+            var start = await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, WithRemovals, 1, 0, Green, CancellationToken.None);
+
+            start.Started.ShouldBeTrue("a rule file that cannot be read does not stop the review");
+            var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+            (await store.JobAsync(job.Id, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Running);
+            var inputs = (await store.InputsAsync(job.Id, CancellationToken.None)).ShouldNotBeNull();
+            (inputs.Rules.Unreadable, inputs.Rules.Files.Count, inputs.Purpose).ShouldBe((true, 0, (ReviewPurpose?)null), "the rules are kept as unreadable, and no purpose was given");
+            inputs.Removed.Entries.ShouldHaveSingleItem().What.ShouldBe(RemovedEntry.TestFileDeleted, "the removals are still kept");
+        }
+        finally
+        {
+            File.SetUnixFileMode(unreadable, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
+    [Fact]
+    public async Task Resuming_a_paused_review_keeps_the_inputs_it_started_with()
+    {
+        SnapshotFile("AGENTS.md", "Every write is declared.");
+        var store = Store();
+        var reviews = Reviews(TakingTheSnapshot([]), store);
+        await reviews.StartAsync("acme", "shop", 12, Head, WithRemovals, 1, 0, Green, CancellationToken.None, new ReviewPurpose("Checkout total", "First description."));
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        var first = (await store.InputsAsync(job.Id, CancellationToken.None)).ShouldNotBeNull();
+        await store.PauseAsync(job.Id, "the AI provider's usage limit was reached", CancellationToken.None);
+        SnapshotFile("CLAUDE.md", "A rule written after the start.");
+
+        var resumed = await reviews.StartAsync("acme", "shop", 12, Head, OneFile, 1, 0, Green, CancellationToken.None, new ReviewPurpose("Another title", "Another description."));
+
+        resumed.Sentence.ShouldStartWith("Resuming the review of acme/shop#12 at abc1234 from the first batch not done.");
+        var kept = (await store.InputsAsync(job.Id, CancellationToken.None)).ShouldNotBeNull();
+        kept.Purpose.ShouldBe(first.Purpose, "a resumed review keeps the purpose it started with");
+        kept.Rules.Files.Select(f => f.Path).ShouldBe(["AGENTS.md"], "a resumed review keeps the rule files it started with");
+        kept.Removed.Entries.Select(e => e.Path).ShouldBe(first.Removed.Entries.Select(e => e.Path), "a resumed review keeps the removals it started with");
+    }
+
+    private void BoundRules()
+    {
+        SnapshotFile("AGENTS.md", new string('a', 7_000));
+        SnapshotFile("CLAUDE.md", new string('c', 7_000));
+        SnapshotFile("CONTRIBUTING.md", new string('o', 7_000));
+    }
+
+    private static ReviewPurpose BoundPurpose =>
+        new(new string('t', 400), new string('d', 5_000), 7, new string('i', 400), new string('b', 5_000));
+
+    [Fact]
+    public async Task With_inputs_at_their_bounds_no_planned_batch_request_passes_the_cap()
+    {
+        BoundRules();
+        var store = Store();
+        ReviewFile[] files = [.. Enumerable.Range(1, 8).Select(n => new ReviewFile($"src/Orders/File{n}.cs", "@@ -1 +1 @@\n+" + new string('x', 9_000), "modified"))];
+
+        var start = await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, files, 1, 0, Green, CancellationToken.None, BoundPurpose);
+
+        start.Started.ShouldBeTrue(start.Sentence);
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        var inputs = (await store.InputsAsync(job.Id, CancellationToken.None)).ShouldNotBeNull();
+        var batches = await store.BatchesAsync(job.Id, CancellationToken.None);
+        batches.ShouldAllBe(b => b.Failure == null, "every file still fits a batch beside the inputs");
+        foreach (var batch in batches)
+        {
+            var request = AuditBatchRunner.ReviewRequest(job, batch, batches.Count, [], files, inputs);
+            var fixedLines = AuditBatchRunner.ReviewRequest(job, batch, batches.Count, [], [], null);
+            ((long)request.Length - fixedLines.Length).ShouldBeLessThanOrEqualTo(
+                Options.MaxBatchCharacters, $"batch {batch.Order}'s patches and inputs stay within the cap, beside the lines always outside it");
+        }
+    }
+
+    [Fact]
+    public async Task A_file_with_no_room_beside_the_inputs_is_counted_as_not_read_as_a_diff_larger_than_one_batch()
+    {
+        BoundRules();
+        Options.MaxBatchCharacters = 40_000;
+        var store = Store();
+        ReviewFile[] files =
+        [
+            new("src/Orders/Small.cs", "@@ -1 +1 @@\n+small", "modified"),
+            new("src/Orders/Large.cs", "@@ -1 +1 @@\n+" + new string('x', 20_000), "modified"),
+        ];
+
+        var start = await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, files, 1, 0, Green, CancellationToken.None, BoundPurpose);
+
+        start.Started.ShouldBeTrue(start.Sentence);
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        (await store.BatchesAsync(job.Id, CancellationToken.None)).Select(b => (string.Join(",", b.Files), b.Failure)).ShouldBe(
+        [
+            ("src/Orders/Small.cs", (string?)null),
+            ("src/Orders/Large.cs", RepositoryAudits.DiffTooLarge),
+        ], "a patch that fits the cap alone but not beside the inputs is counted as not read, as a diff larger than one batch, and the rest is reviewed");
+    }
+
+    [Fact]
+    public async Task A_review_whose_files_fit_the_cap_alone_but_none_beside_the_inputs_does_not_start()
+    {
+        BoundRules();
+        Options.MaxBatchCharacters = 40_000;
+        var store = Store();
+        ReviewFile[] files = [.. Enumerable.Range(1, 2).Select(n => new ReviewFile($"src/Orders/Large{n}.cs", "@@ -1 +1 @@\n+" + new string('x', 20_000), "modified"))];
+
+        var start = await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, files, 1, 0, Green, CancellationToken.None, BoundPurpose);
+
+        (start.Started, start.Sentence).ShouldBe(
+            (false, "No review of acme/shop#12 was started: none of the 2 changed files can be read in batches: 2 with a diff larger than one batch of about 10,000 tokens."),
+            "a review with no file left to read beside the inputs is refused like one with none left to read at all");
+        (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldBeNull("no job row is created");
+    }
+
+    [Fact]
+    public async Task The_start_and_its_stored_size_check_name_the_batches_of_the_final_plan()
+    {
+        BoundRules();
+        Options.MaxBatchCharacters = 40_000;
+        var store = Store();
+        ReviewFile[] files = [.. Enumerable.Range(1, 3).Select(n => new ReviewFile($"src/Orders/File{n}.cs", "@@ -1 +1 @@\n+" + new string('x', 12_000), "modified"))];
+
+        var start = await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, files, 1, 0, Green, CancellationToken.None, BoundPurpose);
+
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        (await store.BatchesAsync(job.Id, CancellationToken.None)).Count.ShouldBe(3, "beside the inputs each file needs a batch of its own, where alone the three fit one");
+        start.Sentence.ShouldStartWith("review started: 3 files in 3 batches,", Case.Sensitive, "the start names the batches of the plan that runs");
+        (await store.PreflightAsync(job.Id, CancellationToken.None)).ShouldNotBeNull().Checks.Single(c => c.Name == PreflightName.Size).Sentence
+            .ShouldStartWith("3 files in 3 batches;", Case.Sensitive, "the stored size check names the batches of the plan that runs");
+    }
 }

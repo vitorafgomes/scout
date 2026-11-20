@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ISSUES_MARKER,
@@ -21,7 +21,7 @@ import {
   type ReviewFindings,
 } from '@scout/shared';
 
-import { commentBody, issueBody, reviewBody } from './review-findings';
+import { issueBody } from './review-findings';
 import { ReviewFindingsComponent } from './review-findings.component';
 import { ReviewFindingsStore, findingsCards } from './review-findings.store';
 import { ScoutBridgeService } from './scout-bridge';
@@ -143,7 +143,7 @@ function makeBridge() {
   const verdictListeners: ((status: GitHubVerdictStatus) => void)[] = [];
   const waitingListeners: ((status: GitHubWaitingApproval) => void)[] = [];
   let actions = 0;
-  let key: Omit<GitHubVerdictStatus, keyof GitHubVerdictProgress> = VERDICT_KEY;
+  let key: GitHubVerdictKey & { verdict: GitHubVerdictRequest['verdict'] } = VERDICT_KEY;
   const push = (next: readonly LocalTurn[]) => {
     turns = next;
     listeners.forEach((listener) => listener(turns));
@@ -243,10 +243,21 @@ function makeBridge() {
       return () => undefined;
     }),
     waiting: (status: GitHubWaitingApproval) => waitingListeners.forEach((l) => l(status)),
-    verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'>) =>
+    verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine' | 'verdict'>) =>
       verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...key, ...status })),
     pushStatus: (status: Omit<GitHubVerdictStatus, 'signedAs' | 'testsLine'>) =>
       verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...status })),
+    pushFull: (status: GitHubVerdictStatus) => verdictListeners.forEach((l) => l(status)),
+    githubPreviewVerdict: vi.fn(async (req: GitHubVerdictRequest) => ({
+      body: `### Scout review\n\n${req.findings.map((f) => `- ${f.title}: ${f.why} ${f.fix}`).join('\n')}`,
+      comments: req.findings.map((f) => ({
+        id: f.id,
+        path: f.path,
+        line: f.line,
+        body: `${f.title}\n\n${f.why}\n\n**Fix:** ${f.fix}`,
+      })),
+      dropped: [] as string[],
+    })),
     appOpenExternal: vi.fn(async (_req: { url: string }): Promise<void> => undefined),
   };
 }
@@ -460,7 +471,7 @@ describe('review findings cards', () => {
 
   it('Edit shows what is wrong and the fix, Use this text keeps the edited text and marks Yes, and the comment is rebuilt from it', async () => {
     const bridge = makeBridge();
-    const fixture = await render(bridge);
+    const fixture = await render(bridge, reviewed);
     const edit = el(fixture, 'edit', card(fixture, 1))!;
     expect(text(edit)).toBe('Edit');
 
@@ -528,21 +539,13 @@ describe('review findings cards', () => {
       repository: 'acme/shop',
       number: 5,
       verdict: 'comment',
-      body: reviewBody(reviewed, [total, naming]),
-      comments: [
-        {
-          path: 'src/orders/Checkout.cs',
-          line: 88,
-          body: commentBody({ ...total, why: 'Edited: sum after the discounts.' }),
-        },
-        { path: 'src/orders/Cart.cs', line: 30, body: commentBody(naming) },
-      ],
+      findings: [{ ...total, why: 'Edited: sum after the discounts.' }, naming],
       commit: 'ec7f951',
       testsLine: '',
     });
   });
 
-  it('once GitHub took the review the cards show Review posted with the link and no buttons, and Post cannot post again; a failed post says why and keeps the buttons', async () => {
+  it('once GitHub took the review the cards show Review posted with the link and still offer Post and the Verdict group; a failed post says why and keeps the buttons', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
@@ -568,8 +571,6 @@ describe('review findings cards', () => {
     await click(fixture, el(fixture, 'post'));
     bridge.verdict({ actionId: 'action-2', state: 'given', url: URL, reason: null });
     await settle(fixture);
-    await fixture.componentInstance.post();
-    await settle(fixture);
 
     expect(el(fixture, 'posted')?.className).toBe('posted');
     const posted = el(fixture, 'posted')!;
@@ -578,15 +579,16 @@ describe('review findings cards', () => {
       'Posted as one review that only comments, without approval or request for changes. The items with No stayed here in the chat.',
     );
     expect(text(posted.querySelector('a'))).toBe(URL);
-    expect(el(fixture, 'post')).toBeNull();
-    expect(el(fixture, 'approve')).toBeNull();
-    expect(el(fixture, 'summary')).toBeNull();
-    expect(all(fixture, 'yes')).toEqual([]);
-    expect(all(fixture, 'no')).toEqual([]);
-    expect(all(fixture, 'edit')).toEqual([]);
+    expect(
+      ['post', 'approve', 'request-changes'].map(
+        (test) => !(el(fixture, test) as HTMLButtonElement).disabled,
+      ),
+      'a posted review leaves Post and the Verdict group offered at the same commit',
+    ).toEqual([true, true, true]);
     expect(card(fixture, 1).classList.contains('no')).toBe(true);
-    expect(text(el(fixture, 'dismissed', card(fixture, 1)))).toBe('Dismissed: Move has no lock');
-    expect(all(fixture, 'undo')).toEqual([]);
+    expect(text(el(fixture, 'dismissed', card(fixture, 1)))).toBe(
+      'Dismissed: Move has no lock Undo',
+    );
     expect(bridge.githubGiveVerdict).toHaveBeenCalledTimes(2);
 
     await click(fixture, posted.querySelector('a'));
@@ -624,7 +626,10 @@ describe('review findings cards', () => {
       'Posted as one review that only comments, without approval or request for changes. The items with No stayed here in the chat.',
     );
     expect(text(el(fixture, 'posted')?.querySelector('a') ?? null)).toBe(URL);
-    expect(el(fixture, 'post')).toBeNull();
+    expect(
+      el(fixture, 'post'),
+      'Post stays offered after a review posted elsewhere',
+    ).not.toBeNull();
     expect(bridge.githubGiveVerdict).not.toHaveBeenCalled();
   });
 
@@ -752,8 +757,9 @@ describe('review findings cards', () => {
     );
   });
 
-  it('the preview shows the review body and one comment box per selected finding', async () => {
-    const fixture = await render(makeBridge());
+  it('the preview shows the note the worker composed', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
     const toggle = el(fixture, 'toggle-preview')!;
     expect(text(toggle)).toBe('See how it reads on the PR');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
@@ -765,22 +771,36 @@ describe('review findings cards', () => {
 
     expect(text(el(fixture, 'toggle-preview'))).toBe('Hide the preview');
     expect(el(fixture, 'toggle-preview')!.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      bridge.githubPreviewVerdict.mock.calls.map(([request]) => request),
+      'the preview asks the worker for the verdict the card offers first, with the chosen findings',
+    ).toEqual([
+      {
+        repository: 'acme/shop',
+        number: 5,
+        verdict: 'approve',
+        findings: [total, naming],
+        commit: 'ec7f951',
+        testsLine: '',
+      },
+    ]);
     const preview = el(fixture, 'preview')!;
-    const summary = preview.querySelector('.gh-review .gh-body')!;
-    expect(summary.querySelector('strong')?.textContent).toBe('Verdict:');
-    expect(Array.from(summary.querySelectorAll('li code')).map(text)).toEqual([
+    expect(text(el(fixture, 'preview-for', preview))).toBe(
+      'Preview of the note for Approve, as Scout would post it on PR #5',
+    );
+    expect(text(el(fixture, 'preview-note', preview))).toBe(
+      `Scout review ${total.title}: ${total.why} ${total.fix} ${naming.title}: ${naming.why} ${naming.fix}`.replace(
+        /`/g,
+        '',
+      ),
+    );
+    expect(all(fixture, 'preview-comment-path', preview).map(text)).toEqual([
       'src/orders/Checkout.cs:88',
       'src/orders/Cart.cs:30',
     ]);
-    expect(Array.from(preview.querySelectorAll('.gh-file')).map(text)).toEqual([
-      'src/orders/Checkout.cs',
-      'src/orders/Cart.cs',
-    ]);
-    const comments = Array.from(preview.querySelectorAll('.gh-comment .gh-body'));
-    expect(comments).toHaveLength(2);
-    expect(comments[0]!.querySelector('strong')?.textContent).toBe('Fix:');
-    expect(text(comments[0]!.querySelector('p'))).toContain('Discounts applied after the sum');
-    expect(text(comments[1]!.querySelector('p'))).toContain('Name says the wrong thing');
+    expect(all(fixture, 'preview-comment', preview)[0]!.querySelector('strong')?.textContent).toBe(
+      'Fix:',
+    );
   });
 
   it('a review card shows its rule line when the finding has one, and none otherwise', async () => {
@@ -1414,18 +1434,14 @@ describe('review findings cards', () => {
       repository: 'acme/shop',
       number: 5,
       verdict: 'approve',
-      body: reviewBody(reviewed, [lock, naming]),
-      comments: [
-        { path: 'src/orders/Cart.cs', line: 12, body: commentBody(lock) },
-        { path: 'src/orders/Cart.cs', line: 30, body: commentBody(naming) },
-      ],
+      findings: [lock, naming],
       commit: 'ec7f951',
       testsLine: 'Tests did not run: No Docker.',
     });
     expect(bridge.githubVerdictStatus).toHaveBeenCalledExactlyOnceWith({ actionId: 'action-1' });
   });
 
-  it('while the action is queued or running the Verdict group is gone and Post is off, with Giving the verdict…, a second click sends nothing; once given the card says Approved on PR #5 with the link and loses its buttons', async () => {
+  it('while the action is queued or running the Verdict group is gone and Post is off, with Giving the verdict…, a second click sends nothing; once given the card says Approved on PR #5 with the link and still offers its buttons', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
@@ -1464,10 +1480,10 @@ describe('review findings cards', () => {
       ),
     }).toEqual({
       title: 'Approved on PR #5',
-      link: URL,
+      link: 'See the review on GitHub',
       posted: null,
       giving: null,
-      buttons: [0, 0, 0, 0, 0, 0, 0],
+      buttons: [1, 1, 1, 3, 3, 3, 1],
     });
   });
 
@@ -1541,7 +1557,7 @@ describe('review findings cards', () => {
       'Nothing to post; every finding was dismissed.',
     );
     expect(bridge.githubGiveVerdict.mock.calls[0]![0]).toEqual(
-      expect.objectContaining({ verdict: 'approve', comments: [] }),
+      expect.objectContaining({ verdict: 'approve', findings: [] }),
     );
   });
 
@@ -1595,9 +1611,10 @@ describe('review findings cards', () => {
     expect(dismissed).toEqual(['Dismissed: Move has no lock Undo']);
     expect(summary).toBe('2 of 2 selected');
     expect(bridge.localSetDecisions).not.toHaveBeenCalled();
-    expect(bridge.githubGiveVerdict.mock.calls[0]![0].comments[0]!.body).toBe(
-      commentBody({ ...total, why: 'Edited elsewhere.', fix: 'Sum later.' }),
-    );
+    expect(
+      bridge.githubGiveVerdict.mock.calls[0]![0].findings[0],
+      'the verdict carries the finding as the owner edited it',
+    ).toEqual({ ...total, why: 'Edited elsewhere.', fix: 'Sum later.' });
   });
 
   it('a decisions write main refuses puts the pick back', async () => {
@@ -1614,7 +1631,7 @@ describe('review findings cards', () => {
       'Nothing selected yet. Decide item by item, or Yes to all.',
     );
   });
-  it('one verdict is one action per pull request and commit: a second give while it is queued, running or given sends nothing, and after it failed the next one is a new action', async () => {
+  it('the store sends every give unless one of the key is sending, keeps the action it shows against an older one, and lets a newer action replace a given one', async () => {
     const bridge = makeBridge();
     await render(bridge, reviewed);
     const store = TestBed.inject(ReviewFindingsStore);
@@ -1622,33 +1639,47 @@ describe('review findings cards', () => {
       repository: 'acme/shop',
       number: 5,
       verdict,
-      body: 'b',
-      comments: [],
+      findings: [],
       commit: 'ec7f951',
       testsLine: '',
     });
-    const states: (string | undefined)[] = [];
-    const give = async (verdict: GitHubVerdictRequest['verdict']) => {
-      await store.giveVerdict(request(verdict));
-      states.push(store.verdict('acme/shop', 5, 'ec7f951')?.state);
+    const shown = () => {
+      const v = store.verdict('acme/shop', 5, 'ec7f951');
+      return `${v?.verdict}:${v?.state}`;
     };
+    const states: string[] = [];
 
-    await give('approve');
-    await give('request_changes');
-    bridge.verdict({ actionId: 'action-1', state: 'running', url: null, reason: null });
-    await give('approve');
-    bridge.verdict({ actionId: 'action-1', state: 'failed', url: null, reason: 'No.' });
-    await give('request_changes');
-    bridge.verdict({ actionId: 'action-2', state: 'given', url: URL, reason: null });
-    await give('approve');
-    await store.giveVerdict({ ...request('approve'), commit: 'f00ba47' });
-
-    expect(states).toEqual(['queued', 'queued', 'running', 'queued', 'given']);
-    expect(bridge.githubGiveVerdict.mock.calls.map(([r]) => [r.verdict, r.commit])).toEqual([
-      ['approve', 'ec7f951'],
-      ['request_changes', 'ec7f951'],
-      ['approve', 'f00ba47'],
+    await Promise.all([
+      store.giveVerdict(request('approve')),
+      store.giveVerdict(request('approve')),
     ]);
+    states.push(shown());
+    await store.giveVerdict(request('request_changes'));
+    states.push(shown());
+    bridge.verdict({ actionId: 'action-1', state: 'running', url: null, reason: null });
+    states.push(shown());
+    bridge.verdict({ actionId: 'action-2', state: 'given', url: URL, reason: null });
+    states.push(shown());
+    bridge.verdict({ actionId: 'action-9', state: 'queued', url: null, reason: null });
+    states.push(shown());
+    await store.giveVerdict(request('approve'));
+    states.push(shown());
+
+    expect(
+      states,
+      'a give is sent unless one is sending; an older action never hides the newer; a newer one replaces a given one',
+    ).toEqual([
+      'approve:queued',
+      'request_changes:queued',
+      'request_changes:queued',
+      'request_changes:given',
+      'request_changes:queued',
+      'approve:queued',
+    ]);
+    expect(
+      bridge.githubGiveVerdict.mock.calls.map(([r]) => r.verdict),
+      'two gives while one is sending send once',
+    ).toEqual(['approve', 'request_changes', 'approve']);
   });
   it('a window opened after the click looks the verdict up and shows it in progress, then given by the push for its key, with no click of its own; each findings turn looks it up once', async () => {
     const bridge = makeBridge();
@@ -1765,8 +1796,7 @@ describe('review findings cards', () => {
       repository: 'acme/shop',
       number: 5,
       verdict: 'approve',
-      body: '**Verdict:** ready to merge\n\nNo findings.\n\n3 of 3 files read',
-      comments: [],
+      findings: [],
       commit: 'ec7f951',
       testsLine: 'Checks: build passed\nTests passed in 42s (dotnet test)',
     });
@@ -1800,7 +1830,7 @@ describe('review findings cards', () => {
     expect(el(marked, 'clean-read')?.querySelector('b')).toBeNull();
   });
 
-  it('a clean review approved reads Approved on PR #5 with the link, and no button is left', async () => {
+  it('a clean review approved reads Approved on PR #5 with the link, and still offers Approve', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, clean);
     await click(fixture, el(fixture, 'approve'));
@@ -1814,7 +1844,11 @@ describe('review findings cards', () => {
       buttons: ['approve', 'request-changes', 'post', 'yes-all'].map(
         (test) => all(fixture, test).length,
       ),
-    }).toEqual({ title: 'Approved on PR #5', link: URL, buttons: [0, 0, 0, 0] });
+    }).toEqual({
+      title: 'Approved on PR #5',
+      link: 'See the review on GitHub',
+      buttons: [1, 0, 0, 0],
+    });
   });
 });
 
@@ -2051,10 +2085,6 @@ const CARD_STATES: readonly CardStateRow[] = [
     },
     drawing: {
       ...PENDING_DRAWING,
-      approveWhenGreen: 0,
-      requestChanges: 0,
-      post: 0,
-      checkLine: null,
       given: 'Approved on PR #5',
       afterChecks: 'Approved after the checks passed.',
     },
@@ -2204,8 +2234,7 @@ describe('review findings cards: approve when the checks pass, as the artboard d
         repository: 'acme/shop',
         number: 5,
         verdict: 'approve',
-        body: reviewBody({ ...reviewed, checks: PENDING_CHECKS }, [total]),
-        comments: [{ path: total.path, line: total.line, body: commentBody(total) }],
+        findings: [total],
         commit: 'ec7f951',
         testsLine: 'Checks: build passed, e2e pending, lint pending',
       },
@@ -2346,5 +2375,300 @@ describe('review findings cards: the look the QuickAsk artboard draws', () => {
       color: 'var(--sc-error)',
       text: 'The verdict was not given.',
     });
+  });
+});
+
+describe('review findings cards: a second verdict at the same commit and the note preview, as the artboard draws them', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  const given = (
+    bridge: ReturnType<typeof makeBridge>,
+    actionId: string,
+    verdict: GitHubVerdictRequest['verdict'],
+  ) =>
+    bridge.pushFull({
+      ...VERDICT_KEY,
+      verdict,
+      actionId,
+      state: 'given',
+      url: URL,
+      reason: null,
+      signedAs: 'scout[bot]',
+      testsLine: null,
+    });
+
+  it('the given line names the verdict the control plane reports, its commit, its signer and the review on GitHub', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
+    await click(fixture, el(fixture, 'request-changes'));
+    given(bridge, 'action-1', 'approve');
+    await settle(fixture);
+    const box = el(fixture, 'verdict-given')!;
+
+    expect(
+      {
+        title: text(box.querySelector('strong')),
+        at: text(el(fixture, 'given-at', box)),
+        signer: text(el(fixture, 'given-signer', box)),
+        link: text(el(fixture, 'given-link', box)),
+      },
+      'the given line names the verdict on GitHub as the control plane reports it, never the button clicked',
+    ).toEqual({
+      title: 'Approved on PR #5',
+      at: 'The verdict on GitHub at commit ec7f951.',
+      signer: 'Signed as Bot (scout[bot])',
+      link: 'See the review on GitHub',
+    });
+    await click(fixture, el(fixture, 'given-link', box));
+    expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: URL });
+  });
+
+  it('after a verdict was given the card still offers the others, under the line that says so', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'request-changes'));
+    given(bridge, 'action-1', 'request_changes');
+    await settle(fixture);
+    const box = el(fixture, 'verdict-given')!;
+    const offer = el(fixture, 'given-offer')!;
+
+    expect(text(offer), 'the card says another verdict or other comments can still be given').toBe(
+      'You can still give another verdict or post other comments at this commit; each waits for your approval.',
+    );
+    expect(
+      box.compareDocumentPosition(offer) & Node.DOCUMENT_POSITION_FOLLOWING,
+      'the offer sits under the given line',
+    ).toBeTruthy();
+    expect(
+      ['approve', 'request-changes', 'post'].map(
+        (test) => !(el(fixture, test) as HTMLButtonElement).disabled,
+      ),
+      'Approve, Request changes and Post stay offered after a verdict was given',
+    ).toEqual([true, true, true]);
+    expect(
+      box.classList.contains('changes'),
+      'a request for changes is drawn on the warn tone',
+    ).toBe(true);
+
+    await click(fixture, el(fixture, 'approve'));
+    expect(
+      bridge.githubGiveVerdict,
+      'a click after a given verdict sends the new one',
+    ).toHaveBeenCalledTimes(2);
+  });
+
+  it('the same verdict asked again sends nothing new and says so in one line', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
+    await click(fixture, el(fixture, 'approve'));
+    given(bridge, 'action-1', 'approve');
+    await settle(fixture);
+    bridge.githubGiveVerdict.mockResolvedValueOnce({ actionId: 'action-1' });
+
+    await click(fixture, el(fixture, 'approve'));
+
+    expect(
+      text(el(fixture, 'nothing-new')),
+      'an identical request is told it sent nothing new',
+    ).toBe(
+      'Nothing new was sent: this verdict with these findings is already on PR #5 at commit ec7f951.',
+    );
+    expect(el(fixture, 'nothing-new')!.getAttribute('role')).toBe('status');
+    expect(
+      text(el(fixture, 'verdict-given')?.querySelector('strong') ?? null),
+      'the given line stays',
+    ).toBe('Approved on PR #5');
+  });
+
+  it('a second verdict given at the same commit is the one the given line names, after the earlier one', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
+    await click(fixture, el(fixture, 'request-changes'));
+    given(bridge, 'action-1', 'request_changes');
+    await settle(fixture);
+    await click(fixture, el(fixture, 'approve'));
+    given(bridge, 'action-2', 'approve');
+    await settle(fixture);
+    const box = el(fixture, 'verdict-given')!;
+
+    expect(
+      {
+        title: text(box.querySelector('strong')),
+        at: text(el(fixture, 'given-at', box)),
+        warn: box.classList.contains('changes'),
+      },
+      'the newer verdict is named, after the request for changes at the same commit, on the ok tone',
+    ).toEqual({
+      title: 'Approved on PR #5',
+      at: 'The verdict on GitHub at commit ec7f951, given after the request for changes at the same commit.',
+      warn: false,
+    });
+  });
+
+  it('the preview is asked again when the selection or an applied edit changes it, never on a keystroke', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
+    const quiet = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      await settle(fixture);
+    };
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'toggle-preview'));
+    await click(fixture, el(fixture, 'yes', card(fixture, 1)));
+    await quiet();
+    await click(fixture, el(fixture, 'edit', card(fixture, 1)));
+    await write(fixture, 'comment-text', card(fixture, 1), 'Two moves at once drop an item.');
+    await quiet();
+    const whileTyping = bridge.githubPreviewVerdict.mock.calls.length;
+    await click(fixture, el(fixture, 'use-text', card(fixture, 1)));
+    await quiet();
+
+    expect(whileTyping, 'one ask on opening and one for the new selection, none while typing').toBe(
+      2,
+    );
+    expect(bridge.githubPreviewVerdict).toHaveBeenCalledTimes(3);
+    expect(
+      text(el(fixture, 'preview-note')),
+      'the applied edit reaches the composed note',
+    ).toContain('Two moves at once drop an item.');
+  });
+
+  it('a preview of a request for changes names it when the card offers no approval', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, checks: FAILED_CHECKS });
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'toggle-preview'));
+
+    expect(
+      text(el(fixture, 'preview-for')),
+      'the preview names the verdict the card offers first',
+    ).toBe('Preview of the note for Request changes, as Scout would post it on PR #5');
+    expect(bridge.githubPreviewVerdict.mock.calls[0]![0].verdict).toBe('request_changes');
+  });
+
+  it('a preview that fails shows why, and the verdict can still be given', async () => {
+    const bridge = makeBridge();
+    bridge.githubPreviewVerdict.mockRejectedValueOnce(
+      new Error(
+        '[scout:github/verdict-refused] Scout approves only when every check of the commit passed: 1 still running (build).',
+      ),
+    );
+    const fixture = await render(bridge, reviewed);
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'toggle-preview'));
+    const failed = el(fixture, 'preview-failed');
+
+    expect(text(failed), 'a preview that fails says why in one line').toBe(
+      'The preview could not be composed: Scout approves only when every check of the commit passed: 1 still running (build).',
+    );
+    expect(failed!.getAttribute('role')).toBe('alert');
+    expect(el(fixture, 'preview-note')).toBeNull();
+    expect(
+      (el(fixture, 'approve') as HTMLButtonElement).disabled,
+      'the verdict stays enabled: the send composes and checks again',
+    ).toBe(false);
+  });
+
+  it('markup in a finding never reaches the preview as markup', async () => {
+    const bridge = makeBridge();
+    const hostile: ReviewFinding = {
+      ...total,
+      title: 'Total <script>window.hacked = 1</script> <img src="x" onerror="window.hacked = 2">',
+    };
+    const fixture = await render(bridge, { ...reviewed, findings: [hostile] });
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'toggle-preview'));
+    const preview = el(fixture, 'preview')!;
+
+    expect(
+      preview.querySelectorAll('script, img'),
+      'no script or image element is made from a finding',
+    ).toHaveLength(0);
+    expect(
+      Array.from(preview.querySelectorAll('*')).filter((node) => node.hasAttribute('onerror')),
+      'no event handler attribute reaches the DOM',
+    ).toEqual([]);
+    expect(text(el(fixture, 'preview-note', preview)), 'the markup shows as text').toContain(
+      '<script>',
+    );
+  });
+});
+
+describe('review findings store: a burst of preview changes', () => {
+  it('a card that leaves the view inside the quiet window sends no preview', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'toggle-preview'));
+    const opened = bridge.githubPreviewVerdict.mock.calls.length;
+    const store = TestBed.inject(ReviewFindingsStore);
+    vi.useFakeTimers();
+
+    store.preview('f-1', {
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'approve',
+      findings: [total, naming],
+      commit: 'ec7f951',
+      testsLine: '',
+    });
+    fixture.destroy();
+    vi.advanceTimersByTime(1_000);
+
+    expect(opened, 'opening the preview asked once').toBe(1);
+    expect(
+      bridge.githubPreviewVerdict,
+      'the waiting request of a card that left the view is never sent',
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  beforeEach(() => TestBed.resetTestingModule());
+  afterEach(() => vi.useRealTimers());
+
+  it('asks at once when the preview opens, then sends a burst as its last request after 400 ms of quiet', async () => {
+    const bridge = makeBridge();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+      ],
+    });
+    const store = TestBed.inject(ReviewFindingsStore);
+    const request = (n: number): GitHubVerdictRequest => ({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'approve',
+      findings: [{ ...total, title: `Selection ${n}` }],
+      commit: 'ec7f951',
+      testsLine: '',
+    });
+    vi.useFakeTimers();
+
+    store.preview('f-1', request(0));
+    const atOpen = bridge.githubPreviewVerdict.mock.calls.length;
+    for (let n = 1; n <= 5; n++) {
+      store.preview('f-1', request(n));
+      vi.advanceTimersByTime(100);
+    }
+    const inTheBurst = bridge.githubPreviewVerdict.mock.calls.length;
+    vi.advanceTimersByTime(300);
+    const afterQuiet = bridge.githubPreviewVerdict.mock.calls.map(
+      ([sent]) => sent.findings[0]!.title,
+    );
+    vi.advanceTimersByTime(1_000);
+    store.preview('f-1', request(6));
+    vi.advanceTimersByTime(400);
+
+    expect(atOpen, 'the first preview after the panel opens is asked without waiting').toBe(1);
+    expect(inTheBurst, 'changes within the window send nothing yet').toBe(1);
+    expect(
+      afterQuiet,
+      'five changes within the window make one request, with the last selection',
+    ).toEqual(['Selection 0', 'Selection 5']);
+    expect(
+      bridge.githubPreviewVerdict.mock.calls.map(([sent]) => sent.findings[0]!.title),
+      'a change after the window makes another request',
+    ).toEqual(['Selection 0', 'Selection 5', 'Selection 6']);
   });
 });

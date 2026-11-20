@@ -1,8 +1,8 @@
 ---
 title: "Desktop GitHub card - history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-08
-changes: "2026-11-11 entry: Use a token opens the credential dialog with the token only. Earlier: initial history note, the mention of the Scout bot in the bell and the slug that follows a rename"
+changes: "v1.2 (2026-11-20): the card sends findings, stays open after a verdict and previews the note. 2026-11-11 entry: Use a token opens the credential dialog with the token only. Earlier: initial history note, the mention of the Scout bot in the bell and the slug that follows a rename"
 page_type: reference
 status: artefact
 description: "What changed in the desktop's GitHub card, the Scout bot and the bell's GitHub poll, and when."
@@ -16,6 +16,12 @@ reliability: high
 # Desktop GitHub card - history
 
 > Dated changes of [[pages/services/desktop-github]]; the service page states how it works now.
+
+## 2026-11-20 - The card sends findings, stays open after a verdict and previews the note
+
+- **What it was:** the card wrote the note with `reviewBody` and `commentBody`, closed once a verdict was given, and named the button clicked.
+- **What it is:** the card sends the chosen findings; the given line names the verdict the control plane reports, with its commit, signer and "See the review on GitHub"; the Verdict group and Post stay offered; an identical request shows "Nothing new was sent: ..."; the preview is the worker's note, and a failure shows "The preview could not be composed: <sentence>". `MARKS` are GitHub shortcodes used by `issueBody` only ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **Tests:** the card's new specs in `review-findings.component.spec.ts`, the matrix updated on purpose for a card that stays open, `review-findings.spec.ts`; the renderer 5500 passed.
 
 ## 2026-11-11 - Use a token opens the credential dialog, with the token only
 

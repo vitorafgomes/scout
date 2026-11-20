@@ -106,6 +106,7 @@ import {
   type GitHubBotCreateRequest,
   type GitHubBotSetWritesRequest,
   type GitHubBotStatus,
+  type GitHubNotePreview,
   type GitHubVerdictAction,
   type GitHubVerdictKey,
   type GitHubVerdictRequest,
@@ -378,6 +379,8 @@ function createFakeBridge(): ScoutBridge {
     githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
     githubBotStatus: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
     githubGiveVerdict: (_req: GitHubVerdictRequest): Promise<GitHubVerdictAction> =>
+      rejectNotAvailable(),
+    githubPreviewVerdict: (_req: GitHubVerdictRequest): Promise<GitHubNotePreview> =>
       rejectNotAvailable(),
     githubVerdictStatus: (_req: GitHubVerdictAction): Promise<GitHubVerdictStatus> =>
       rejectNotAvailable(),
@@ -954,6 +957,11 @@ export class ScoutBridgeService {
 
   async githubGiveVerdict(req: GitHubVerdictRequest): Promise<GitHubVerdictAction> {
     return this.bridge.githubGiveVerdict(req);
+  }
+
+  /** The note and comments a verdict would post now; nothing is sent. */
+  async githubPreviewVerdict(req: GitHubVerdictRequest): Promise<GitHubNotePreview> {
+    return this.bridge.githubPreviewVerdict(req);
   }
 
   async githubVerdictStatus(req: GitHubVerdictAction): Promise<GitHubVerdictStatus> {

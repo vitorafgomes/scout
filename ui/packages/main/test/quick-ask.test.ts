@@ -8,6 +8,7 @@ import {
   CHANNEL,
   ISSUES_MARKER,
   readIpcError,
+  type GitHubVerdictRequest,
   type LocalTurn,
   type WorkerEvent,
 } from '@scout/shared';
@@ -3488,6 +3489,117 @@ describe('quick ask: reading the text on a screenshot', () => {
     }
   });
 
+  const PREVIEWED: GitHubVerdictRequest = {
+    repository: 'acme/shop',
+    number: 5,
+    verdict: 'request_changes',
+    findings: [
+      {
+        id: 'lock',
+        severity: 'block',
+        title: 'Move has no lock',
+        path: 'src/Cart.cs',
+        line: 12,
+        why: 'Two moves lose an item.',
+        fix: 'Take the lock.',
+      },
+    ],
+    coverage: { read: 51, of: 133 },
+    notes: ['82 files not read: the review was stopped.'],
+    commit: '3f2a9c1d4b5e6f708192a3b4c5d6e7f809a1b2c3',
+    testsLine: '',
+  };
+
+  it("a preview sends the verdict as the card would queue it on a note request and resolves with the worker's note", async () => {
+    const t = await setup();
+    const note = {
+      body: '### :robot: Scout review: changes requested',
+      comments: [{ id: 'lock', path: 'src/Cart.cs', line: 12, body: 'c' }],
+      dropped: ['src/Cart.cs:99'],
+    };
+
+    const answer = t.invoke(CHANNEL.githubPreviewVerdict, sender(), PREVIEWED);
+    const { id } = JSON.parse(t.written[0]!) as { id: string };
+    t.quickAsk.handleWorkerLine(JSON.stringify({ id, event: 'note', text: JSON.stringify(note) }));
+
+    expect(
+      JSON.parse(t.written[0]!),
+      'the worker gets the verdict in the shape the control plane queues',
+    ).toEqual({
+      type: 'note',
+      id,
+      note: {
+        owner: 'acme',
+        repo: 'shop',
+        number: 5,
+        verdict: 'request_changes',
+        findings: PREVIEWED.findings,
+        commit: PREVIEWED.commit,
+        filesRead: 51,
+        filesChanged: 133,
+        notes: ['82 files not read: the review was stopped.'],
+      },
+    });
+    expect(await answer, 'the card gets the note the worker composed').toEqual(note);
+    expect(await t.invoke(CHANNEL.localGetTurns, sender()), 'a preview is never a turn').toEqual(
+      [],
+    );
+  });
+
+  it("a preview rejects with the worker's fail sentence, refuses a verdict it cannot read, and refuses a malformed note", async () => {
+    const t = await setup();
+
+    const failed = t.invoke(CHANNEL.githubPreviewVerdict, sender(), PREVIEWED);
+    const { id } = JSON.parse(t.written[0]!) as { id: string };
+    t.quickAsk.handleWorkerLine(
+      JSON.stringify({
+        id,
+        event: 'fail',
+        text: 'The review is over 60,000 characters; keep fewer findings.',
+      }),
+    );
+    const malformed = t.invoke(CHANNEL.githubPreviewVerdict, sender(), PREVIEWED);
+    const second = (JSON.parse(t.written[1]!) as { id: string }).id;
+    t.quickAsk.handleWorkerLine(JSON.stringify({ id: second, event: 'note', text: '{"body":1}' }));
+
+    expect((await t.rejectionError(failed)).message).toBe(
+      'The review is over 60,000 characters; keep fewer findings.',
+    );
+    expect((await t.rejectionError(malformed)).message).toBe('Scout could not compose the note.');
+    expect(
+      (
+        await t.rejectionError(
+          t.invoke(CHANNEL.githubPreviewVerdict, sender(), {
+            ...PREVIEWED,
+            body: 'x',
+            findings: 'none',
+          }),
+        )
+      ).message,
+    ).toBe('Scout could not read that verdict.');
+    expect(t.written, 'a verdict it cannot read never reaches the worker').toHaveLength(2);
+  });
+
+  it('a preview the worker does not answer in time fails with its sentence', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = await setup();
+      const slow = refusal(t.invoke(CHANNEL.githubPreviewVerdict, sender(), PREVIEWED));
+      jest.advanceTimersByTime(14_999);
+      await flush();
+      const beforeTimeout = slow.error;
+      jest.advanceTimersByTime(1);
+      await flush();
+
+      expect(beforeTimeout).toBeNull();
+      expect(slow.error?.message, 'after 15 s the card says the worker did not answer').toBe(
+        'Scout did not answer the preview of the note in time.',
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('readText refuses a screenshot that is not a JPEG of at most 3 MB with the sentence', async () => {
     const t = await setup();
     const refused = [
@@ -4725,6 +4837,54 @@ describe('quick ask: the floating button card, a second window that shows beside
       card: attempt(t.cards()[0]!.webContents),
       button: attempt(t.bubble().webContents),
     }).toEqual({ card: 'ipc/not-floating-button', button: 'allowed' });
+  });
+
+  it('a note preview is allowed from the Scout window and quick ask only: the floating button and its card are refused', async () => {
+    const t = await setup({ bubble: bubble('bottom-right') });
+    await card(t, true);
+    const frame = { frameTreeNodeId: 1, url: 'file:///app/renderer/index.html' };
+    const from = (contents: object) => ({
+      sender: Object.assign(contents, { mainFrame: frame }),
+      senderFrame: frame,
+    });
+    const { logger } = recordingLogger();
+    const mainContents = {};
+    const askContents = {};
+    const ours = new Map<object, 'main' | 'quick-ask'>([
+      [mainContents, 'main'],
+      [askContents, 'quick-ask'],
+    ]);
+    const refuse = senderCheck(
+      {
+        windowOf: (s) => ours.get(s as object) ?? t.quickAsk.windowOf(s) ?? 'unknown',
+        isAppPage: () => true,
+      },
+      logger,
+    );
+    const guard = QUICK_ASK_GUARDS[CHANNEL.githubPreviewVerdict]!;
+    const attempt = (contents: object) => {
+      try {
+        refuse(guard.allowed, from(contents), CHANNEL.githubPreviewVerdict, guard.refusal);
+        return 'allowed';
+      } catch (err: unknown) {
+        return readIpcError(err).code;
+      }
+    };
+
+    expect(
+      {
+        main: attempt(mainContents),
+        quickAsk: attempt(askContents),
+        card: attempt(t.cards()[0]!.webContents),
+        button: attempt(t.bubble().webContents),
+      },
+      'only the windows that give verdicts may preview one',
+    ).toEqual({
+      main: 'allowed',
+      quickAsk: 'allowed',
+      card: 'github/not-verdict-window',
+      button: 'github/not-verdict-window',
+    });
   });
 
   it.each([undefined, null, 'yes', 1, {}])(

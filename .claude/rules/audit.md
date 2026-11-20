@@ -21,6 +21,7 @@ Read one when your change touches what its title names.
 - [[pages/decisions/0055-pull-request-review-as-a-job-in-batches|ADR 0055 - The pull request review as a job in batches]] - the pull request review as a job of this engine, its kind and pull request on the job row
 - [[pages/decisions/0061-the-pull-request-review-job-as-built|ADR 0061 - The pull request review job as built]] - the review batch turn, the run, its bounds of running time and its one card
 - [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell|ADR 0062 - The review job runs to its end, in parallel, shown and controlled from the bell]] - the review read to its end, code first, in waves; the owner's controls; the pause at 60 minutes
+- [[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed|ADR 0064 - The review batch is handed the purpose, the project's rules and what was removed]] - the three inputs computed by code, their bounds and how they are kept with the job
 - [[pages/decisions/0039-repository-snapshot-under-the-data-folder|ADR 0039 - A repository snapshot under Scout's data folder, read locally and searched by the Knowledge index]] - the snapshot the plan is cut from
 - [[pages/decisions/0040-review-findings-as-cards-in-chat|ADR 0040 - The review's findings as cards in the chat, posted as one review from the cards]] - the `scout-findings` block and `present_audit_findings`
 - [[pages/decisions/0033-channel-operator-architecture|ADR 0033 - Channel operator architecture: state in the control plane, pipeline in Scout.Operator, media through the connected AI Source, progress back to the originating channel]] - the background-job and origin-post precedent
@@ -42,6 +43,7 @@ Find the row your change matches and read that page. Read one or two rows, not t
 | Plan; Rows; Merge | `context/pages/services/audit/how-it-works-plan.md` |
 | Batch turn; Worker | `context/pages/services/audit/how-it-works-batch-turn.md` |
 | Review batch turn; Review run; Review card | `context/pages/services/audit/how-it-works-review-job.md` |
+| Review inputs; the purpose; the rule files; what was removed | `context/pages/services/audit/how-it-works-review-inputs.md` |
 | Pause; Continue from Scout Desktop; Stop and status | `context/pages/services/audit/how-it-works-pause.md` |
 | Invariants it preserves | `context/pages/services/audit/invariants-it-preserves.md` |
 | Tests | `context/pages/services/audit/tests.md` |

@@ -1,8 +1,8 @@
 ---
 title: "Desktop quick ask - history"
-version: "1.3"
+version: "1.4"
 date: 2026-11-08
-changes: "Added the teardown hook and the split of the quick-ask tests (2026-11-10). Earlier: Added the microphone and speaker chosen in Settings; the display choice of the floating button works across monitors"
+changes: "v1.4 (2026-11-20): the note preview. Added the teardown hook and the split of the quick-ask tests (2026-11-10). Earlier: Added the microphone and speaker chosen in Settings; the display choice of the floating button works across monitors"
 page_type: reference
 status: artefact
 description: "What changed in the desktop quick ask, the conversation shared with the Chat screen and its voice, and when."
@@ -19,6 +19,11 @@ reliability: high
 # Desktop quick ask - history
 
 > Dated changes to [[pages/services/desktop-quick-ask]]; the service page states how it works now.
+
+## 2026-11-20 - The note preview
+
+- **What changed:** `scout:github.previewVerdict` is answered by main's `previewNote`, which writes a `note` request on the worker's stdin and resolves with its answer; the Scout window and the quick-ask window only (`ui/packages/main/src/quick-ask/quick-ask.ts:1655`; [[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **Tests:** `ui/packages/main/test/quick-ask.test.ts:3513`, `:3549`, `:3583`, `:4842`.
 
 ## 2026-11-10 - The quick-ask tests tear down after every test, and the restart path has its own file
 

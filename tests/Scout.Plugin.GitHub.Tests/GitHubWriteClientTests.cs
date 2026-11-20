@@ -115,4 +115,37 @@ public sealed class GitHubWriteClientTests
         ex.Message.ShouldBe(message);
         ex.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
+
+    [Theory]
+    [InlineData("review", "")]
+    [InlineData("review", "{not json")]
+    [InlineData("verdict", "{not json")]
+    [InlineData("comment", "")]
+    [InlineData("comment", "null")]
+    [InlineData("reply", "{not json")]
+    [InlineData("issue", "{not json")]
+    [InlineData("issue", "")]
+    [InlineData("review", "<html><body>Accepted</body></html>")]
+    [InlineData("issue", "<html><body>Accepted</body></html>")]
+    public async Task A_Write_GitHub_Accepts_With_An_Unreadable_Answer_Says_It_May_Already_Be_There(string write, string body)
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.Created, body, body.StartsWith('<') ? response => response.Content.Headers.ContentType = new("text/html") : null);
+
+        Func<Task> send = write switch
+        {
+            "review" => () => client.SubmitReviewAsync("octocat", "hello", 42, "b", [], CancellationToken.None),
+            "verdict" => () => client.SubmitVerdictAsync("octocat", "hello", 42, ReviewVerdict.Approve, "b", [], "abc1234", CancellationToken.None),
+            "comment" => () => client.CommentOnIssueAsync("octocat", "hello", 42, "b", CancellationToken.None),
+            "reply" => () => client.ReplyToReviewCommentAsync("octocat", "hello", 42, 99, "b", CancellationToken.None),
+            _ => () => client.CreateIssueAsync("octocat", "hello", "t", "b", [], CancellationToken.None),
+        };
+
+        var ex = await Should.ThrowAsync<GitHubApiException>(send);
+
+        (ex.Message, ex.StatusCode).ShouldBe(
+            (GitHubWriteClient.UnreadableAnswer, (HttpStatusCode?)HttpStatusCode.Created),
+            $"a {write} GitHub answered 201 with an unreadable body may already be there, and the caller is told so");
+        handler.Requests.Count.ShouldBe(1, "the write is sent once and never again");
+    }
 }

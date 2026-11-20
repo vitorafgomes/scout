@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
+using Scout.Conversation.Abstractions;
 using Scout.Llm;
 using Scout.Plugin.GitHub.Abstractions;
 
@@ -132,6 +133,7 @@ public static class GitHubServiceCollectionExtensions
             sp.GetRequiredService<GitHubActionsPlugin>(), GitHubActionsPlugin.PluginName));
         services.AddSingleton(sp => new GitHubVerdictRunner(
             sp.GetRequiredService<GitHubActionsPlugin>(), sp.GetRequiredService<IGitHubClient>(), sp.GetRequiredService<IGitHubWriteClient>()));
+        services.AddSingleton<IReviewNotePreview>(sp => sp.GetRequiredService<GitHubVerdictRunner>());
         services.AddSingleton(sp => new GitHubWriteRunner(
             sp.GetRequiredService<GitHubActionsPlugin>(), sp.GetRequiredService<IGitHubClient>(), sp.GetRequiredService<IGitHubWriteClient>()));
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.SubmitReview, GitHubActionsPlugin.FeatureId,

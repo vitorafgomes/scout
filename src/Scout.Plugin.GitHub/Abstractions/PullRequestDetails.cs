@@ -59,7 +59,8 @@ public sealed record PullRequestHead(string Sha, string AuthorLogin, bool? Merge
 /// <param name="State"><c>APPROVED</c>, <c>CHANGES_REQUESTED</c>, <c>COMMENTED</c>, <c>DISMISSED</c> or <c>PENDING</c>.</param>
 /// <param name="CommitId">The commit it was given on.</param>
 /// <param name="HtmlUrl">Browser URL of the review.</param>
-public sealed record PullRequestReview(long Id, string AuthorLogin, string State, string CommitId, string HtmlUrl);
+/// <param name="Body">The review's text, empty when it has none.</param>
+public sealed record PullRequestReview(long Id, string AuthorLogin, string State, string CommitId, string HtmlUrl, string Body = "");
 
 /// <summary>One check on a commit, a check run or a commit status folded into the same shape.</summary>
 /// <param name="Name">The check run's name, or the status's context.</param>

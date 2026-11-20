@@ -12,5 +12,5 @@ reliability: high
 
 ## Hot spots
 
-- `src/Scout.Adapter.Local/LocalChatAdapter.cs:451`: `ToMessage`, the only place `IsLocalOwner` is set to true. Trust comes from holding the worker's stdin ([[pages/decisions/0028-local-quick-ask-assistant]]).
+- `src/Scout.Adapter.Local/LocalChatAdapter.cs:464`: `ToMessage`, the only place `IsLocalOwner` is set to true. Trust comes from holding the worker's stdin ([[pages/decisions/0028-local-quick-ask-assistant]]).
 - `src/Scout.Adapter.Local/LocalEventWriter.cs:23`: one `WriteLine` per event is what keeps stdout lines whole.

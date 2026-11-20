@@ -43,13 +43,21 @@ public sealed class GitHubActionsPluginTests : IDisposable
             });
     }
 
-    private void PullRequestHasFiles() =>
+    private void PullRequestHasFiles()
+    {
         _reads.ListPullRequestFilesAsync("octocat", "hello", 42, Arg.Any<CancellationToken>())
             .Returns(new List<ChangedFile> { new("src/Checkout.cs", "modified", 2, 1, Patch), new("img/logo.png", "added", 0, 0, null) });
+        _reads.GetPullRequestHeadAsync("octocat", "hello", 42, Arg.Any<CancellationToken>()).Returns(new PullRequestHead("abc1234def", "alice", Mergeable: true));
+        _reads.ListCheckRunsAsync("octocat", "hello", "abc1234def", Arg.Any<CancellationToken>()).Returns(new CheckRuns([], 0));
+        _reads.ListStatusesAsync("octocat", "hello", "abc1234def", Arg.Any<CancellationToken>()).Returns([]);
+    }
 
     private void GitHubAcceptsTheReview() =>
         _writes.SubmitReviewAsync("octocat", "hello", 42, Arg.Any<string>(), Arg.Any<IReadOnlyList<ReviewComment>>(), Arg.Any<CancellationToken>())
             .Returns(new PostedReview(77, "https://github.com/octocat/hello/pull/42#pullrequestreview-77"));
+
+    private static string Finding(string id, string path, int line) =>
+        $$"""{"id":"{{id}}","severity":"fix","title":"{{id}} title","path":"{{path}}","line":{{line}},"why":"Why {{id}}.","fix":"Fix {{id}}."}""";
 
     [Fact]
     public async Task A_Review_Is_Posted_At_Once_With_The_Comments_On_The_Diff_And_The_Answer_Carries_The_Url_And_The_Dropped_Ones()
@@ -57,36 +65,32 @@ public sealed class GitHubActionsPluginTests : IDisposable
         PullRequestHasFiles();
         GitHubAcceptsTheReview();
 
-        var result = await Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "Ready after one fix.", """
-            [{"path":"src/Checkout.cs","line":3,"body":"c is new"},
-             {"path":"src/Checkout.cs","line":5,"body":"past the hunk"},
-             {"path":"img/logo.png","line":1,"body":"binary"},
-             {"path":"src/Other.cs","line":1,"body":"not in the PR"}]
-            """, CancellationToken.None);
+        var result = await Plugin().SubmitPullRequestReviewAsync(
+            "octocat", "hello", 42,
+            $"[{Finding("a", "src/Checkout.cs", 3)},{Finding("b", "src/Checkout.cs", 5)},{Finding("c", "img/logo.png", 1)},{Finding("d", "src/Other.cs", 1)}]",
+            CancellationToken.None);
 
         result.ShouldBe("Posted a review on octocat/hello#42 with 1 comment(s): https://github.com/octocat/hello/pull/42#pullrequestreview-77 Dropped, not on a line of the diff: src/Checkout.cs:5, img/logo.png:1, src/Other.cs:1.");
         await _writes.Received(1).SubmitReviewAsync(
-            "octocat", "hello", 42, "Ready after one fix.",
-            Arg.Is<IReadOnlyList<ReviewComment>>(c => c.Count == 1 && c[0] == new ReviewComment("src/Checkout.cs", 3, "c is new")),
+            "octocat", "hello", 42, Arg.Is<string>(b => b.StartsWith("### :robot: Scout review: commented, not approved\n", StringComparison.Ordinal)),
+            Arg.Is<IReadOnlyList<ReviewComment>>(c => c.Count == 1 && c[0] == new ReviewComment("src/Checkout.cs", 3, ":wrench: **Fix** · a title\n\n**What is wrong:** Why a.\n\n**Proposed fix:** Fix a.")),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Nothing_To_Post_Malformed_Comments_A_Missing_Pull_Request_And_A_Bad_Name_Are_Refused_Before_Anything_Is_Sent()
+    public async Task Malformed_Findings_A_Missing_Pull_Request_And_A_Bad_Name_Are_Refused_Before_Anything_Is_Sent()
     {
         PullRequestHasFiles();
-        _reads.ListPullRequestFilesAsync("octocat", "hello", 9999, Arg.Any<CancellationToken>()).Returns((IReadOnlyList<ChangedFile>?)null);
+        _reads.GetPullRequestHeadAsync("octocat", "hello", 9999, Arg.Any<CancellationToken>()).Returns((PullRequestHead?)null);
         var plugin = Plugin();
 
-        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octocat", "hello", 42, "", """[{"path":"src/Checkout.cs","line":9,"body":"past the hunk"}]""", CancellationToken.None)))
-            .ShouldBe(GitHubActionsPlugin.NothingToPost);
-        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octocat", "hello", 42, "b", "not json", CancellationToken.None)))
-            .ShouldBe(GitHubActionsPlugin.InvalidComments);
-        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octocat", "hello", 42, "b", """[{"path":"a.cs","line":0,"body":"x"}]""", CancellationToken.None)))
-            .ShouldBe(GitHubActionsPlugin.InvalidComments);
-        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octocat", "hello", 9999, "b", "[]", CancellationToken.None)))
+        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octocat", "hello", 42, "not json", CancellationToken.None)))
+            .ShouldBe(ReviewFindings.InvalidReviewFindings);
+        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octocat", "hello", 42, $"[{Finding("a", "a.cs", 0)}]", CancellationToken.None)))
+            .ShouldStartWith("Finding 1 ");
+        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octocat", "hello", 9999, "[]", CancellationToken.None)))
             .ShouldBe("Pull request #9999 not found in octocat/hello or not accessible.");
-        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octo cat", "hello", 42, "b", "[]", CancellationToken.None)))
+        (await Refused(() => plugin.SubmitPullRequestReviewAsync("octo cat", "hello", 42, "[]", CancellationToken.None)))
             .ShouldBe(GitHubNames.InvalidRepository);
         await _writes.DidNotReceiveWithAnyArgs().SubmitReviewAsync(default!, default!, default, default!, default!, default);
     }
@@ -100,24 +104,13 @@ public sealed class GitHubActionsPluginTests : IDisposable
     }
 
     [Fact]
-    public async Task A_Line_Number_Written_As_A_String_Is_Read()
-    {
-        PullRequestHasFiles();
-        GitHubAcceptsTheReview();
-
-        var result = await Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "", """[{"path":"src/Checkout.cs","line":"3","body":"c"}]""", CancellationToken.None);
-
-        result.ShouldStartWith("Posted a review on octocat/hello#42 with 1 comment(s)");
-    }
-
-    [Fact]
     public async Task GitHub_Refusing_The_Review_Is_The_Sentence_For_The_Model_And_The_Status_For_The_Log()
     {
         PullRequestHasFiles();
         _writes.SubmitReviewAsync(default!, default!, default, default!, default!, default)
             .ThrowsAsyncForAnyArgs(new GitHubApiException("Resource not accessible by integration", System.Net.HttpStatusCode.Forbidden));
 
-        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "b", "[]", CancellationToken.None));
+        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "[]", CancellationToken.None));
 
         ex.Message.ShouldBe("Resource not accessible by integration");
         ex.Outcome.ShouldBe("github 403");
@@ -130,7 +123,7 @@ public sealed class GitHubActionsPluginTests : IDisposable
         _writes.SubmitReviewAsync(default!, default!, default, default!, default!, default)
             .ThrowsAsyncForAnyArgs(new HttpRequestException("connection reset"));
 
-        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "b", "[]", CancellationToken.None));
+        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "[]", CancellationToken.None));
 
         ex.Message.ShouldBe("Could not reach GitHub. Try again later." + GitHubActionsPlugin.MayAlreadyBePosted);
         ex.Outcome.ShouldBe("HttpRequestException");
@@ -139,10 +132,11 @@ public sealed class GitHubActionsPluginTests : IDisposable
     [Fact]
     public async Task GitHub_Unreachable_While_Reading_The_Diff_Never_Says_The_Review_May_Be_There()
     {
+        PullRequestHasFiles();
         _reads.ListPullRequestFilesAsync("octocat", "hello", 42, Arg.Any<CancellationToken>())
             .ThrowsAsync(new HttpRequestException("connection reset"));
 
-        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "b", "[]", CancellationToken.None));
+        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "[]", CancellationToken.None));
 
         ex.Message.ShouldBe("Could not reach GitHub. Try again later.");
         await _writes.DidNotReceiveWithAnyArgs().SubmitReviewAsync(default!, default!, default, default!, default!, default);
@@ -157,7 +151,7 @@ public sealed class GitHubActionsPluginTests : IDisposable
         _writes.SubmitReviewAsync(default!, default!, default, default!, default!, default)
             .ThrowsAsyncForAnyArgs(new OperationCanceledException(cts.Token));
 
-        await Should.ThrowAsync<OperationCanceledException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "b", "[]", cts.Token));
+        await Should.ThrowAsync<OperationCanceledException>(() => Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, "[]", cts.Token));
     }
 
     [Fact]

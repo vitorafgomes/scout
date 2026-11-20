@@ -44,7 +44,8 @@ internal sealed class SqliteAuditStore : IAuditJobStore
 
     /// <inheritdoc />
     public Task<string> CreateJobAsync(
-        string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct) =>
+        string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct,
+        ReviewInputs? inputs = null) =>
         RunAsync("save", async db =>
         {
             var id = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
@@ -60,6 +61,7 @@ internal sealed class SqliteAuditStore : IAuditJobStore
                 Started = Now(),
                 Status = Running,
                 Preflight = preflight is null ? null : JsonSerializer.Serialize(preflight, JsonSerializerOptions.Web),
+                Inputs = inputs is null ? null : JsonSerializer.Serialize(inputs, JsonSerializerOptions.Web),
             });
             db.Batches.AddRange(batches.Select((batch, i) => new AuditBatchRow
             {
@@ -363,4 +365,19 @@ internal sealed class SqliteAuditStore : IAuditJobStore
             await db.Jobs.Where(j => j.Id == jobId).Select(j => j.Preflight).SingleOrDefaultAsync(ct).ConfigureAwait(false) is { } kept
                 ? JsonSerializer.Deserialize<ReviewPreflight>(kept, JsonSerializerOptions.Web)
                 : null);
+
+    /// <inheritdoc />
+    public Task<ReviewInputs?> InputsAsync(string jobId, CancellationToken ct) =>
+        RunAsync("read", async db =>
+        {
+            var kept = await db.Jobs.Where(j => j.Id == jobId).Select(j => j.Inputs).SingleOrDefaultAsync(ct).ConfigureAwait(false);
+            try
+            {
+                return kept is null ? null : JsonSerializer.Deserialize<ReviewInputs>(kept, JsonSerializerOptions.Web);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        });
 }

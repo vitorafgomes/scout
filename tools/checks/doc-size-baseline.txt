@@ -5,7 +5,7 @@
 13830 context/pages/architecture/desktop-ui-design-system/4-component-library.md
 13942 context/pages/architecture/desktop-ui-design-system.md
 12735 context/pages/architecture/electron-provisioning-ui/per-platform-feasibility.md
-24061 context/pages/conventions/decisions-that-look-like-defects.md
+24062 context/pages/conventions/decisions-that-look-like-defects.md
 15528 context/pages/conventions/desktop-prototype.md
 30850 context/pages/conventions/testing.md
 39244 context/pages/conventions/tooling.md
@@ -17,7 +17,7 @@
 12424 context/pages/decisions/0022-discord-setup-from-the-bot-token.md
 34667 context/pages/decisions/0028-local-quick-ask-assistant.md
 16494 context/pages/decisions/0029-project-site-and-releases.md
-51062 context/pages/decisions/0032-per-feature-write-permissions.md
+51720 context/pages/decisions/0032-per-feature-write-permissions.md
 40963 context/pages/decisions/0033-channel-operator-architecture.md
 31628 context/pages/decisions/0034-live-transcription-on-the-local-adapter.md
 14677 context/pages/decisions/0036-text-read-from-a-screenshot-by-a-local-ocr-program.md
@@ -25,7 +25,7 @@
 18969 context/pages/decisions/0038-code-quality-assistant-on-the-write-gate.md
 19329 context/pages/decisions/0040-review-findings-as-cards-in-chat.md
 12967 context/pages/decisions/0042-audit-as-a-job-with-saved-progress.md
-18214 context/pages/decisions/0043-the-verdict-on-a-pull-request.md
+20092 context/pages/decisions/0043-the-verdict-on-a-pull-request.md
 13115 context/pages/decisions/0044-scout-acts-on-github-as-its-own-app.md
 19465 context/pages/decisions/0045-theme-and-notification-center.md
 16056 context/pages/decisions/0047-the-docker-card.md
@@ -35,6 +35,8 @@
 17051 context/pages/decisions/0053-electron-fuses-and-ipc-sender-check.md
 12076 context/pages/decisions/0054-functions-scoped-per-skill-and-job.md
 14022 context/pages/decisions/0055-pull-request-review-as-a-job-in-batches.md
+12606 context/pages/decisions/0059-approve-when-the-checks-pass.md
+12173 context/pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell.md
 21978 context/pages/decisions/index.md
 67995 context/pages/invariants/no-executive-writes.md
 22672 context/pages/invariants/secrets-never-in-source.md

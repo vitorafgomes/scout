@@ -1,6 +1,7 @@
 import { reviewQuestion } from '@scout/shared';
 import type { Logger } from '../util/logger.js';
 import type { NotificationInput } from './notification-store.js';
+import { OPEN_IN_THE_CHAT } from './sources.js';
 
 /** A mention older than this keeps Review it and starts nothing by itself. */
 export const MENTION_MAX_AGE_MS = 60 * 60_000;
@@ -8,6 +9,8 @@ export const MENTION_MAX_AGE_MS = 60 * 60_000;
 export const MENTION_RETRY_MS = 60_000;
 /** The detail of a mention's entry once its review was asked; an entry that carries it is never asked again. */
 export const STARTED_DETAIL = 'Review started by the mention. The answer is in the chat.';
+/** The detail of a mention's review once its answer is in the chat: nothing reaches GitHub before the owner's ok there. */
+export const READY_DETAIL = 'Nothing is posted on GitHub before you approve it in the chat.';
 
 export interface MentionReviewDeps {
   /** The owner's GitHub login, or null while GitHub is not connected. */
@@ -110,7 +113,7 @@ export class MentionReviews {
       const review: NotificationInput = {
         id: `review:${id}`,
         kind: 'running',
-        title: `Reviewing ${pullRequestOf(entry)}`,
+        title: `Reviewing ${pullRequestOf(entry)}${askedBy(entry)}`,
         detail: 'Started by your mention of the Scout bot',
         indeterminate: true,
         ...(entry.url === undefined ? {} : { url: entry.url }),
@@ -137,7 +140,8 @@ export class MentionReviews {
         ...review,
         kind: 'done',
         title: `Review of ${pullRequestOf(running.mention)} is ready`,
-        detail: 'The answer is in the chat.',
+        detail: READY_DETAIL,
+        actions: [OPEN_IN_THE_CHAT],
       });
     }
     this.pump();
@@ -178,6 +182,12 @@ export class MentionReviews {
     this.started.clear();
     this.running = null;
   }
+}
+
+/** ", asked by @login" for the login whose mention the title names, or nothing when the title names none. */
+function askedBy(entry: NotificationInput): string {
+  const login = /^@([A-Za-z0-9-]+) mentioned @/.exec(entry.title)?.[1];
+  return login === undefined ? '' : `, asked by @${login}`;
 }
 
 /** The pull request a mention's title names, "owner/repo#n", or the words for one that names none. */

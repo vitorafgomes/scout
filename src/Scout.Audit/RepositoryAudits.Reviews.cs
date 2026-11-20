@@ -18,10 +18,14 @@ public interface IPullRequestReviews
     /// <paramref name="files"/> are every changed file, each with its patch or null when GitHub returned no diff for it;
     /// <paramref name="diffsLeftOut"/> is how many diffs the pull request's answer left out, and none left out starts no
     /// review; <paramref name="notListed"/> is how many changed files GitHub did not list, each counted as not read;
-    /// <paramref name="checks"/> are the head commit's checks as the caller read them, null when it could not.
+    /// <paramref name="checks"/> are the head commit's checks as the caller read them, null when it could not;
+    /// <paramref name="purpose"/> is what the pull request says it does, null when it was not given. A new review keeps the
+    /// purpose, the project's rule files and what the pull request removed for its batches; a resumed one keeps those it
+    /// started with.
     /// </summary>
     Task<ReviewStart> StartAsync(
-        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, int notListed, ReviewCheckCounts? checks, CancellationToken ct);
+        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, int notListed, ReviewCheckCounts? checks, CancellationToken ct,
+        ReviewPurpose? purpose = null);
 
     /// <summary>How the latest review of the pull request is going, from its rows.</summary>
     Task<string> StatusAsync(string owner, string repo, int number, CancellationToken ct);
@@ -33,8 +37,11 @@ public interface IPullRequestReviews
     Task<AuditControlAnswer> ControlAsync(string owner, string repo, int number, string action, CancellationToken ct);
 }
 
-/// <summary>One changed file of a pull request: its repository-relative path and its patch, null when GitHub returned no diff for it.</summary>
-public sealed record ReviewFile(string Path, string? Patch);
+/// <summary>
+/// One changed file of a pull request: its repository-relative path, its patch, null when GitHub returned no diff for it,
+/// and its status as GitHub gives it, such as <c>removed</c>, null when it was not given.
+/// </summary>
+public sealed record ReviewFile(string Path, string? Patch, string? Status = null);
 
 internal sealed partial class RepositoryAudits : IPullRequestReviews
 {
@@ -73,7 +80,8 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
     internal const int MaxReviewMinutes = 60;
 
     public async Task<ReviewStart> StartAsync(
-        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, int notListed, ReviewCheckCounts? checks, CancellationToken ct)
+        string owner, string repo, int number, string headSha, IReadOnlyList<ReviewFile> files, int diffsLeftOut, int notListed, ReviewCheckCounts? checks, CancellationToken ct,
+        ReviewPurpose? purpose = null)
     {
         if (!IsValid(owner, repo))
         {
@@ -100,38 +108,13 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
         var controlled = files.Where(f => f.Path.Any(char.IsControl)).Select(f => f.Path).ToList();
         var unread = files.Where(f => f.Patch is null && !controlled.Contains(f.Path)).Select(f => f.Path).ToList();
         var sized = files.Where(f => f.Patch is not null && !controlled.Contains(f.Path)).Select(f => new AuditPlanner.Entry(f.Path, AuditBatchRunner.SentLength(f.Path, f.Patch!) + 1)).ToList();
-        var room = cap - 1;
-        var tooLarge = sized.Where(f => f.Size > room).ToList();
-        if (tooLarge.Count == sized.Count)
+        if (sized.All(f => f.Size > cap - 1))
         {
-            return NotStarted(NothingToRead(review, files.Count, unread.Count, tooLarge.Count, controlled.Count, cap));
-        }
-
-        List<AuditBatchPlan> plan =
-        [
-            .. sized.Except(tooLarge).GroupBy(f => ReadingOrder(f.Path)).OrderBy(g => g.Key)
-                .SelectMany(g => AuditPlanner.Plan([.. g], options.MaxBatchFiles, room)),
-        ];
-        if (controlled.Count > 0)
-        {
-            plan.Add(new AuditBatchPlan(ControlCharacterArea, controlled, 0, Failure: ControlCharacterPath));
-        }
-
-        if (tooLarge.Count > 0)
-        {
-            plan.Add(new AuditBatchPlan(DiffTooLargeArea, [.. tooLarge.Select(f => f.Path)], tooLarge.Sum(f => f.Size), Failure: DiffTooLarge));
-        }
-
-        if (unread.Count > 0)
-        {
-            plan.Add(new AuditBatchPlan(NoDiffArea, unread, 0, Failure: NoDiff));
+            return NotStarted(NothingToRead(review, files.Count, unread.Count, sized.Count, controlled.Count, cap));
         }
 
         notListed = Math.Max(0, notListed);
-        if (notListed > 0)
-        {
-            plan.Add(new AuditBatchPlan(NotListedArea, [.. Enumerable.Range(1, notListed).Select(i => string.Create(CultureInfo.InvariantCulture, $"(file {i} GitHub did not list)"))], 0, Failure: NotListed));
-        }
+        var plan = PlanIn(cap - 1);
 
         var changed = files.Count + notListed;
 
@@ -174,12 +157,24 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
                 return new ReviewStart(false, $"The {review} did not start: the snapshot Scout took is at {Short(taken.Commit)}, not at the pull request's head {Short(headSha)}.", new ReviewPreflight(preflight));
             }
 
+            var inputs = Handed(new ReviewInputs(
+                purpose is null ? null : ReviewInputs.Bound(purpose), ReviewRules.Read(taken.Root, [.. files.Select(f => f.Path)]), ReviewRemoved.From(files, taken.Root)));
+            if (inputs is not null)
+            {
+                plan = PlanIn(cap - 1 - AuditBatchRunner.InputsLength(inputs));
+                preflight[preflight.FindIndex(c => c.Name == PreflightName.Size)] = Size(changed, plan);
+                if (plan.All(b => b.Failure is not null))
+                {
+                    return new ReviewStart(false, NothingToRead(review, files.Count, unread.Count, sized.Count, controlled.Count, cap), new ReviewPreflight(preflight));
+                }
+            }
+
             var moved = latest is { Status: AuditStatus.Running or AuditStatus.Paused }
                 && await store.StopAsync(owner, repo, number, ct).ConfigureAwait(false)
                 ? $" Stopped the review at {Short(latest.Commit)}: the pull request moved from {Short(latest.Commit)} to {Short(taken.Commit)}."
                 : string.Empty;
             var kept = new ReviewPreflight(preflight);
-            await store.CreateJobAsync(owner, repo, number, taken.Commit, origin(), plan, kept, ct).ConfigureAwait(false);
+            await store.CreateJobAsync(owner, repo, number, taken.Commit, origin(), plan, kept, ct, inputs).ConfigureAwait(false);
             signal.Wake();
             var started = string.Create(
                 CultureInfo.InvariantCulture,
@@ -199,7 +194,47 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
             logger.LogWarning("The review of a pull request could not start ({ExceptionType}).", ex.GetType().Name);
             return new ReviewStart(false, $"Scout could not take the snapshot of {owner}/{repo} ({ex.GetType().Name}).", new ReviewPreflight(preflight));
         }
+
+        List<AuditBatchPlan> PlanIn(long room)
+        {
+            var tooLarge = sized.Where(f => f.Size > room).ToList();
+            List<AuditBatchPlan> batches =
+            [
+                .. sized.Except(tooLarge).GroupBy(f => ReadingOrder(f.Path)).OrderBy(g => g.Key)
+                    .SelectMany(g => AuditPlanner.Plan([.. g], options.MaxBatchFiles, room)),
+            ];
+            if (controlled.Count > 0)
+            {
+                batches.Add(new AuditBatchPlan(ControlCharacterArea, controlled, 0, Failure: ControlCharacterPath));
+            }
+
+            if (tooLarge.Count > 0)
+            {
+                batches.Add(new AuditBatchPlan(DiffTooLargeArea, [.. tooLarge.Select(f => f.Path)], tooLarge.Sum(f => f.Size), Failure: DiffTooLarge));
+            }
+
+            if (unread.Count > 0)
+            {
+                batches.Add(new AuditBatchPlan(NoDiffArea, unread, 0, Failure: NoDiff));
+            }
+
+            if (notListed > 0)
+            {
+                batches.Add(new AuditBatchPlan(NotListedArea, [.. Enumerable.Range(1, notListed).Select(i => string.Create(CultureInfo.InvariantCulture, $"(file {i} GitHub did not list)"))], 0, Failure: NotListed));
+            }
+
+            return batches;
+        }
     }
+
+    /// <summary>
+    /// The inputs a review keeps, or none when they hold nothing to hand a batch: no purpose, no rule file named or
+    /// unreadable, and nothing removed or uncounted; such a review is planned and asked as one that kept none.
+    /// </summary>
+    private static ReviewInputs? Handed(ReviewInputs inputs) =>
+        inputs is { Purpose: null, Rules: { Unreadable: false, Files.Count: 0, NotIncluded.Count: 0 }, Removed: { Entries.Count: 0, TestFilesWithoutDiff: 0, RepositoryNotSearched: false } }
+            ? null
+            : inputs;
 
     /// <summary>
     /// The pull request's size: every changed file and every batch kept, and the most the batches can take, each wave of

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
 
@@ -17,12 +18,14 @@ public sealed record GivenVerdict(string Owner, string Repo, int Number, string 
 
 /// <summary>
 /// Runs a verdict the owner approved, from the payload queued with the action: the review card's shape
-/// (<c>comments</c> as an array, a <c>testsLine</c>) or the arguments of <c>give_pull_request_verdict</c>
-/// (<c>comments_json</c> as text). The checks and the post are the function's: a refusal before anything is sent, or a
+/// (<c>findings</c> as an array, a <c>testsLine</c>, and a review job's <c>filesRead</c>, <c>filesChanged</c> and
+/// <c>notes</c>) or the arguments of <c>give_pull_request_verdict</c> (<c>findings_json</c> as text). A payload without
+/// findings, as one queued before the note was composed by code, is unreadable and nothing is sent. The checks, the
+/// note and the post are the function's: a refusal before anything is sent, or a
 /// failure, is a <see cref="WriteFailedException"/>. The tests line is posted on its own, after the verdict was given and
 /// before it is recorded.
 /// </summary>
-public sealed class GitHubVerdictRunner
+public sealed class GitHubVerdictRunner : IReviewNotePreview
 {
     /// <summary>Why a verdict whose payload cannot be read is not given.</summary>
     public const string Unreadable = "The verdict's data could not be read; give the verdict again from the review card.";
@@ -47,9 +50,32 @@ public sealed class GitHubVerdictRunner
     {
         var request = Read(payload) ?? throw new WriteFailedException(Unreadable, "refused");
         var (posted, _, already, signer) = await _actions.GiveVerdictAsync(
-                request.Owner, request.Repo, request.Number, request.Verdict, request.Body, request.Comments, request.Commit, ct)
+                request.Owner, request.Repo, request.Number, request.Verdict, request.Findings, request.Commit, request.Extras, ct)
             .ConfigureAwait(false);
         return new GivenVerdict(request.Owner, request.Repo, request.Number, posted.HtmlUrl, request.TestsLine, already, signer);
+    }
+
+    /// <summary>
+    /// The note and comments the verdict <paramref name="requestJson"/> describes would post now, in the shape of a queued
+    /// verdict, composed by the same path as <see cref="GiveAsync"/> with the same reads and nothing sent:
+    /// <c>{"body", "comments":[{"id","path","line","body"}], "dropped":["path:line"]}</c>.
+    /// </summary>
+    /// <param name="requestJson">The verdict as the review card would queue it.</param>
+    /// <param name="ct">Cancels the reads.</param>
+    /// <returns>The preview as JSON.</returns>
+    /// <exception cref="WriteFailedException">The verdict cannot be read or would be refused, or a read failed; its sentence says why.</exception>
+    public async Task<string> PreviewAsync(string requestJson, CancellationToken ct)
+    {
+        var request = Read(requestJson) ?? throw new WriteFailedException(Unreadable, "refused");
+        var (body, comments, dropped) = await _actions.PreviewAsync(
+                request.Owner, request.Repo, request.Number, request.Verdict, request.Findings, request.Commit, request.Extras, ct)
+            .ConfigureAwait(false);
+        return JsonSerializer.Serialize(new
+        {
+            body,
+            comments = comments.Select(c => new { id = c.Id, path = c.Comment.Path, line = c.Comment.Line, body = c.Comment.Body }),
+            dropped,
+        });
     }
 
     /// <summary>
@@ -104,16 +130,24 @@ public sealed class GitHubVerdictRunner
                 return null;
             }
 
-            var comments = root.TryGetProperty("comments", out var array) && array.ValueKind == JsonValueKind.Array
+            var findings = root.TryGetProperty("findings", out var array) && array.ValueKind == JsonValueKind.Array
                 ? array.GetRawText()
-                : Text(root, "comments_json");
-            return new Request(owner, repo, number, Text(root, "verdict"), Text(root, "body"), comments, Text(root, "commit"), Text(root, "testsLine"));
+                : Text(root, "findings_json");
+            if (findings is null)
+            {
+                return null;
+            }
+
+            var extras = NoteExtras.Read(Property(root, "filesRead"), Property(root, "filesChanged"), Property(root, "notes"));
+            return new Request(owner, repo, number, Text(root, "verdict"), findings, Text(root, "commit"), Text(root, "testsLine"), extras);
         }
         catch (JsonException)
         {
             return null;
         }
     }
+
+    private static JsonElement? Property(JsonElement root, string name) => root.TryGetProperty(name, out var value) ? value : null;
 
     private static string? Text(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
@@ -134,5 +168,5 @@ public sealed class GitHubVerdictRunner
     }
 
     private sealed record Request(
-        string Owner, string Repo, int Number, string? Verdict, string? Body, string? Comments, string? Commit, string? TestsLine);
+        string Owner, string Repo, int Number, string? Verdict, string Findings, string? Commit, string? TestsLine, NoteExtras? Extras);
 }

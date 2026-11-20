@@ -34,6 +34,7 @@ internal sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) :
             job.Property(j => j.PullRequest).HasColumnName("pull_request");
             job.Property(j => j.Preflight).HasColumnName("preflight");
             job.Property(j => j.Resumed).HasColumnName("resumed");
+            job.Property(j => j.Inputs).HasColumnName("inputs");
         });
 
         modelBuilder.Entity<AuditBatchRow>(batch =>
@@ -114,6 +115,9 @@ internal sealed class AuditJobRow
 
     /// <summary>When the job last resumed from a pause, in UTC; null for one never paused and resumed.</summary>
     public DateTime? Resumed { get; set; }
+
+    /// <summary>The inputs a review's batches are handed, as JSON, written once with the row; null for an audit and a job kept before they existed.</summary>
+    public string? Inputs { get; set; }
 }
 
 /// <summary>A row of <c>audit_batch</c>.</summary>

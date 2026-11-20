@@ -1,14 +1,19 @@
 ---
 title: "Host console"
-version: "1.4"
+version: "1.5"
 date: 2026-11-13
-updated: 2026-11-19
-changes: "v1.4 (2026-11-19): JobControlPoller passes a review's control to the audit library. v1.3 (2026-11-17): the host joins the review job to the GitHub plugin. v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-20
+changes: "v1.5 (2026-11-20): review inputs cross the host; a success with an unreadable body. v1.4 (2026-11-19): JobControlPoller passes a review's control to the audit library. v1.3 (2026-11-17): the host joins the review job to the GitHub plugin. v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-20 - Review inputs cross the host; a success with an unreadable body
+
+- **What changed:** `PullRequestReviewsAdapter` copies each file's status and the purpose field by field into the audit library ([[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]); `GitHubActionExecutor` records a write GitHub accepted with an unreadable answer as `failed: github 201` with the sentence that it may already be there.
+- **Tests:** `PullRequestReviewsAdapterTests::A_start_passes_each_files_status_and_the_purpose_to_the_audit_library`, `HostAuditTurnTests::A_review_started_through_the_plugin_keeps_its_inputs_on_the_job`, `GitHubActionExecutorTests::An_Approved_Write_GitHub_Accepts_With_An_Unreadable_Answer_Is_Recorded_As_Possibly_Sent`; `Scout.Host.Console.Tests` 381 passed.
 
 ## 2026-11-19 - JobControlPoller passes a review's control to the audit library
 

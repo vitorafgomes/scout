@@ -4,6 +4,7 @@ import {
   ISSUES_TARGET,
   issueLinks,
   readIpcError,
+  type GitHubNotePreview,
   type GitHubVerdictKey,
   type GitHubVerdictRequest,
   type GitHubVerdictStatus,
@@ -46,7 +47,11 @@ export interface Posted {
   readonly urls: readonly string[];
 }
 
-/** Where the owner's verdict on a pull request stands in this window: being sent, then the action's state. */
+/**
+ * Where the owner's verdict on a pull request stands in this window: being sent, then the action's state, the verdict
+ * as the control plane reports it, who signed it, the verdict given before it at the same commit, and `unchanged` when
+ * the last click asked for the very verdict already given, so nothing new was sent.
+ */
 export interface VerdictView {
   readonly verdict: GitHubVerdictRequest['verdict'];
   readonly state: 'sending' | GitHubVerdictStatus['state'];
@@ -54,6 +59,16 @@ export interface VerdictView {
   readonly url?: string | null;
   readonly reason?: string | null;
   readonly afterChecks?: true;
+  readonly signedAs?: string | null;
+  readonly earlier?: GitHubVerdictRequest['verdict'];
+  readonly unchanged?: true;
+}
+
+/** The note the worker composed for the verdict a card previews, or why it could not compose it. */
+export interface NotePreview {
+  readonly verdict: GitHubVerdictRequest['verdict'];
+  readonly note?: GitHubNotePreview;
+  readonly error?: string;
 }
 
 /**
@@ -77,6 +92,9 @@ type Decisions = Readonly<Record<string, LocalFindingDecision>>;
 type WindowState = Omit<ReviewState, 'picks' | 'edited'>;
 
 const EMPTY: WindowState = { editing: null, preview: false };
+
+/** How long the card's preview waits after the last change of a burst before it asks the worker. */
+export const PREVIEW_QUIET_MS = 400;
 const NO_DECISIONS: Decisions = {};
 
 /**
@@ -94,6 +112,9 @@ export class ReviewFindingsStore {
   private readonly pending = signal<Readonly<Record<string, Decisions>>>({});
   private readonly verdicts = signal<Readonly<Record<string, VerdictView>>>({});
   private readonly waitings = signal<Readonly<Record<string, GitHubWaitingApproval>>>({});
+  private readonly previews = signal<Readonly<Record<string, NotePreview>>>({});
+  private readonly previewAsked = new Map<string, string>();
+  private readonly previewTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly lookedUp = new Set<string>();
 
   private readonly conversation = inject(LocalConversation);
@@ -166,6 +187,7 @@ export class ReviewFindingsStore {
   }
 
   togglePreview(turnId: string): void {
+    if (this.state(turnId).preview) this.forgetPreview(turnId);
     this.update(turnId, (s) => ({ ...s, preview: !s.preview }));
   }
 
@@ -237,6 +259,46 @@ export class ReviewFindingsStore {
     }
   }
 
+  /**
+   * Asks the worker, through main, for the note and comments `request` would post. The first request after the
+   * preview opens is sent at once; a burst of later changes is sent as its last request, `PREVIEW_QUIET_MS` after the
+   * last change. An answer to a request the card no longer shows is dropped, and none is cached, so the head and the
+   * checks are read again each time. Nothing is sent to GitHub.
+   */
+  preview(turnId: string, request: GitHubVerdictRequest): void {
+    const asked = JSON.stringify(request);
+    if (this.previewAsked.get(turnId) === asked) return;
+    const first = !this.previewAsked.has(turnId);
+    this.previewAsked.set(turnId, asked);
+    clearTimeout(this.previewTimers.get(turnId));
+    const keep = (preview: NotePreview) => {
+      if (this.previewAsked.get(turnId) === asked) {
+        this.previews.update((p) => ({ ...p, [turnId]: preview }));
+      }
+    };
+    const send = () => {
+      this.previewTimers.delete(turnId);
+      this.bridge.githubPreviewVerdict(request).then(
+        (note) => keep({ verdict: request.verdict, note }),
+        (err: unknown) => keep({ verdict: request.verdict, error: readIpcError(err).message }),
+      );
+    };
+    if (first) send();
+    else this.previewTimers.set(turnId, setTimeout(send, PREVIEW_QUIET_MS));
+  }
+
+  /** Drops the preview of a card that left the view: its waiting request is never sent, and its next one is asked at once. */
+  forgetPreview(turnId: string): void {
+    clearTimeout(this.previewTimers.get(turnId));
+    this.previewTimers.delete(turnId);
+    this.previewAsked.delete(turnId);
+  }
+
+  /** The last note the worker composed for a card's preview, or why it could not; null before the first answer. */
+  notePreview(turnId: string): NotePreview | null {
+    return this.previews()[turnId] ?? null;
+  }
+
   /** The verdict on a pull request at the reviewed commit, as this window last saw its action. */
   verdict(repository: string, number: number, commit: string): VerdictView | null {
     return this.verdicts()[verdictKey(repository, number, commit)] ?? null;
@@ -244,18 +306,28 @@ export class ReviewFindingsStore {
 
   /**
    * Gives the owner's verdict as one action; nothing is sent while a verdict on the same pull request and commit
-   * is being sent, queued, running or given. A refusal shows as the failed verdict's reason.
+   * is being sent. A verdict given before it stays named as the earlier one; when the control plane answers with the
+   * action already given, the request was the same and the view says nothing new was sent. A refusal shows as the
+   * failed verdict's reason.
    */
   async giveVerdict(request: GitHubVerdictRequest): Promise<void> {
     const key = verdictKey(request.repository, request.number, request.commit);
-    const current = this.verdicts()[key];
-    if (current !== undefined && current.state !== 'failed') return;
-    this.verdicts.update((v) => ({ ...v, [key]: { verdict: request.verdict, state: 'sending' } }));
+    const before = this.verdicts()[key];
+    if (before?.state === 'sending') return;
+    const earlier = before?.state === 'given' ? { earlier: before.verdict } : {};
+    this.verdicts.update((v) => ({
+      ...v,
+      [key]: { verdict: request.verdict, state: 'sending', ...earlier },
+    }));
     try {
       const { actionId } = await this.bridge.githubGiveVerdict(request);
+      if (before?.state === 'given' && before.actionId === actionId) {
+        this.verdicts.update((v) => ({ ...v, [key]: { ...before, unchanged: true } }));
+        return;
+      }
       this.verdicts.update((v) => ({
         ...v,
-        [key]: { verdict: request.verdict, state: 'queued', actionId },
+        [key]: { verdict: request.verdict, state: 'queued', actionId, ...earlier },
       }));
       const status = await this.bridge.githubVerdictStatus({ actionId }).catch(() => null);
       if (status !== null) this.applyVerdict(status);
@@ -339,14 +411,32 @@ export class ReviewFindingsStore {
       if (
         current?.actionId !== undefined &&
         current.actionId !== status.actionId &&
-        current.state !== 'failed'
+        current.state !== 'failed' &&
+        current.state !== 'given'
       ) {
         return verdicts;
       }
-      const { verdict, actionId, state, url, reason, afterChecks } = status;
+      const { verdict, actionId, state, url, reason, afterChecks, signedAs } = status;
+      const earlier =
+        current?.actionId === actionId ||
+        current?.state === 'sending' ||
+        current?.state === 'queued'
+          ? current.earlier
+          : current?.state === 'given'
+            ? current.verdict
+            : undefined;
       return {
         ...verdicts,
-        [key]: { verdict, actionId, state, url, reason, ...(afterChecks ? { afterChecks } : {}) },
+        [key]: {
+          verdict,
+          actionId,
+          state,
+          url,
+          reason,
+          signedAs,
+          ...(afterChecks ? { afterChecks } : {}),
+          ...(earlier === undefined ? {} : { earlier }),
+        },
       };
     });
   }
