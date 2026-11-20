@@ -39,6 +39,8 @@ import {
   type LocalMeetingSummary,
   type LocalMeetingTurn,
   type LocalMeetingsResponse,
+  type GitHubNotePreview,
+  type GitHubVerdictRequest,
   type LocalReadTextResponse,
   type LocalShortcut,
   type LocalTranscriptEvent,
@@ -54,6 +56,7 @@ import { ASK_ARG } from '../shell/login-item.js';
 import { fitInWorkArea, placeInCorner } from './placement.js';
 import { registerSpeech } from './speech.js';
 import { isBellOnlyReviewLine } from '../notifications/sources.js';
+import { toVerdictRequest } from '../ipc/github-verdict.js';
 
 export const DEFAULT_QUICK_ASK_SHORTCUT = 'CommandOrControl+Alt+Space';
 export const NOT_RUNNING_MESSAGE = 'Scout is not running. Start it from the tray or the app.';
@@ -152,6 +155,10 @@ const MEETING_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const ISO_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|[+-]\d{2}:\d{2})$/;
 const MAX_EXPORT_NAME_CHARS = 120;
 const READ_TIMEOUT_MS = 15_000;
+/** A preview of a note waits for the worker as a text read does. */
+const PREVIEW_TIMEOUT_MS = READ_TIMEOUT_MS;
+const PREVIEW_TIMEOUT_REPLY = 'Scout did not answer the preview of the note in time.';
+const PREVIEW_FAILED_REPLY = 'Scout could not compose the note.';
 const MAX_IMAGE_BASE64_CHARS = 4_000_000;
 const MAX_PCM16_BASE64_CHARS = 48_000;
 const SYSTEM_AUDIO_ARMED_MS = 10_000;
@@ -731,6 +738,8 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
   const sessionSenders = new Map<string, unknown>();
   let listeningPushed = false;
   const reads = new Map<string, (outcome: LocalReadTextResponse | Error) => void>();
+  const previews = new Map<string, (outcome: GitHubNotePreview | Error) => void>();
+  let previewCount = 0;
   let readCount = 0;
   const meetingRequests = new Map<string, (outcome: Record<string, unknown> | Error) => void>();
   let meetingCount = 0;
@@ -1639,6 +1648,76 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     });
   }
 
+  /**
+   * The note and comments a verdict would post now: the verdict, as the card would queue it, goes to the worker as a
+   * `note` request on stdin, and the answer is its `note` event, or its `fail` sentence, or a timeout after 15 s.
+   */
+  function previewNote(req: unknown): Promise<GitHubNotePreview> {
+    let request: GitHubVerdictRequest;
+    try {
+      request = toVerdictRequest(req);
+    } catch (err: unknown) {
+      return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+    }
+    const [owner, repo] = request.repository.split('/');
+    const note = {
+      owner,
+      repo,
+      number: request.number,
+      verdict: request.verdict,
+      findings: request.findings,
+      commit: request.commit,
+      ...(request.coverage === undefined
+        ? {}
+        : { filesRead: request.coverage.read, filesChanged: request.coverage.of }),
+      ...(request.notes === undefined ? {} : { notes: request.notes }),
+    };
+    previewCount += 1;
+    const id = `n-${previewCount}`;
+    return new Promise((resolve, reject) => {
+      const settle = (outcome: GitHubNotePreview | Error): void => {
+        clearTimeout(timer);
+        previews.delete(id);
+        if (outcome instanceof Error) reject(outcome);
+        else resolve(outcome);
+      };
+      const timer = setTimeout(() => {
+        logger.warn('quick-ask: the worker did not answer a note preview in time', { id });
+        settle(ipcError('github/preview-failed', PREVIEW_TIMEOUT_REPLY));
+      }, PREVIEW_TIMEOUT_MS);
+      previews.set(id, settle);
+      const accepted = supervisor.writeStdin(JSON.stringify({ type: 'note', id, note }), (err) => {
+        logger.warn('quick-ask: note preview not delivered to the worker', {
+          id,
+          error: err.message,
+        });
+        settle(ipcError('github/preview-failed', STOPPED_REPLY));
+      });
+      if (!accepted) {
+        settle(ipcError('local/not-running', NOT_RUNNING_MESSAGE));
+        return;
+      }
+      logger.info('quick-ask: note preview sent to the worker', {
+        id,
+        findings: request.findings.length,
+      });
+    });
+  }
+
+  function applyPreview(p: Record<string, unknown>): boolean {
+    const id = p['id'];
+    const settle = typeof id === 'string' ? previews.get(id) : undefined;
+    if (settle === undefined) return false;
+    const text = typeof p['text'] === 'string' ? p['text'] : '';
+    if (p['event'] === 'note') {
+      const preview = toNotePreview(text);
+      settle(preview ?? ipcError('github/preview-failed', PREVIEW_FAILED_REPLY));
+    } else if (p['event'] === 'fail') {
+      settle(ipcError('github/preview-failed', text.length > 0 ? text : PREVIEW_FAILED_REPLY));
+    }
+    return true;
+  }
+
   function applyRead(p: Record<string, unknown>): boolean {
     const id = p['id'];
     const settle = typeof id === 'string' ? reads.get(id) : undefined;
@@ -1803,6 +1882,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
   ipcMain.handle(CHANNEL.localStopListening, (_event, req: unknown) => stopListening(req));
   ipcMain.handle(CHANNEL.localListening, () => ({ listening: sessions.size > 0 }));
   ipcMain.handle(CHANNEL.localReadText, (_event, req: unknown) => readText(req));
+  ipcMain.handle(CHANNEL.githubPreviewVerdict, (_event, req: unknown) => previewNote(req));
   const speech = registerSpeech({ ipcMain, supervisor, vault, logger });
   ipcMain.handle(CHANNEL.localKeepMeeting, (_event, req: unknown) => keepMeeting(req));
   ipcMain.handle(CHANNEL.localMeetings, (_event, req: unknown) => listMeetings(req));
@@ -1874,6 +1954,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
         parsed === null ||
         applyMeeting(parsed) ||
         applyRead(parsed) ||
+        applyPreview(parsed) ||
         speech.apply(parsed) ||
         applyTranscript(parsed)
       )
@@ -1942,6 +2023,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
         CHANNEL.localStopListening,
         CHANNEL.localListening,
         CHANNEL.localReadText,
+        CHANNEL.githubPreviewVerdict,
         CHANNEL.localKeepMeeting,
         CHANNEL.localMeetings,
         CHANNEL.localExportMeeting,
@@ -1964,4 +2046,38 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
       turns.length = 0;
     },
   };
+}
+
+/** The worker's preview as the desktop reads it: a body, the comments with their finding's id, and the dropped places; null when malformed. */
+function toNotePreview(text: string): GitHubNotePreview | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof data !== 'object' || data === null) return null;
+  const { body, comments, dropped } = data as Record<string, unknown>;
+  if (
+    typeof body !== 'string' ||
+    !Array.isArray(comments) ||
+    !Array.isArray(dropped) ||
+    !dropped.every((d) => typeof d === 'string')
+  ) {
+    return null;
+  }
+  const kept: GitHubNotePreview['comments'][number][] = [];
+  for (const raw of comments) {
+    const c = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+    if (
+      typeof c['id'] !== 'string' ||
+      typeof c['path'] !== 'string' ||
+      !Number.isInteger(c['line']) ||
+      typeof c['body'] !== 'string'
+    ) {
+      return null;
+    }
+    kept.push({ id: c['id'], path: c['path'], line: c['line'] as number, body: c['body'] });
+  }
+  return { body, comments: kept, dropped: dropped as string[] };
 }

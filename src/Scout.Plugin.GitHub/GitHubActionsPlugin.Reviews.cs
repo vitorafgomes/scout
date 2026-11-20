@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.SemanticKernel;
 using Scout.Plugin.GitHub.Abstractions;
 
@@ -7,8 +8,9 @@ namespace Scout.Plugin.GitHub;
 
 /// <summary>
 /// <c>start_pull_request_review</c> and <c>get_pull_request_review_status</c>: the review of a pull request too large for
-/// one turn, run by the host as a job in batches. The start reads the pull request and its head commit's checks, and hands
-/// them to the host's reviews; the job writes into Scout's data folder only, and nothing is posted on GitHub.
+/// one turn, run by the host as a job in batches. The start reads the pull request, its head commit's checks and the issue
+/// its description names, and hands them to the host's reviews; the job writes into Scout's data folder only, and nothing
+/// is posted on GitHub.
 /// </summary>
 internal sealed partial class GitHubActionsPlugin
 {
@@ -52,8 +54,52 @@ internal sealed partial class GitHubActionsPlugin
         }
 
         var checks = await CheckCountsAsync(owner, repo, pr.HeadSha, ct).ConfigureAwait(false);
+        var purpose = await PurposeAsync(owner, repo, pr, ct).ConfigureAwait(false);
         return await reviews!.StartAsync(
-            owner, repo, number, pr.HeadSha, pr.Files, GitHubPlugin.FitPatchBudget(pr.Files).LeftOut, pr.ChangedFileCount - pr.Files.Count, checks, ct).ConfigureAwait(false);
+            owner, repo, number, pr.HeadSha, pr.Files, GitHubPlugin.FitPatchBudget(pr.Files).LeftOut, pr.ChangedFileCount - pr.Files.Count, checks, ct, purpose).ConfigureAwait(false);
+    }
+
+    [GeneratedRegex(@"(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d{1,9})\b")]
+    private static partial Regex ClosingIssue();
+
+    [GeneratedRegex(@"(?<![\w/])#(\d{1,9})\b")]
+    private static partial Regex NamedIssue();
+
+    /// <summary>
+    /// What <paramref name="pr"/> says it does: its title and description, and the issue its description names, by a closing
+    /// keyword first and else the first <c>#n</c>, never the pull request's own number, read once. An issue GitHub fails or
+    /// does not find is marked unread; a number that is a pull request is no issue. Never throws for a failed read.
+    /// </summary>
+    private async Task<PullRequestPurpose> PurposeAsync(string owner, string repo, PullRequestDetails pr, CancellationToken ct)
+    {
+        var named = pr.Body is null
+            ? null
+            : ClosingIssue().Matches(pr.Body).Concat(NamedIssue().Matches(pr.Body))
+                .Select(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))
+                .Where(n => n > 0 && n != pr.Number)
+                .Cast<int?>()
+                .FirstOrDefault();
+        if (named is not { } issue)
+        {
+            return new(pr.Title, pr.Body, null, null, null, false);
+        }
+
+        IssueDetails? read;
+        try
+        {
+            read = await reads.GetIssueAsync(owner, repo, issue, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            read = null;
+        }
+
+        return read switch
+        {
+            null => new(pr.Title, pr.Body, issue, null, null, IssueUnread: true),
+            { IsPullRequest: true } => new(pr.Title, pr.Body, null, null, null, false),
+            _ => new(pr.Title, pr.Body, issue, read.Title, read.Body, false),
+        };
     }
 
     /// <summary>How the latest review job of the pull request is going.</summary>
@@ -85,17 +131,11 @@ internal sealed partial class GitHubActionsPlugin
     {
         try
         {
-            var runsTask = reads.ListCheckRunsAsync(owner, repo, sha, ct);
-            var statusesTask = reads.ListStatusesAsync(owner, repo, sha, ct);
-            await Task.WhenAll(runsTask, statusesTask).ConfigureAwait(false);
-            var runs = await runsTask.ConfigureAwait(false);
-            var statuses = await statusesTask.ConfigureAwait(false);
-            if (runs.Total > runs.Checks.Count || statuses.Count >= GitHubClient.FilesPage)
+            if (await ReadChecksAsync(owner, repo, sha, ct).ConfigureAwait(false) is not { } checks)
             {
                 return null;
             }
 
-            var checks = runs.Checks.Concat(statuses).ToList();
             var pending = checks.Count(c => c.Status != "completed");
             var passing = checks.Count(c => c.Status == "completed" && c.Conclusion is ("success" or "neutral" or "skipped"));
             return new PullRequestCheckCounts(passing, pending, checks.Count - pending - passing);

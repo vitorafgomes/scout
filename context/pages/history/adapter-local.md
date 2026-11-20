@@ -1,13 +1,18 @@
 ---
 title: "Adapter local"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Version notes moved out of page headers."
+changes: "v1.1 (2026-11-20): the note request. Version notes moved out of page headers."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-20 - The note request
+
+- **What changed:** a `note` request on stdin hands its verdict to the host's `IReviewNotePreview` and answers one `note` event or `fail` (`src/Scout.Adapter.Local/LocalChatAdapter.cs:380`, `:770`; [[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **Tests:** `tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:1000` and the note request's other tests in that class.
 
 ## Version notes: `pages/services/adapter-local.md`
 

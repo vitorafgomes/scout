@@ -159,8 +159,7 @@ describe('control plane over UDS', () => {
           repository: 'acme/shop',
           number: 20,
           verdict: 'approve',
-          body: '',
-          comments: [],
+          findings: [],
           commit: '0123456789abcdef0123456789abcdef01234567',
           testsLine: '',
         })

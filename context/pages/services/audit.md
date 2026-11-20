@@ -1,9 +1,9 @@
 ---
 title: "Audit"
-version: "1.18"
+version: "1.19"
 date: 2026-11-11
-updated: 2026-11-18
-changes: "v1.18 (2026-11-13) the checks before a review, first part (a done review at the same commit blocks; the size never past 60 minutes): a review start answers ReviewStart with its checks, size, Docker runs, head, another review and grants, each ok, a warning or a block, kept once on the job's new."
+updated: 2026-11-20
+changes: "v1.19 (2026-11-20): the review inputs page linked (ADR 0064). v1.18 (2026-11-13) the checks before a review, first part (a done review at the same commit blocks; the size never past 60 minutes): a review start answers ReviewStart with its checks, size, Docker runs, head, another review and grants, each ok, a warning or a block, kept once on the job's new."
 page_type: service
 status: active
 description: "Runs a whole-repository audit as a job: plans the batches from the repository snapshot, runs one model turn per batch with a closed scope, keeps the plan, the files read and the findings in SQLite under Scout's data folder, posts the findings into the conversation that started it, and resumes after a restart."
@@ -34,6 +34,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/audit/how-it-works-plan\|How it works: Plan]] | Plan; Rows; Merge | 7984 |
 | [[pages/services/audit/how-it-works-batch-turn\|How it works: Batch turn]] | Batch turn; Worker | 11154 |
 | [[pages/services/audit/how-it-works-review-job\|How it works: Review job]] | Review batch turn; Review run; Review card | 11222 |
+| [[pages/services/audit/how-it-works-review-inputs\|How it works: Review inputs]] | Review inputs; the purpose; the rule files; what was removed | 6025 |
 | [[pages/services/audit/how-it-works-pause\|How it works: Pause]] | Pause; Continue from Scout Desktop; Stop and status | 7368 |
 | [[pages/services/audit/invariants-it-preserves\|Invariants it preserves]] | Invariants it preserves | 2759 |
 | [[pages/services/audit/tests\|Tests]] | Tests | 8607 |

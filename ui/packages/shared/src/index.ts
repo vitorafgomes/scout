@@ -226,7 +226,7 @@ export {
   type GitHubBotCreateRequest,
   type GitHubBotSetWritesRequest,
   type GitHubVerdictAction,
-  type GitHubVerdictComment,
+  type GitHubNotePreview,
   type GitHubVerdictKey,
   type GitHubVerdictProgress,
   type GitHubVerdictRequest,

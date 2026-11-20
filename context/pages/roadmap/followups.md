@@ -23,6 +23,66 @@ reliability: medium
 
 ## Entries
 
+### The tests line is still a second comment beside the review note (2026-11-20)
+
+- **Gap:** a verdict's tests line is posted as its own comment after the note ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]), so the pull request carries two texts where the artboard draws one.
+- **Blocker:** none.
+- **Unblocks with:** the tests line folded into the note's tests section, its separate post removed, with the already-posted check moved with it.
+
+### A removal can be reported by two batches (2026-11-20)
+
+- **Gap:** a deleted test file is handed to its own batch and to the batch that holds code of the same stem ([[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]); the earlier titles only partly stop the second report.
+- **Blocker:** the cross-batch pass does not exist yet.
+- **Unblocks with:** the pass that compares findings across batches.
+
+### The one-turn review gets only the skill's sentences, not the computed inputs (2026-11-20)
+
+- **Gap:** a review answered in one turn judges removals, the purpose and written rules only through `code-review`'s sentences and its own reads; the inputs Scout computes are handed to the review job's batches only ([[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]).
+- **Blocker:** none.
+- **Unblocks with:** the computed removals in `get_pull_request`'s answer and a read of the rule files for the one-turn review, with tests.
+
+### Comments, replies and issues still take free text from the model (2026-11-20)
+
+- **Gap:** the review and the verdict take findings and Scout composes their text ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]); `comment_on_pull_request`, `comment_on_issue`, `reply_to_review_comment` and `create_issue` still post the text the model wrote.
+- **Blocker:** the owner's choice of templates for them (the artboard draws the reply and the issues).
+- **Unblocks with:** those functions taking structured fields and code composing their text, each with its test.
+
+### An Approvals card for a chat verdict shows findings, not the composed note (2026-11-20)
+
+- **Gap:** a verdict asked in chat is listed on the Approvals screen with its findings; the note Scout will compose from them is not shown there ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **Blocker:** none; the preview read exists on the worker's stdin.
+- **Unblocks with:** the Approvals card asking the same preview, with a spec.
+
+### The rule files are read at the reviewed commit, not at the base (2026-11-20)
+
+- **Gap:** the author of a pull request can write a rule file at the reviewed commit; the batch is told the file changed (`changedHere`) and to judge it, not rely on it ([[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]).
+- **Blocker:** a second snapshot at the base commit.
+- **Unblocks with:** reading the rules at the base when a review is shown to be misled by a changed rule.
+
+### A wave waits for its slowest batch (2026-11-20)
+
+- **Gap:** the batches of a wave run together and the next wave starts only when all of them ended; on a real run of two minutes forty, about one minute was spent waiting for the slowest batch.
+- **Blocker:** none.
+- **Unblocks with:** a pool that starts the next pending batch as soon as one ends, with its test of the order of saves.
+
+### A grant withdrawn between the executor's check and the send (2026-11-20)
+
+- **Gap:** the executor reads the GitHub grant just before it sends an approved action; a revoke that lands after that read and before the request reaches GitHub cannot be stopped.
+- **Blocker:** a known limit of the design: no check can sit between a send and the network.
+- **Unblocks with:** nothing; recorded so it is not reported again as a defect.
+
+### The mention review rows owed (2026-11-20)
+
+- **Gap:** eleven rows of the bell's Mention review group are not built: the started detail with the files count, the not-allowed note, the ready title with the comment count and verdict and its tone, the posting and posted words, the rejected entry and the dedicated card ([[pages/roadmap/prototype-migration]]).
+- **Blocker:** each needs data or a component the app does not have yet.
+- **Unblocks with:** the rows, one change each, as that page lists them.
+
+### A renderer wizard guard test failed once, suspected flake (2026-11-19)
+
+- **Gap:** one container run of the renderer's tests failed `src/app/core/wizard.guards.spec.ts` > `requireBotTokenGuard` > "redirects to / when hasProvisioning is false (no token, no guild)" (5491 of 5492 passed); the two runs after it on the same tree passed 5492 of 5492. The change under test touched no renderer file, so the failure is suspected to depend on timing or order, not on the code.
+- **Blocker:** none; it did not fail again, and the cause was not looked for.
+- **Unblocks with:** the failure seen a second time, then the guard's spec read for a shared or timed state, with its fix and repeated runs.
+
 ### A waiting approval GitHub never calls mergeable ends as timed out (2026-11-19)
 
 - **Gap:** with every check passed and GitHub's `mergeable` still not said, an approval that waits for the checks keeps waiting, and after two hours it ends as `timed-out`, so the bell says the checks did not finish although they did ([[pages/services/desktop-github/verdict-from-the-review-card]]).
@@ -61,17 +121,11 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 - **Blocker:** none.
 - **Unblocks with:** the LLM project saying whether the provider is local, read by the audit's registration, with its test.
 
-### A second verdict or other comments at the same commit are not sent (2026-11-19)
+### A review makes one pass over every concern (2026-11-19)
 
-- **Gap:** after a first verdict on a pull request at a commit, a different verdict or different comments at the same commit are not sent. The owner decided on 2026-11-19 that they must be.
-- **Blocker:** none; it is the next change.
-- **Unblocks with:** that change, with its tests.
-
-### A review judges mostly what the patches show (2026-11-19)
-
-- **Gap:** a review batch reads the patches and what its five reads find; it is not given the purpose of the pull request nor the project's own rules, and it makes one pass over every concern with no pass that tries to refute each finding.
+- **Gap:** a review batch is handed the purpose, the project's rules and what was removed ([[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]), but it still makes one pass over every concern, with no pass that tries to refute each finding and none across batches.
 - **Blocker:** none; these are the next changes.
-- **Unblocks with:** the pull request's purpose and the project's rules in the batch request, one pass per concern, and a second pass that tries to refute each finding, each with its test.
+- **Unblocks with:** one pass per concern, and a second pass that tries to refute each finding, each with its test.
 
 ### The e2e suite was not run for the review job in the bell (2026-11-19)
 
@@ -227,13 +281,13 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:273`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1695`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:255`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:273`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1707`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:240`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
 ### The review card keeps only the end of a failed run's output (2026-11-13)
 
-- **Gap:** a failed sandbox run's result leads with the lines that name the failure, then the last 4,000 characters ([[pages/services/sandbox]]); `run_pull_request_tests` answers the model both, but the run kept for the review's card is cut to its last 4,000 (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:249`), and the desktop's parser cuts to the last 4,000 again (`ui/packages/renderer/src/app/core/review-findings.ts:278`), so a failure the model saw in the failure section can be absent from the card ([[pages/services/plugin-github]]).
+- **Gap:** a failed sandbox run's result leads with the lines that name the failure, then the last 4,000 characters ([[pages/services/sandbox]]); `run_pull_request_tests` answers the model both, but the run kept for the review's card is cut to its last 4,000 (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:249`), and the desktop's parser cuts to the last 4,000 again (`ui/packages/renderer/src/app/core/review-findings.ts:263`), so a failure the model saw in the failure section can be absent from the card ([[pages/services/plugin-github]]).
 - **Blocker:** the kept output counts toward the 24,000-character findings block, and the card is a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** the kept run carrying the failure section within a bound the findings block allows, the parser keeping it, and the card's tests line showing it, with the artboard updated and a spec row per state.
 
@@ -322,13 +376,13 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A pull request verdict given again may be sent twice after a claim that was not confirmed (2026-11-11)
 
-- **Gap:** the verdict card's once-only enqueue, `EnqueueApprovedOnceAsync` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:155`, called from `src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:195`), answers an earlier action unless it was rejected or executed with an outcome starting with `failed` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:178`). That queues a verdict again when its earlier action was recorded `failed: not confirmed`, or rejected by the claim path as not confirmed after a lapsed claim across a revoke or a new grant; both mean it may already be on GitHub. The findings card's issues stopped doing this in review round 2 of [[pages/roadmap/approve-together]] phase 1, where such a row answers the click ([[pages/services/control-plane]], The findings card's issues).
+- **Gap:** the verdict card's once-only enqueue, `EnqueueApprovedOnceAsync` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:155`, called from `src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:217`), answers an earlier action unless it was rejected or executed with an outcome starting with `failed` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:178`). That queues a verdict again when its earlier action was recorded `failed: not confirmed`, or rejected by the claim path as not confirmed after a lapsed claim across a revoke or a new grant; both mean it may already be on GitHub. The findings card's issues stopped doing this in review round 2 of [[pages/roadmap/approve-together]] phase 1, where such a row answers the click ([[pages/services/control-plane]], The findings card's issues).
 - **Blocker:** none; out of the scope of that review, which was the card.
 - **Unblocks with:** the same rule on the verdict path, through `WriteGateService.NotConfirmedOutcome` and `WriteGateService.IsNotConfirmed`, with a test that drives the lapse through the real claim; the verdict's own check on GitHub for one already given may cover part of it, which the change should read first.
 
 ### Six name rules still accept a trailing newline (2026-11-11)
 
-- **Gap:** a .NET regex `$` also matches before a final newline, so a value such as `main` followed by a newline passes these rules: the git reference and file extension rules of the GitHub plugin (`src/Scout.Plugin.GitHub/GitHubNames.cs:39`, `:33`), the verdict card's repository part and commit rules (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:136`, `:139`), the owner control's name rule (`src/Scout.ControlPlane/Controls/OwnerControlService.cs:65`) and the comment rules' name rule (`src/Scout.ControlPlane/Operator/CommentRules.cs:311`). The repository name rules of the plugin and of the findings card were anchored with `\z` in review round 1 of [[pages/roadmap/approve-together]] phase 1.
+- **Gap:** a .NET regex `$` also matches before a final newline, so a value such as `main` followed by a newline passes these rules: the git reference and file extension rules of the GitHub plugin (`src/Scout.Plugin.GitHub/GitHubNames.cs:39`, `:33`), the verdict card's repository part and commit rules (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:153`, `:156`), the owner control's name rule (`src/Scout.ControlPlane/Controls/OwnerControlService.cs:65`) and the comment rules' name rule (`src/Scout.ControlPlane/Operator/CommentRules.cs:311`). The repository name rules of the plugin and of the findings card were anchored with `\z` in review round 1 of [[pages/roadmap/approve-together]] phase 1.
 - **Blocker:** none; none was named by a finding of that review.
 - **Unblocks with:** `\A` and `\z` in each, one row per rule with a trailing newline in its existing test, as the repository rules got.
 - **Done (2026-11-12):** the verdict card's repository part and commit rules, the owner control's name rule and the comment rules' name rule are anchored with `\A` and `\z`, and so are the findings card's finding id rule (`src/Scout.Plugin.GitHub/ReviewFindings.cs:55`) and the comment desk's id rule for fetched comments (`src/Scout.Operator/CommentDesk.cs:368`), each with a trailing-newline row (`tests/Scout.Operator.Tests/CommentDeskTests.cs:90`, `tests/Scout.ControlPlane.Tests/WriteGate/PullRequestVerdictServiceTests.cs:198`, `tests/Scout.ControlPlane.Tests/Controls/OwnerControlServiceTests.cs:39`, `tests/Scout.ControlPlane.Tests/Operator/CommentServiceTests.cs:186`, `tests/Scout.Plugin.GitHub.Tests/GitHubPluginFindingsTests.cs:129`). Still open: the plugin's git reference and file extension rules, which feed only reads and a snapshot into Scout's own folder.
@@ -416,7 +470,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A review reads every non-zero exit as "Tests failed" (2026-11-10)
 
-- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:107`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
+- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:94`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
 - **Unblocks with:** `testsLine` reading "Tests could not be started: <reason>" when `ran` is true and `reason` is set, with rows for a restore failure, exits 126 and 127, an exit 1 without a reason and a pass; no contract change, the field is already in the block. Exit 2 from a line `sh` cannot parse stays "Tests failed".
 
 ### A project that mixes passing tests with tests that need Docker is reported as failed (2026-11-15)
@@ -444,17 +498,17 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### What the audit cards still take from the model after the sent titles (2026-11-12)
 
-- **Gap:** since 2026-11-12 a finding is sent once a done issues turn on its repository carries its title (`sentTitles`, `ui/packages/renderer/src/app/core/review-findings.store.ts:467`), no longer from the reply's English "queued for your approval". What the card knows is still what it asked, not what was queued: a done turn where the model called nothing still reads as queued; a turn that fails after queuing some issues marks none sent, so Open offers them again; whether an issue was already queued is the model's check, with no dedupe at the gate for model calls; and a reply that cites an earlier issue link of the same repository still marks the cards opened, since the queued sentence no longer wins over a link. Two findings of one audit with the same trimmed title both read as sent once one is sent, since a title is the only identity an issue has on the turn. An issue the owner later rejects in Approvals still reads "Issue queued" on the card, and a done turn whose reply says the issues could not be queued is contradicted by the card; both stay so until the card reads the queue's state.
+- **Gap:** since 2026-11-12 a finding is sent once a done issues turn on its repository carries its title (`sentTitles`, `ui/packages/renderer/src/app/core/review-findings.store.ts:557`), no longer from the reply's English "queued for your approval". What the card knows is still what it asked, not what was queued: a done turn where the model called nothing still reads as queued; a turn that fails after queuing some issues marks none sent, so Open offers them again; whether an issue was already queued is the model's check, with no dedupe at the gate for model calls; and a reply that cites an earlier issue link of the same repository still marks the cards opened, since the queued sentence no longer wins over a link. Two findings of one audit with the same trimmed title both read as sent once one is sent, since a title is the only identity an issue has on the turn. An issue the owner later rejects in Approvals still reads "Issue queued" on the card, and a done turn whose reply says the issues could not be queued is contradicted by the card; both stay so until the card reads the queue's state.
 - **Unblocks with:** the card's Open going through `ApproveCardIssues` (approve-together phase 3, [[pages/roadmap/approve-together]]), which takes the model off the path, dedupes in code and answers each issue's "Opened #N"; then a gate-level dedupe for the model's own `create_issue` calls.
 
 ### A short and a full hash of one commit are two keys (2026-11-10)
 
-- **Gap:** one action per pull request and commit compares the commit as text, in the renderer's store, in main and in the control plane (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:348`). A review that names `ec7f951` and a later one that names the full hash of the same commit are two keys, so a second Post or verdict is accepted.
+- **Gap:** one action per pull request and commit compares the commit as text, in the renderer's store, in main and in the control plane (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:433`). A review that names `ec7f951` and a later one that names the full hash of the same commit are two keys, so a second Post or verdict is accepted.
 - **Unblocks with:** comparing by prefix when one side is a prefix of the other, at least seven characters, in the three places, with a row per place.
 
 ### Doc summaries on functions that are not exported (2026-11-10)
 
-- **Gap:** `stopRunning` in main and `outcome` in the findings store carry a doc summary although neither is exported (`ui/packages/main/src/quick-ask/quick-ask.ts:1381`, `ui/packages/renderer/src/app/core/review-findings.store.ts:480`); both files already had such summaries on local functions, so the lane followed the precedent, which is wider than the rule that allows a summary on a public type or member.
+- **Gap:** `stopRunning` in main and `outcome` in the findings store carry a doc summary although neither is exported (`ui/packages/main/src/quick-ask/quick-ask.ts:1390`, `ui/packages/renderer/src/app/core/review-findings.store.ts:570`); both files already had such summaries on local functions, so the lane followed the precedent, which is wider than the rule that allows a summary on a public type or member.
 - **Unblocks with:** a decision on local functions in `ui/`, then one sweep of the two files.
 
 ### No GitHub action goes through the one-minute release window in a test (2026-11-10)
@@ -479,7 +533,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A queued GitHub write is checked only after the owner approved it (2026-11-10)
 
-- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:473`, `:496`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
+- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:525`, `:496`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
 - **Unblocks with:** running the checks that need no network when the call is queued, and answering the model the refusal instead of queuing; the checks that read GitHub (the diff a review comment anchors to) stay at the send.
 
 ### A rejected action keeps its whole payload (2026-11-10)
@@ -494,17 +548,17 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The two GitHub runners each parse a payload with their own helpers (2026-11-10)
 
-- **Gap:** `GitHubWriteRunner` and `GitHubVerdictRunner` each carry a `Read`, a `Text` and a `Number` over the payload's JSON (`src/Scout.Plugin.GitHub/GitHubWriteRunner.cs:124`, `src/Scout.Plugin.GitHub/GitHubVerdictRunner.cs:88`), written twice with small differences.
+- **Gap:** `GitHubWriteRunner` and `GitHubVerdictRunner` each carry a `Read`, a `Text` and a `Number` over the payload's JSON (`src/Scout.Plugin.GitHub/GitHubWriteRunner.cs:127`, `src/Scout.Plugin.GitHub/GitHubVerdictRunner.cs:114`), written twice with small differences.
 - **Unblocks with:** a third reader of an action's payload; until then two copies are cheaper than a shared type (Rule C).
 
 ### The five GitHub write functions still carry a body that sends (2026-11-10)
 
-- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:579` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
+- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:658` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
 - **Unblocks with:** bodies that answer the queued sentence and send nothing, the senders staying internal to the runner.
 
 ### What is left of the review turn nothing builds (2026-11-10)
 
-- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1585`, `:1633`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
+- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1597`, `:1645`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
 - **Unblocks with:** deleting the flag, the marker, the two tags and their specs in one change; the compiler names every use.
 
 ### The conductor's own failure write is not bounded (2026-11-10)
@@ -575,7 +629,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### An action settled from the write log carries no result (2026-11-09)
 
-- **Gap:** an action whose write is already in the write log is marked executed with the logged outcome and no result (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:226`), because the write-log entry keeps the outcome only. A GitHub verdict settled that way reads as given with an empty link, and a settled failure shows "not recorded" in place of the failure text (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:228`, `:229`).
+- **Gap:** an action whose write is already in the write log is marked executed with the logged outcome and no result (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:226`), because the write-log entry keeps the outcome only. A GitHub verdict settled that way reads as given with an empty link, and a settled failure shows "not recorded" in place of the failure text (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:250`, `:251`).
 - **Blocker:** a decision on where the result is kept: on the write-log entry, or on the action before it is marked.
 - **Unblocks with:** the result kept where the settle can read it and passed to the mark, with a test where a verdict logged but never marked is settled and its state carries the link, and one where a settled failure carries its text.
 
@@ -947,7 +1001,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 - **Fix:** none expected; what remains open is the owner confirming on screen that the bubble stays above native Wayland windows. If it does not, record it under ADR 0028.
 - **Measured 2026-10-31 with Electron 45 under `--ozone-platform=x11`:** every window COSMIC's X window manager manages, whatever its type, is placed where COSMIC chooses, ignores `setPosition` and `setBounds` before and after `show`, reports not always-on-top and gets a server-side frame. A window created with `focusable: false`, shown, then made focusable and focused stays unmanaged, keeps its position and always-on-top, and `document.hasFocus()` reported focus to its page, but that was not real X keyboard focus (see the last bullet).
 - **Measured 2026-10-31 on the owner's COSMIC session** (AppImage started with `--ozone-platform=x11`, read with `xwininfo` and `xprop` on `DISPLAY=:1`): the bubble window was 64x64 at +1840+1190, the bottom-right corner of the 1920x1080 laptop display (offset +0+190) minus the 16 px margin, so the corner and the display choice hold. COSMIC's X window manager reports itself as "Smithay X WM" and lists `_NET_WM_STATE_ABOVE` and `_NET_WM_STATE_SKIP_TASKBAR` in `_NET_SUPPORTED`. The bubble carries no `WM_STATE` and is absent from `_NET_CLIENT_LIST_STACKING`: with `focusable: false` Electron creates it as a window the X window manager does not manage, which the compositor draws above managed windows. Whether that holds above native Wayland windows is only visible on screen.
-- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:1103`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
+- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:1112`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
 
 ### Voice transcript shown inside the reply, not as the question (2026-10-31)
 
@@ -964,7 +1018,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### Floating button does not follow display changes (2026-10-31)
 
-- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:629`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
+- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:636`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
 - **Fix:** reposition it on `screen`'s `display-metrics-changed` and `display-removed` events, removing the listeners on dispose, with a test that emits each event on the fake screen.
 
 ### Clear on the Chat screen keeps the worker's local memory (2026-10-30)

@@ -223,6 +223,10 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
         WriteToken("""{"access_token":"ghu_write"}""", new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc));
         _respond = request => request.RequestUri!.AbsolutePath switch
         {
+            "/repos/octocat/hello-world/pulls/1" => Json("""{"head":{"sha":"abc1234def"},"user":{"login":"alice"},"mergeable":true}"""),
+            "/user" => Json("""{"login":"octocat"}"""),
+            "/repos/octocat/hello-world/commits/abc1234def/check-runs" => Json("""{"total_count":0,"check_runs":[]}"""),
+            "/repos/octocat/hello-world/commits/abc1234def/status" => Json("""{"statuses":[]}"""),
             "/repos/octocat/hello-world/pulls/1/files" => Json("""[{"filename":"a.cs","status":"modified","additions":1,"deletions":0,"patch":"@@ -1 +1 @@\n-x\n+y"}]"""),
             "/repos/octocat/hello-world/pulls/1/reviews" => Json("""{"id":1,"html_url":"https://github.com/octocat/hello-world/pull/1#pullrequestreview-1"}"""),
             "/repos/octocat/hello-world/issues" => Json("""{"number":2,"html_url":"https://github.com/octocat/hello-world/issues/2"}"""),
@@ -235,8 +239,7 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
             ["owner"] = "octocat",
             ["repo"] = "hello-world",
             ["number"] = 1,
-            ["body"] = "b",
-            ["comments"] = """[{"path":"a.cs","line":1,"body":"c"}]""",
+            ["findings_json"] = """[{"id":"a","severity":"fix","title":"t","path":"a.cs","line":1,"why":"w","fix":"f"}]""",
         };
         var issue = new KernelArguments
         {
@@ -253,7 +256,11 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
         reviewAnswer.ShouldBe("Posted a review on octocat/hello-world#1 with 1 comment(s): https://github.com/octocat/hello-world/pull/1#pullrequestreview-1");
         issueAnswer.ShouldBe("Opened issue #2 on octocat/hello-world: https://github.com/octocat/hello-world/issues/2");
         _requests.Select(r => (r.Method, r.Path, r.Authorization)).ShouldBe([
+            ("GET", "/repos/octocat/hello-world/pulls/1", "Bearer ghu_write"),
+            ("GET", "/user", "Bearer ghu_write"),
             ("GET", "/repos/octocat/hello-world/pulls/1/files", "Bearer ghu_write"),
+            ("GET", "/repos/octocat/hello-world/commits/abc1234def/check-runs", "Bearer ghu_write"),
+            ("GET", "/repos/octocat/hello-world/commits/abc1234def/status", "Bearer ghu_write"),
             ("POST", "/repos/octocat/hello-world/pulls/1/reviews", "Bearer ghu_write"),
             ("POST", "/repos/octocat/hello-world/issues", "Bearer ghu_write"),
         ]);

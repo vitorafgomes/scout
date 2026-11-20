@@ -93,15 +93,18 @@ public sealed class GitHubWriteRunner
             || Text(arguments, "repo") is not { } repo
             || Number(arguments, "number") is not { } number
             || number > int.MaxValue
-            || !arguments.TryGetValue("comments", out var comments))
+            || !(arguments.TryGetValue("findings", out var findings) || arguments.TryGetValue("findings_json", out findings)))
         {
             throw new WriteFailedException(Unreadable, "refused");
         }
 
-        var text = comments.ValueKind == JsonValueKind.String ? comments.GetString() : comments.GetRawText();
-        var (posted, _) = await _actions.PostReviewAsync(owner, repo, (int)number, Text(arguments, "body"), text, ct).ConfigureAwait(false);
+        var text = findings.ValueKind == JsonValueKind.String ? findings.GetString() : findings.GetRawText();
+        var extras = NoteExtras.Read(Value(arguments, "filesRead"), Value(arguments, "filesChanged"), Value(arguments, "notes"));
+        var (posted, _) = await _actions.PostReviewAsync(owner, repo, (int)number, text, Text(arguments, "commit"), extras, ct).ConfigureAwait(false);
         return new GitHubWriteDone(posted.HtmlUrl, await SignerAsync(GitHubWriteKind.Review, owner, repo, ct).ConfigureAwait(false));
     }
+
+    private static JsonElement? Value(Dictionary<string, JsonElement> arguments, string name) => arguments.TryGetValue(name, out var value) ? value : null;
 
     private async Task<string?> SignerAsync(GitHubWriteKind kind, string owner, string repo, CancellationToken ct)
     {

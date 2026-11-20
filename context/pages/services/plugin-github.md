@@ -31,7 +31,8 @@ Read the page your change touches, not all of them.
 |---|---|---|
 | [[pages/services/plugin-github/public-contract\|Public contract]] | Public contract | 10460 |
 | [[pages/services/plugin-github/how-it-works\|How it works]] | How it works | 1953 |
-| [[pages/services/plugin-github/the-writes\|The writes (ADR 0038 v1.3, ADR 0043, 2026-11-07)]] | The writes (ADR 0038 v1.3, ADR 0043, 2026-11-07) | 11855 |
+| [[pages/services/plugin-github/the-writes\|The writes (ADR 0038 v1.3, ADR 0043, 2026-11-07)]] | The writes (ADR 0038 v1.3, ADR 0043, 2026-11-07) | 11977 |
+| [[pages/services/plugin-github/the-review-note\|The review note (ADR 0063, 2026-11-20)]] | The review note; ReviewNote; findings_json; the note preview | 3117 |
 | [[pages/services/plugin-github/the-pull-request-s-checks-and-its-tests-in-a-con\|The pull request's checks and its tests in a container (ADR 0043, 2026-11-07)]] | The pull request's checks and its tests in a container (ADR 0043, 2026-11-07) | 8599 |
 | [[pages/services/plugin-github/the-audit-as-a-job\|The audit as a job (ADR 0042, 2026-11-07)]] | The audit as a job (ADR 0042, 2026-11-07) | 1588 |
 | [[pages/services/plugin-github/the-conventions-profile\|The conventions profile (ADR 0038 phase 4, 2026-11-06)]] | The conventions profile (ADR 0038 phase 4, 2026-11-06) | 1246 |

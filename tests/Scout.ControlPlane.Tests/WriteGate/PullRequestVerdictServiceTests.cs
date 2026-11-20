@@ -43,8 +43,10 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
         new FeaturesService(new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), Array.Empty<IFeatureCredentialValidator>())
             .SetWriteGrantAsync(FeatureCatalog.GitHubId, granted: true, confirmWrites: true, CancellationToken.None);
 
-    private static PullRequestVerdictRequest Approve(string commit = Sha, string body = "Ready to merge.") =>
-        new("octocat", "hello", 42, "approve", body, [new VerdictComment("src/Checkout.cs", 3, "c is new")], commit, "Tests: 3 checks passed.");
+    private static VerdictFinding Finding(string title = "c is new") => new("a", "fix", title, "src/Checkout.cs", 3, null, "Why.", "Fix.", null);
+
+    private static PullRequestVerdictRequest Approve(string commit = Sha, string title = "c is new") =>
+        new("octocat", "hello", 42, "approve", [Finding(title)], commit, "Tests: 3 checks passed.");
 
     [Fact]
     public async Task The_Owner_s_Click_Queues_The_Verdict_Already_Approved_With_What_The_Worker_Needs_And_Logs_The_Approval()
@@ -60,15 +62,16 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
         payload.GetProperty("repo").GetString().ShouldBe("hello");
         payload.GetProperty("number").GetInt32().ShouldBe(42);
         payload.GetProperty("verdict").GetString().ShouldBe("approve");
-        payload.GetProperty("body").GetString().ShouldBe("Ready to merge.");
         payload.GetProperty("commit").GetString().ShouldBe(Sha);
         payload.GetProperty("testsLine").GetString().ShouldBe("Tests: 3 checks passed.");
-        var comment = payload.GetProperty("comments").EnumerateArray().ShouldHaveSingleItem();
-        (comment.GetProperty("path").GetString(), comment.GetProperty("line").GetInt32(), comment.GetProperty("body").GetString())
-            .ShouldBe(("src/Checkout.cs", 3, "c is new"));
+        var finding = payload.GetProperty("findings").EnumerateArray().ShouldHaveSingleItem();
+        (finding.GetProperty("severity").GetString(), finding.GetProperty("path").GetString(), finding.GetProperty("line").GetInt32(), finding.GetProperty("title").GetString())
+            .ShouldBe(("fix", "src/Checkout.cs", 3, "c is new"), "the worker gets the findings to compose the note from");
+        payload.GetProperty("content").GetString()!.ShouldMatch("^[0-9a-f]{64}$", "the payload carries the digest of what it sends");
+        payload.TryGetProperty("body", out _).ShouldBeFalse("a verdict carries findings, never a body");
         var logged = (await _writes.ListAsync(10, CancellationToken.None)).ShouldHaveSingleItem();
         logged.ShouldBe(logged with { FeatureId = "github", Action = "Pull request verdicts", Target = "octocat/hello#42", Outcome = "approved", ApprovedBy = "owner", ActionId = action.Id });
-        (await File.ReadAllTextAsync(_writes.FilePath)).ShouldNotContain("Ready to merge.");
+        (await File.ReadAllTextAsync(_writes.FilePath)).ShouldNotContain("c is new");
     }
 
     [Fact]
@@ -79,15 +82,13 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
 
         var first = await Verdicts().GiveAsync(post, CancellationToken.None);
         var second = await Verdicts().GiveAsync(post, CancellationToken.None);
-        var approveAfter = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
 
         (first.FeatureId, first.Action, first.Target, first.Summary, first.Status)
             .ShouldBe(("github", "Pull request reviews", "octocat/hello#42", "Post a review on octocat/hello#42", PendingActionStatus.Approved));
         var payload = JsonDocument.Parse(first.Payload.ShouldNotBeNull()).RootElement;
         payload.GetProperty("verdict").GetString().ShouldBe("comment");
-        payload.GetProperty("comments").EnumerateArray().ShouldHaveSingleItem().GetProperty("body").GetString().ShouldBe("c is new");
-        second.Id.ShouldBe(first.Id);
-        approveAfter.Id.ShouldBe(first.Id);
+        payload.GetProperty("findings").EnumerateArray().ShouldHaveSingleItem().GetProperty("title").GetString().ShouldBe("c is new");
+        second.Id.ShouldBe(first.Id, "an identical click cannot post again");
         (await _actions.ListOpenAsync("github", CancellationToken.None)).ShouldHaveSingleItem().Id.ShouldBe(first.Id);
         var logged = (await _writes.ListAsync(10, CancellationToken.None)).ShouldHaveSingleItem();
         logged.ShouldBe(logged with { FeatureId = "github", Action = "Pull request reviews", Target = "octocat/hello#42", Outcome = "approved", ApprovedBy = "owner", ActionId = first.Id });
@@ -123,21 +124,59 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task One_Commit_Of_One_Pull_Request_Gets_One_Verdict_However_Often_Or_Whichever_Way_It_Is_Clicked()
+    public async Task A_Different_Verdict_At_A_Commit_That_Already_Has_One_Is_Queued_And_Logged_As_Its_Own_Approval()
     {
         await GrantGitHubAsync();
 
         var first = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
-        var again = await Verdicts().GiveAsync(Approve(body: "Edited summary."), CancellationToken.None);
         var otherVerdict = await Verdicts().GiveAsync(Approve() with { Verdict = "request_changes" }, CancellationToken.None);
+
+        otherVerdict.Id.ShouldNotBe(first.Id, "a different verdict at the same commit is its own action");
+        (otherVerdict.Action, otherVerdict.Status).ShouldBe(("Pull request verdicts", PendingActionStatus.Approved));
+        (await _writes.ListAsync(10, CancellationToken.None)).Select(e => (e.Outcome, e.ApprovedBy, e.ActionId))
+            .ShouldBe([("approved", "owner", first.Id), ("approved", "owner", otherVerdict.Id)], ignoreOrder: true, customMessage: "each verdict is approved and logged on its own");
+    }
+
+    [Fact]
+    public async Task The_Same_Verdict_With_Different_Comments_Is_Queued_Again()
+    {
+        await GrantGitHubAsync();
+
+        var first = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
+        var otherComments = await Verdicts().GiveAsync(Approve(title: "Edited by the owner"), CancellationToken.None);
         var otherCommit = await Verdicts().GiveAsync(Approve(commit: "fedcba9"), CancellationToken.None);
         var otherPullRequest = await Verdicts().GiveAsync(Approve() with { Number = 43 }, CancellationToken.None);
 
-        again.Id.ShouldBe(first.Id);
-        otherVerdict.Id.ShouldBe(first.Id);
-        otherCommit.Id.ShouldNotBe(first.Id);
-        otherPullRequest.Id.ShouldNotBe(first.Id);
-        (await _writes.ListAsync(10, CancellationToken.None)).Count.ShouldBe(3);
+        new[] { otherComments.Id, otherCommit.Id, otherPullRequest.Id }.ShouldNotContain(first.Id, "other comments, another commit or another pull request is its own action");
+        (await _writes.ListAsync(10, CancellationToken.None)).Count.ShouldBe(4, "each one is approved and logged on its own");
+    }
+
+    [Fact]
+    public async Task An_Identical_Request_Answers_The_Action_Already_There_Even_After_It_Ran()
+    {
+        await GrantGitHubAsync();
+        var first = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
+        var again = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
+        await Gate().RecordAsync("github", "Pull request verdicts", "octocat/hello#42", "succeeded", first.Id, "https://github.com/r/88", CancellationToken.None);
+
+        var afterItRan = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
+
+        (again.Id, afterItRan.Id).ShouldBe((first.Id, first.Id), "an identical request is ignored, before and after it ran");
+        (await _writes.ListAsync(10, CancellationToken.None)).Count(e => e.Outcome == "approved").ShouldBe(1, "one approval is logged");
+    }
+
+    [Fact]
+    public async Task An_Action_Without_A_Content_Digest_Is_Never_Identical()
+    {
+        await GrantGitHubAsync();
+        var old = await _actions.EnqueueApprovedOnceAsync(
+            "github", "Pull request verdicts", "octocat/hello#42", "Approve octocat/hello#42",
+            $$$"""{"owner":"octocat","repo":"hello","number":42,"verdict":"approve","commit":"{{{Sha}}}"}""", _ => false, CancellationToken.None);
+        await _actions.ExecuteAsync(old.Action.Id, "succeeded", "https://github.com/r/1", _ => Task.CompletedTask, CancellationToken.None);
+
+        var again = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
+
+        again.Id.ShouldNotBe(old.Action.Id, "an action queued before the digest existed is never the same as a new request");
     }
 
     [Fact]
@@ -149,7 +188,7 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
         var whileRunning = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
         await _actions.ExecuteAsync(running.Id, "succeeded", "https://github.com/octocat/hello/pull/42#pullrequestreview-88", _ => Task.CompletedTask, CancellationToken.None);
 
-        var afterGiven = await Verdicts().GiveAsync(Approve() with { Verdict = "request_changes" }, CancellationToken.None);
+        var afterGiven = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
 
         (whileRunning.Id, afterGiven.Id).ShouldBe((running.Id, running.Id));
     }
@@ -180,14 +219,14 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
     public async Task A_Malformed_Or_Oversized_Verdict_Is_Refused_Before_Anything_Is_Queued()
     {
         await GrantGitHubAsync();
-        var bad = new PullRequestVerdictRequest("octo cat", "hello", 0, "merge", "b", [new VerdictComment("", 0, "")], "not-a-sha", null);
-        var huge = Approve(body: new string('x', 200_001));
+        var bad = new PullRequestVerdictRequest("octo cat", "hello", 0, "merge", [Finding() with { Path = "", Line = 0 }], "not-a-sha", null);
+        var huge = Approve(title: new string('x', 200_001));
 
         var invalid = await Should.ThrowAsync<FeatureValidationFailedException>(() => Verdicts().GiveAsync(bad, CancellationToken.None));
         var tooLarge = await Should.ThrowAsync<FeatureValidationFailedException>(() => Verdicts().GiveAsync(huge, CancellationToken.None));
 
-        invalid.Errors.Keys.Order(StringComparer.Ordinal).ShouldBe(["comments", "commit", "number", "repository", "verdict"]);
-        tooLarge.Errors.ShouldBe(new Dictionary<string, string> { ["payload"] = "The verdict is over 200000 characters; keep fewer comments." });
+        invalid.Errors.Keys.Order(StringComparer.Ordinal).ShouldBe(["commit", "findings", "number", "repository", "verdict"]);
+        tooLarge.Errors.ShouldBe(new Dictionary<string, string> { ["payload"] = "The verdict is over 200000 characters; keep fewer findings." });
         (await _actions.ListOpenAsync("github", CancellationToken.None)).ShouldBeEmpty();
     }
 
@@ -362,7 +401,7 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
     public async Task A_Click_On_A_Commit_Whose_Chat_Verdict_Waits_Replaces_It_With_Exactly_The_Card_s_Verdict(string asked)
     {
         await GrantGitHubAsync();
-        var arguments = $$$"""{"commit":"{{{Sha}}}","number":"42","owner":"octocat","repo":"hello","verdict":"{{{asked}}}","body":"The model's text.","comments_json":"[]"}""";
+        var arguments = $$$"""{"commit":"{{{Sha}}}","number":"42","owner":"octocat","repo":"hello","verdict":"{{{asked}}}","findings_json":"[]"}""";
         var waiting = await Gate().RequestAsync("github", "Pull request verdicts", "GitHubActions.give_pull_request_verdict", "s", arguments, CancellationToken.None);
 
         var clicked = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
@@ -372,9 +411,9 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
         clicked.Id.ShouldNotBe(waiting.ActionId);
         (clicked.Status, clicked.Summary, clicked.Target).ShouldBe((PendingActionStatus.Approved, "Approve octocat/hello#42", "octocat/hello#42"));
         var runs = JsonDocument.Parse(clicked.Payload!).RootElement;
-        (runs.GetProperty("verdict").GetString(), runs.GetProperty("body").GetString(), runs.GetProperty("testsLine").GetString())
-            .ShouldBe(("approve", "Ready to merge.", "Tests: 3 checks passed."));
-        runs.GetProperty("comments").EnumerateArray().ShouldHaveSingleItem().GetProperty("body").GetString().ShouldBe("c is new");
+        (runs.GetProperty("verdict").GetString(), runs.GetProperty("testsLine").GetString())
+            .ShouldBe(("approve", "Tests: 3 checks passed."));
+        runs.GetProperty("findings").EnumerateArray().ShouldHaveSingleItem().GetProperty("title").GetString().ShouldBe("c is new");
         (await _writes.ListAsync(10, CancellationToken.None)).Select(e => (e.Outcome, e.ActionId)).ShouldBe([
             ("approved", clicked.Id),
             ("rejected: Replaced by the owner's verdict from the review card.", waiting.ActionId),
@@ -403,8 +442,10 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
         await Gate().RecordAsync("github", "Pull request verdicts", "octocat/hello#42", "succeeded", given.Id, "https://github.com/r/88", CancellationToken.None);
 
         var executed = (await _actions.FindAsync(given.Id, CancellationToken.None)).ShouldNotBeNull();
-        executed.Payload.ShouldBe($$$"""{"owner":"octocat","repo":"hello","number":42,"verdict":"approve","commit":"{{{Sha}}}"}""");
-        (await File.ReadAllTextAsync(_actions.FilePath)).ShouldNotContain("Ready to merge.");
+        executed.Payload.ShouldNotBeNull().ShouldMatch(
+            $$$"""^\{"owner":"octocat","repo":"hello","number":42,"verdict":"approve","commit":"{{{Sha}}}","content":"[0-9a-f]{64}"\}$""",
+            "an executed verdict keeps which pull request, commit and verdict it was, and its content digest");
+        (await File.ReadAllTextAsync(_actions.FilePath)).ShouldNotContain("c is new");
         (await Verdicts().FindAsync("octocat/hello", 42, Sha, CancellationToken.None)).ShouldNotBeNull().ActionId.ShouldBe(given.Id);
     }
 
@@ -426,15 +467,70 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task A_Null_Comment_Is_Refused_As_An_Invalid_Comment_Before_Anything_Is_Queued()
+    public async Task A_Null_Or_Incomplete_Finding_Is_Refused_Before_Anything_Is_Queued()
     {
         await GrantGitHubAsync();
-        var card = PullRequestVerdictRequest.FromCard("octocat/hello", 42, "approve", "Ready to merge.", "[null]", Sha, null);
+        string[] cards =
+        [
+            "[null]",
+            """[{"id":"a","severity":"major","title":"t","path":"a.cs","line":1,"why":"w","fix":"f"}]""",
+            """[{"id":"a","severity":"fix","title":"t","path":"a.cs","line":1,"why":"w"}]""",
+            """[{"id":"","severity":"fix","title":"t","path":"a.cs","line":1,"why":"w","fix":"f"}]""",
+        ];
 
-        var invalid = await Should.ThrowAsync<FeatureValidationFailedException>(() => Verdicts().GiveAsync(card, CancellationToken.None));
+        foreach (var findings in cards)
+        {
+            var invalid = await Should.ThrowAsync<FeatureValidationFailedException>(
+                () => Verdicts().GiveAsync(PullRequestVerdictRequest.FromCard("octocat/hello", 42, "approve", findings, Sha, null), CancellationToken.None));
+            invalid.Errors.ShouldBe(
+                new Dictionary<string, string> { ["findings"] = "Every finding needs an id, a severity of block, fix or nit, a title, a path, a positive line, a why and a fix." },
+                $"{findings} is refused");
+        }
 
-        invalid.Errors.ShouldBe(new Dictionary<string, string> { ["comments"] = "Every comment needs a path, a positive line and a body." });
-        (await _actions.ListOpenAsync("github", CancellationToken.None)).ShouldBeEmpty();
+        (await _actions.ListOpenAsync("github", CancellationToken.None)).ShouldBeEmpty("nothing is queued");
+    }
+
+    [Fact]
+    public async Task Findings_That_Share_An_Id_Are_Refused_Before_Anything_Is_Queued()
+    {
+        await GrantGitHubAsync();
+        const string Findings = """[{"id":"a","severity":"fix","title":"t","path":"a.cs","line":1,"why":"w","fix":"f"},{"id":"a","severity":"nit","title":"u","path":"b.cs","line":2,"why":"w","fix":"f"}]""";
+
+        var invalid = await Should.ThrowAsync<FeatureValidationFailedException>(
+            () => Verdicts().GiveAsync(PullRequestVerdictRequest.FromCard("octocat/hello", 42, "approve", Findings, Sha, null), CancellationToken.None));
+
+        invalid.Errors.ShouldBe(
+            new Dictionary<string, string> { ["findings"] = "Each finding needs its own id; two findings share one." },
+            "two findings with one id are refused with their own sentence");
+        (await _actions.ListOpenAsync("github", CancellationToken.None)).ShouldBeEmpty("nothing is queued for the owner to approve");
+    }
+
+    [Fact]
+    public async Task Counts_That_Do_Not_Come_Together_Or_Notes_Over_The_Bounds_Are_Refused_Before_Anything_Is_Queued()
+    {
+        await GrantGitHubAsync();
+
+        var oneCount = await Should.ThrowAsync<FeatureValidationFailedException>(() => Verdicts().GiveAsync(Approve() with { FilesRead = 3 }, CancellationToken.None));
+        var moreReadThanChanged = await Should.ThrowAsync<FeatureValidationFailedException>(() => Verdicts().GiveAsync(Approve() with { FilesRead = 4, FilesChanged = 3 }, CancellationToken.None));
+        var tooManyNotes = await Should.ThrowAsync<FeatureValidationFailedException>(() => Verdicts().GiveAsync(Approve() with { Notes = [.. Enumerable.Repeat("n", 21)] }, CancellationToken.None));
+        var longNote = await Should.ThrowAsync<FeatureValidationFailedException>(() => Verdicts().GiveAsync(Approve() with { Notes = [new string('n', 301)] }, CancellationToken.None));
+
+        new[] { oneCount, moreReadThanChanged, tooManyNotes, longNote }.Select(e => string.Join(",", e.Errors.Keys)).ShouldBe(["files", "files", "notes", "notes"]);
+        (await _actions.ListOpenAsync("github", CancellationToken.None)).ShouldBeEmpty("nothing is queued");
+        (await Verdicts().GiveAsync(Approve() with { FilesRead = 3, FilesChanged = 3, Notes = ["2 files not read."] }, CancellationToken.None)).Status
+            .ShouldBe(PendingActionStatus.Approved, "counts that come together and notes within the bounds are queued");
+    }
+
+    [Fact]
+    public async Task A_Verdict_Asked_In_Chat_Lists_Its_Findings_For_The_Owner()
+    {
+        await GrantGitHubAsync();
+        const string arguments = """{"findings_json":"[{\"id\":\"a\",\"severity\":\"fix\",\"title\":\"Move has no lock\"}]","commit":"0123456","number":"42","owner":"octocat","repo":"hello","verdict":"approve"}""";
+
+        var decision = await Gate().RequestAsync("github", "Pull request verdicts", "GitHubActions.give_pull_request_verdict", "give_pull_request_verdict(...)", arguments, CancellationToken.None);
+
+        var waiting = (await _actions.FindAsync(decision.ActionId!, CancellationToken.None)).ShouldNotBeNull();
+        waiting.ListedText().Body.ShouldBe("""[{"id":"a","severity":"fix","title":"Move has no lock"}]""", "the owner reads what was queued: its findings");
     }
 
     [Fact]

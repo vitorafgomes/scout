@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.53"
+version: "1.54"
 date: 2026-11-08
-updated: 2026-11-19
-changes: "v1.53 (2026-11-19): the review card reads a run that could not run its tests, and a conflict ends a waiting approval. v1.52 (2026-11-19): the review job in the bell, its controls, the quiet chat and the card's measured line. v1.51 (2026-11-17): the data folder row names the review job. v1.50 (2026-11-15): Approve when the checks pass. v1.49 (2026-11-15): an update that fails says its own reason, never the network by default. v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+updated: 2026-11-20
+changes: "v1.54 (2026-11-20): prototype corrections and the mention review entries. v1.53 (2026-11-19): the review card reads a run that could not run its tests, and a conflict ends a waiting approval. v1.52 (2026-11-19): the review job in the bell, its controls, the quiet chat and the card's measured line. v1.51 (2026-11-17): the data folder row names the review job. v1.50 (2026-11-15): Approve when the checks pass. v1.49 (2026-11-15): an update that fails says its own reason, never the network by default. v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,11 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-20 - Prototype corrections and the mention review entries
+
+- **What changed:** the Main artboard draws the review job's pauses, the review card's editor, rule line, known list and last output, the closed waiting approval, and the states of a second verdict and of the note preview; a stopped test run reads "The tests gave no result." in every artboard ([[pages/conventions/desktop-prototype]]). The bell's mention review names who asked, and its ready entry reads "Nothing is posted on GitHub before you approve it in the chat." with Open in the chat.
+- **Tests:** `ui/packages/main/test/notifications-mention-review.test.ts`, the started and the ready entries.
 
 ## 2026-11-19 - The review card reads a run that could not run its tests; a conflict ends a waiting approval
 

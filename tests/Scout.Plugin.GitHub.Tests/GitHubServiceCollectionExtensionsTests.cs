@@ -57,6 +57,17 @@ public sealed class GitHubServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void With_Token_The_Verdict_Runner_Is_The_Review_Note_Previewer_And_Without_One_There_Is_None()
+    {
+        using var provider = Build(Config(token: "test-token"));
+        using var without = Build(Config(token: ""));
+
+        provider.GetService<Scout.Conversation.Abstractions.IReviewNotePreview>().ShouldBeSameAs(
+            provider.GetRequiredService<GitHubVerdictRunner>(), "the preview runs the verdict's own composing path");
+        without.GetService<Scout.Conversation.Abstractions.IReviewNotePreview>().ShouldBeNull("without GitHub there is no preview");
+    }
+
+    [Fact]
     public void With_Token_Registers_GitHub_Named_Plugin()
     {
         using var provider = Build(Config(token: "test-token"));

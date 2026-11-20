@@ -43,7 +43,7 @@ public sealed class GitHubActionsPluginReviewJobTests : IDisposable
     [Fact]
     public async Task Start_passes_every_changed_file_the_head_and_the_left_out_count_and_relays_the_sentence()
     {
-        _reviews.StartAsync("octocat", "hello", 42, Head, Arg.Any<IReadOnlyList<ChangedFile>>(), 1, Arg.Any<int>(), Arg.Any<PullRequestCheckCounts?>(), Arg.Any<CancellationToken>())
+        _reviews.StartAsync("octocat", "hello", 42, Head, Arg.Any<IReadOnlyList<ChangedFile>>(), 1, Arg.Any<int>(), Arg.Any<PullRequestCheckCounts?>(), Arg.Any<CancellationToken>(), Arg.Any<PullRequestPurpose?>())
             .Returns("review started: 3 files, 2 batches, octocat/hello#42 at abc1234.");
 
         var answer = await Plugin().StartPullRequestReviewAsync("octocat", "hello", 42, CancellationToken.None);
@@ -147,5 +147,77 @@ public sealed class GitHubActionsPluginReviewJobTests : IDisposable
         (await plugin.GetPullRequestReviewStatusAsync(owner, "hello", number, CancellationToken.None)).ShouldBe(expected, input);
         _reads.ReceivedCalls().ShouldBeEmpty($"{input}: GitHub is not read");
         _reviews.ReceivedCalls().ShouldBeEmpty($"{input}: no review is asked");
+    }
+
+    private void Described(string? body) =>
+        _reads.GetPullRequestAsync("octocat", "hello", 42, Arg.Any<CancellationToken>()).Returns(new PullRequestDetails(
+            42, "Checkout total", body, "alice", "open", false, "main", "feature", Head, 3, 0, "https://github.com/octocat/hello/pull/42", Files.Length, Files));
+
+    private static IssueDetails Issue(int number, bool pullRequest = false) =>
+        new(number, "Totals are negative", "A refund makes the total negative.", "acme-dev", "open", [], 0, $"https://github.com/octocat/hello/issues/{number}", pullRequest);
+
+    private PullRequestPurpose? StartedWith() => (PullRequestPurpose?)_reviews.ReceivedCalls().ShouldHaveSingleItem("the review starts").GetArguments()[9];
+
+    [Fact]
+    public async Task Start_passes_the_title_the_description_and_the_linked_issue_as_the_purpose()
+    {
+        Described("Keeps the total positive. See #3; fixes #7.");
+        _reads.GetIssueAsync("octocat", "hello", 7, Arg.Any<CancellationToken>()).Returns(Issue(7));
+
+        await Plugin().StartPullRequestReviewAsync("octocat", "hello", 42, CancellationToken.None);
+
+        StartedWith().ShouldBe(
+            new PullRequestPurpose("Checkout total", "Keeps the total positive. See #3; fixes #7.", 7, "Totals are negative", "A refund makes the total negative.", false),
+            "the purpose is the title, the description and the issue a closing keyword names, read once");
+        await _reads.Received(1).GetIssueAsync("octocat", "hello", Arg.Any<int>(), Arg.Any<CancellationToken>());
+        _writes.ReceivedCalls().ShouldBeEmpty("reading the purpose writes nothing on GitHub");
+    }
+
+    [Theory]
+    [InlineData("server error")]
+    [InlineData("timeout")]
+    [InlineData("not found")]
+    public async Task A_linked_issue_GitHub_fails_or_does_not_find_still_starts_the_review_marked_unread(string answer)
+    {
+        Described("Fixes #7.");
+        var issue = _reads.GetIssueAsync("octocat", "hello", 7, Arg.Any<CancellationToken>());
+        _ = answer switch
+        {
+            "server error" => issue.ThrowsAsync(new HttpRequestException("502 Bad Gateway")),
+            "timeout" => issue.ThrowsAsync(new TaskCanceledException("timed out")),
+            _ => issue.Returns((IssueDetails?)null),
+        };
+
+        await Plugin().StartPullRequestReviewAsync("octocat", "hello", 42, CancellationToken.None);
+
+        StartedWith().ShouldBe(
+            new PullRequestPurpose("Checkout total", "Fixes #7.", 7, null, null, true),
+            $"an issue read that ends in {answer} still starts the review, with the issue marked unread");
+        _writes.ReceivedCalls().ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Keeps the total positive.")]
+    [InlineData("Follows up on octocat/hello#9 and closes #42.")]
+    public async Task A_description_that_names_no_issue_reads_none(string? body)
+    {
+        Described(body);
+
+        await Plugin().StartPullRequestReviewAsync("octocat", "hello", 42, CancellationToken.None);
+
+        StartedWith().ShouldBe(new PullRequestPurpose("Checkout total", body, null, null, null, false), "a description that names no issue, or only the pull request itself, has none");
+        await _reads.DidNotReceiveWithAnyArgs().GetIssueAsync(default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task A_number_GitHub_answers_as_a_pull_request_is_no_issue()
+    {
+        Described("Fixes #8.");
+        _reads.GetIssueAsync("octocat", "hello", 8, Arg.Any<CancellationToken>()).Returns(Issue(8, pullRequest: true));
+
+        await Plugin().StartPullRequestReviewAsync("octocat", "hello", 42, CancellationToken.None);
+
+        StartedWith().ShouldBe(new PullRequestPurpose("Checkout total", "Fixes #8.", null, null, null, false), "a number that belongs to a pull request is no linked issue");
     }
 }

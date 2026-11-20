@@ -1,9 +1,9 @@
 ---
 title: "Adapters, LLM providers and plugins are swapped by configuration"
-version: "1.5"
+version: "1.6"
 date: 2026-10-21
-updated: 2026-11-12
-changes: "An ArchTest pins the Ollama client inside its provider folder, now that Ollama chat is built from it (ADR 0012 amendment). Earlier: No connector type is named in Scout.Llm outside the provider folders, pinned by an ArchTest; the OpenAI settings type is built in one provider file.."
+updated: 2026-11-20
+changes: "v1.6 (2026-11-20): the review note preview seam. An ArchTest pins the Ollama client inside its provider folder, now that Ollama chat is built from it (ADR 0012 amendment). Earlier: No connector type is named in Scout.Llm outside the provider folders, pinned by an ArchTest; the OpenAI settings type is built in one provider file.."
 page_type: invariant
 status: active
 description: "Chat adapters, LLM providers and plugins sit behind abstractions and are selected or gated by Scout: configuration; the core names no vendor. The set of options is closed at compile time."
@@ -46,6 +46,7 @@ Scout is open source and ships to users who have different chat platforms and di
 - **Adapters.** `src/Scout.Conversation/Abstractions/IChatAdapter.cs:11` and `src/Scout.Conversation/Abstractions/IResponseSink.cs:17` are the only surface the core sees. Each adapter registers itself as `IChatAdapter` only when its credentials are present: `src/Scout.Adapter.Discord/DiscordServiceCollectionExtensions.cs:32`, `src/Scout.Adapter.Slack/SlackServiceCollectionExtensions.cs:32`, `src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:37`; the local adapter has no credential and registers only when `Scout:Adapters:Local:Enabled` is true (`src/Scout.Adapter.Local/LocalServiceCollectionExtensions.cs:23`, [[pages/services/adapter-local]]). The host starts whatever set is registered: `src/Scout.Host.Console/ConversationWorker.cs:40`.
 - **LLM providers.** `src/Scout.Llm/Abstractions/ILlmProviderFactory.cs:17` is the contract. `src/Scout.Llm/LlmServiceCollectionExtensions.cs:76` switches on `Scout:Llm:Provider` over eleven factories (ten providers, ChatGptPlan and Anthropic among them, and `None`, which answers with a fixed message and calls no model) and fails startup on an unknown name (`:112`). Consumers receive `IChatGateway` (`src/Scout.Llm/Abstractions/IChatGateway.cs:8`), built at `src/Scout.Llm/LlmServiceCollectionExtensions.cs:164`, and a standalone embedding generator (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:161`).
 - **Plugins.** The kernel adds every `KernelPlugin` found in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:131`). GitHub, Kubernetes, Skills and ProjectKnowledge each register one only when enabled: `src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:45`, `src/Scout.Plugin.Kubernetes/KubernetesServiceCollectionExtensions.cs:33`, `src/Scout.Skills/SkillsServiceCollectionExtensions.cs:43`, `src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:77`.
+- **The review note preview.** `IReviewNotePreview` (`src/Scout.Conversation/Abstractions/IReviewNotePreview.cs:8`) is a seam in `Scout.Conversation` that the GitHub plugin fills and the local adapter uses, so the adapter holds no plugin type; `tests/Scout.Host.Console.Tests/HostLocalCompositionTests.cs:98` proves the composed host hands the plugin's preview to the adapter.
 
 ## How it is verified
 - `tests/Scout.ArchTests/ArchitectureTests.cs:147` fails when any Scout library type outside `Scout.Llm.Providers.Anthropic` references the Anthropic SDK (its `Anthropic` namespace or its `Microsoft.Extensions.AI.Anthropic*` extension types), so the Claude API client stays inside its factory ([[pages/decisions/0048-claude-as-an-ai-source]]).

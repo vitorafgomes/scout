@@ -10,7 +10,8 @@ namespace Scout.Plugin.GitHub;
 /// The POSTs Scout makes to GitHub, over the same configured <see cref="HttpClient"/> shape as the reads:
 /// <c>pulls/{n}/reviews</c> with the event <c>COMMENT</c>, <c>APPROVE</c> or <c>REQUEST_CHANGES</c> and every comment
 /// on the right side of the diff, <c>issues</c>, <c>issues/{n}/comments</c> and
-/// <c>pulls/{n}/comments/{id}/replies</c>. A 422 names what GitHub rejected; every other failure maps as the reads do.
+/// <c>pulls/{n}/comments/{id}/replies</c>. A 422 names what GitHub rejected; a success with an empty or unreadable body
+/// says the write may already be there; every other failure maps as the reads do.
 /// </summary>
 internal sealed class GitHubWriteClient : IGitHubWriteClient
 {
@@ -113,9 +114,22 @@ internal sealed class GitHubWriteClient : IGitHubWriteClient
             throw await GitHubClient.ToApiExceptionAsync(response, ct).ConfigureAwait(false);
         }
 
-        return await response.Content.ReadFromJsonAsync<TReply>(cancellationToken: ct).ConfigureAwait(false)
-            ?? throw new GitHubApiException("GitHub returned an unexpected empty response.");
+        TReply? reply;
+        try
+        {
+            reply = await response.Content.ReadFromJsonAsync<TReply>(cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            reply = default;
+        }
+
+        return reply ?? throw new GitHubApiException(UnreadableAnswer, response.StatusCode);
     }
+
+    /// <summary>Why a write GitHub answered with a success and an empty or unreadable body failed: it may be on GitHub.</summary>
+    internal const string UnreadableAnswer =
+        "GitHub did not give a readable answer after the request was sent, so it may already be there: check the repository before asking again.";
 
     /// <summary>What a 422 names: its errors, each a text or an object with a message, else its message.</summary>
     private static string Rejection(string json)

@@ -1,20 +1,23 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   Pipe,
   computed,
   effect,
   inject,
   input,
   signal,
+  untracked,
   type PipeTransform,
 } from '@angular/core';
 
-import type {
-  GitHubVerdictRequest,
-  ReviewFinding,
-  ReviewFindings,
-  ReviewTests,
+import {
+  signerInWords,
+  type GitHubVerdictRequest,
+  type ReviewFinding,
+  type ReviewFindings,
+  type ReviewTests,
 } from '@scout/shared';
 
 import { LocalConversation } from './local-conversation';
@@ -22,22 +25,26 @@ import { MarkdownPipe } from './markdown.pipe';
 import {
   checkMark,
   checksOutcome,
-  commentBody,
   issueBody,
   issuesAsk,
   parseReviewFindings,
-  reviewBody,
   verdictRequest,
 } from './review-findings';
 import { ReviewFindingsStore, type EditedText } from './review-findings.store';
 import { ScoutBridgeService } from './scout-bridge';
 
+/** The verdict given before the one on GitHub at the same commit, as the given line names it. */
+const EARLIER: Readonly<Record<GitHubVerdictRequest['verdict'], string>> = {
+  approve: 'the approval',
+  request_changes: 'the request for changes',
+  comment: 'the review',
+};
 const SEVERITY_LABELS: Readonly<Record<ReviewFinding['severity'], string>> = {
   block: 'Blocking',
   fix: 'Fix',
   nit: 'Suggestion',
 };
-const MAX_COMMENT_CHARS = 2000;
+const MAX_COMMENT_CHARS = 4000;
 const CHECKS_REFUSAL = 'Scout approves only when every check of the commit passed:';
 const SHIELD = 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5';
 const ALERT = 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5';
@@ -288,34 +295,57 @@ export class ReviewFindingsPipe implements PipeTransform {
           <a href="#" (click)="$event.preventDefault(); open(url)">{{ url }}</a>
         }
       </div>
-    } @else if (reviewPosted(); as done) {
-      <div class="posted" data-test="posted" role="status">
-        <strong>Review posted on PR #{{ review().number }}</strong>
-        <span class="posted-line"
-          >Posted as one review that only comments, without approval or request for changes. The
-          items with No stayed here in the chat.</span
-        >
-        @if (done.url) {
-          <a href="#" (click)="$event.preventDefault(); open(done.url)">{{ done.url }}</a>
-        }
-      </div>
-    } @else if (given(); as done) {
-      <div class="posted" data-test="verdict-given" role="status">
-        <strong>{{
-          done.verdict === 'approve'
-            ? 'Approved on PR #' + review().number
-            : 'Changes requested on PR #' + review().number
-        }}</strong>
-        @if (done.afterChecks) {
-          <span class="posted-line" data-test="after-checks"
-            >Approved after the checks passed.</span
+    } @else {
+      @if (reviewPosted(); as done) {
+        <div class="posted" data-test="posted" role="status">
+          <strong>Review posted on PR #{{ review().number }}</strong>
+          <span class="posted-line"
+            >Posted as one review that only comments, without approval or request for changes. The
+            items with No stayed here in the chat.</span
           >
-        }
-        @if (done.url) {
-          <a href="#" (click)="$event.preventDefault(); open(done.url)">{{ done.url }}</a>
-        }
-      </div>
-    } @else if (postingReview()) {
+          @if (done.url) {
+            <a href="#" (click)="$event.preventDefault(); open(done.url)">{{ done.url }}</a>
+          }
+        </div>
+      } @else if (given(); as done) {
+        <div
+          class="posted"
+          [class.changes]="done.verdict === 'request_changes'"
+          data-test="verdict-given"
+          role="status"
+        >
+          <strong>{{
+            done.verdict === 'approve'
+              ? 'Approved on PR #' + review().number
+              : 'Changes requested on PR #' + review().number
+          }}</strong>
+          @if (done.afterChecks) {
+            <span class="posted-line" data-test="after-checks"
+              >Approved after the checks passed.</span
+            >
+          }
+          <span class="posted-line" data-test="given-at">{{ givenAt() }}</span>
+          @if (done.signedAs) {
+            <span class="posted-line" data-test="given-signer"
+              >Signed as {{ signer(done.signedAs) }}</span
+            >
+          }
+          @if (done.url) {
+            <a href="#" data-test="given-link" (click)="$event.preventDefault(); open(done.url)"
+              >See the review on GitHub</a
+            >
+          }
+        </div>
+        <p class="offer" data-test="given-offer">
+          You can still give another verdict or post other comments at this commit; each waits for
+          your approval.
+        </p>
+      }
+      @if (unchangedLine(); as line) {
+        <p class="unchanged" role="status" data-test="nothing-new">{{ line }}</p>
+      }
+    }
+    @if (!posted() && postingReview()) {
       <div class="posting" role="status" data-test="posting">
         @if (target(); as writesTo) {
           <p class="target" data-test="target">{{ writesTo }}</p>
@@ -336,11 +366,11 @@ export class ReviewFindingsPipe implements PipeTransform {
           >Each waits for your approval, here and in Approvals; nothing is left to open.</span
         >
       </div>
-    } @else if (allDismissed() && audit()) {
+    } @else if (!posted() && allDismissed() && audit()) {
       <p class="all-dismissed" data-test="all-dismissed">
         Nothing to open; every finding was dismissed.
       </p>
-    } @else {
+    } @else if (!posted()) {
       <div class="footer">
         @if (target(); as writesTo) {
           <p class="target" data-test="target">{{ writesTo }}</p>
@@ -490,7 +520,7 @@ export class ReviewFindingsPipe implements PipeTransform {
         <p class="error" role="alert" data-test="post-error">{{ message }}</p>
       }
     }
-    @if (!posted() && !given() && !allDismissed() && !allSent() && !postingReview() && !clean()) {
+    @if (!posted() && !allDismissed() && !allSent() && !postingReview() && !clean()) {
       <div class="preview-row">
         <button
           type="button"
@@ -533,36 +563,40 @@ export class ReviewFindingsPipe implements PipeTransform {
         </div>
       } @else if (state().preview) {
         <div class="gh" data-test="preview">
-          @for (item of selected(); track item.finding.id) {
-            <div class="gh-file">{{ item.finding.path }}</div>
-            <div class="gh-comment">
-              <div class="gh-ch">
-                <span class="gh-avatar" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="8" r="4"></circle>
-                    <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"></path>
-                  </svg>
-                </span>
-                <b>you</b>
-                <span>commented via Scout · now</span>
-              </div>
-              <div class="gh-body" [innerHTML]="item.body | markdown"></div>
-            </div>
+          @if (previewVerdict(); as shown) {
+            <p class="preview-for" data-test="preview-for">
+              Preview of the note for {{ verdictLabel(shown) }}, as Scout would post it on PR #{{
+                review().number
+              }}
+            </p>
           }
-          <div class="gh-review">
-            <div class="gh-ch">
-              <span class="gh-avatar" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <circle cx="12" cy="8" r="4"></circle>
-                  <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"></path>
-                </svg>
-              </span>
-              <b>you</b>
-              <span>reviewed via Scout · now</span>
-              <span class="gh-pill">Comment</span>
-            </div>
-            <div class="gh-body" [innerHTML]="previewBody() | markdown"></div>
-          </div>
+          @if (notePreview(); as shown) {
+            @if (shown.error !== undefined) {
+              <p class="error" role="alert" data-test="preview-failed">
+                The preview could not be composed: {{ shown.error }}
+              </p>
+            } @else if (shown.note; as note) {
+              @for (comment of note.comments; track comment.id) {
+                <div class="gh-file" data-test="preview-comment-path">
+                  {{ comment.path }}:{{ comment.line }}
+                </div>
+                <div class="gh-comment">
+                  <div
+                    class="gh-body"
+                    data-test="preview-comment"
+                    [innerHTML]="comment.body | markdown"
+                  ></div>
+                </div>
+              }
+              <div class="gh-review">
+                <div
+                  class="gh-body"
+                  data-test="preview-note"
+                  [innerHTML]="note.body | markdown"
+                ></div>
+              </div>
+            }
+          }
         </div>
       }
     }
@@ -1162,7 +1196,25 @@ export class ReviewFindingsPipe implements PipeTransform {
       color: var(--sc-on-ok-container);
       overflow-wrap: anywhere;
     }
+    .posted.changes {
+      background: var(--sc-warn-container);
+      color: var(--sc-on-warn-container);
+    }
     .posted-line {
+      color: var(--sc-fg-2);
+      font-size: 13px;
+    }
+    .offer,
+    .preview-for {
+      margin: 0;
+      color: var(--sc-fg-2);
+      font-size: 12px;
+    }
+    .unchanged {
+      margin: 0;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: var(--sc-surface-2);
       color: var(--sc-fg-2);
       font-size: 13px;
     }
@@ -1204,6 +1256,14 @@ export class ReviewFindingsComponent {
         this.store.lookUpVerdict(this.turnId(), { repository, number, commit });
       }
     });
+    inject(DestroyRef).onDestroy(() => this.store.forgetPreview(this.turnId()));
+    effect(() => {
+      const verdict = this.previewVerdict();
+      if (!this.state().preview || verdict === null) return;
+      const request = verdictRequest(this.review(), this.selected(), verdict);
+      const turnId = this.turnId();
+      if (request !== null) untracked(() => this.store.preview(turnId, request));
+    });
   }
 
   readonly draft = signal<EditedText>({ why: '', fix: '' });
@@ -1235,7 +1295,33 @@ export class ReviewFindingsComponent {
   });
   /** True while the card's own Post, the verdict `comment`, is on its way to GitHub. */
   readonly postingReview = computed(() => this.giving() && this.verdict()?.verdict === 'comment');
-  readonly closed = computed(() => this.posted() !== null || this.given() !== null);
+  /** True once an audit's issues were opened; a given verdict leaves the card open for another at the same commit. */
+  readonly closed = computed(() => this.posted() !== null);
+  /** Where the given verdict is: its commit, and the verdict it followed at that commit. */
+  readonly givenAt = computed(() => {
+    const commit = (this.review().commit ?? '').slice(0, 7);
+    const earlier = this.given()?.earlier;
+    return earlier === undefined
+      ? `The verdict on GitHub at commit ${commit}.`
+      : `The verdict on GitHub at commit ${commit}, given after ${EARLIER[earlier]} at the same commit.`;
+  });
+  /** The line that says the last click asked for the verdict already given, so nothing new was sent. */
+  readonly unchangedLine = computed(() => {
+    const { number, commit } = this.review();
+    return this.verdict()?.unchanged
+      ? `Nothing new was sent: this verdict with these findings is already on PR #${number} at commit ${(commit ?? '').slice(0, 7)}.`
+      : null;
+  });
+  /** The verdict the preview shows: the approval when the card offers one, else the request for changes. */
+  readonly previewVerdict = computed((): GitHubVerdictRequest['verdict'] | null => {
+    if (this.audit()) return null;
+    if (this.approveOffer() !== null) return 'approve';
+    return this.clean() ? null : 'request_changes';
+  });
+  readonly notePreview = computed(() => {
+    const shown = this.store.notePreview(this.turnId());
+    return shown !== null && shown.verdict === this.previewVerdict() ? shown : null;
+  });
   readonly writing = computed(() => this.posting() || this.busy() || this.giving());
   readonly verdictLocked = computed(() => this.giving() || this.posting() || !this.review().commit);
   /** The checks of the reviewed commit as the worker judges an approval: how many still run, and the first that failed. */
@@ -1267,7 +1353,7 @@ export class ReviewFindingsComponent {
   });
   /** The line under the checks while no approval waits: the check that failed, or how many still run. */
   readonly checkLine = computed(() => {
-    if (this.audit() || this.waiting() !== null || this.given() !== null) return null;
+    if (this.audit() || this.waiting() !== null) return null;
     const { running, failed } = this.checks();
     if (failed !== null)
       return `${failed} did not pass. Scout approves only when every check passed.`;
@@ -1323,7 +1409,10 @@ export class ReviewFindingsComponent {
     const { picks, edited } = this.state();
     return this.unsent()
       .filter((f) => picks[f.id] === 'yes')
-      .map((finding) => ({ finding, body: this.bodyOf({ ...finding, ...edited[finding.id] }) }));
+      .map((original) => {
+        const finding = { ...original, ...edited[original.id] };
+        return { finding, body: this.bodyOf(finding) };
+      });
   });
   /** True on an audit once every finding not dismissed was sent: nothing is left to open. */
   readonly allSent = computed(() => {
@@ -1362,12 +1451,6 @@ export class ReviewFindingsComponent {
       ? `Post on PR #${this.review().number}`
       : `Post ${n} on PR #${this.review().number}`;
   });
-  readonly previewBody = computed(() =>
-    reviewBody(
-      this.review(),
-      this.selected().map((s) => s.finding),
-    ),
-  );
 
   protected readonly noCommit = 'The review names no commit to pin the verdict to.';
   protected readonly checkMark = checkMark;
@@ -1392,6 +1475,18 @@ export class ReviewFindingsComponent {
     if (tone === 'failed') return 'M6 6l12 12M18 6L6 18';
     if (tone === 'pending') return 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2';
     return 'M5 12h14';
+  }
+
+  verdictLabel(verdict: GitHubVerdictRequest['verdict']): string {
+    return verdict === 'approve'
+      ? 'Approve'
+      : verdict === 'request_changes'
+        ? 'Request changes'
+        : 'Post';
+  }
+
+  signer(login: string): string {
+    return signerInWords(login);
   }
 
   severityLabel(finding: ReviewFinding): string {
@@ -1473,8 +1568,9 @@ export class ReviewFindingsComponent {
     if (refusal !== null) this.error.set(refusal);
   }
 
+  /** The issue an audit's finding becomes; a review's comments are composed by the worker, so a review's body is empty. */
   private bodyOf(finding: ReviewFinding): string {
-    return this.audit() ? issueBody(this.review(), finding) : commentBody(finding);
+    return this.audit() ? issueBody(this.review(), finding) : '';
   }
 
   open(url: string): void {

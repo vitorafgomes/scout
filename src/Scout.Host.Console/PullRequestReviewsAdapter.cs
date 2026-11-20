@@ -11,11 +11,13 @@ namespace Scout.Host.Console;
 internal sealed class PullRequestReviewsAdapter(Scout.Audit.IPullRequestReviews reviews) : Scout.Plugin.GitHub.Abstractions.IPullRequestReviews
 {
     public async Task<string> StartAsync(
-        string owner, string repo, int number, string headSha, IReadOnlyList<ChangedFile> files, int diffsLeftOut, int notListed, PullRequestCheckCounts? checks, CancellationToken ct)
+        string owner, string repo, int number, string headSha, IReadOnlyList<ChangedFile> files, int diffsLeftOut, int notListed, PullRequestCheckCounts? checks, CancellationToken ct,
+        PullRequestPurpose? purpose = null)
     {
         var start = await reviews.StartAsync(
-            owner, repo, number, headSha, [.. files.Select(f => new ReviewFile(f.Path, f.Patch))], diffsLeftOut, notListed,
-            checks is null ? null : new ReviewCheckCounts(checks.Passing, checks.Pending, checks.Failing), ct).ConfigureAwait(false);
+            owner, repo, number, headSha, [.. files.Select(f => new ReviewFile(f.Path, f.Patch, f.Status))], diffsLeftOut, notListed,
+            checks is null ? null : new ReviewCheckCounts(checks.Passing, checks.Pending, checks.Failing), ct,
+            purpose is null ? null : new ReviewPurpose(purpose.Title, purpose.Description, purpose.Issue, purpose.IssueTitle, purpose.IssueBody, purpose.IssueUnread)).ConfigureAwait(false);
         return start.Started
             ? string.Join("\n", [start.Sentence, .. start.Preflight.Checks.Where(c => c.Outcome == PreflightOutcome.Warning).Select(c => c.Sentence)])
             : start.Sentence;

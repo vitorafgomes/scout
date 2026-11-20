@@ -99,20 +99,47 @@ internal sealed partial record ReviewFindings(
         }
 
         var invalidFindings = kind is null ? InvalidReviewFindings : InvalidFindings;
-        JsonElement array;
-        try
+        var (findings, problem) = ParseFindings(findingsJson, invalidFindings);
+        if (findings is null)
         {
-            using var document = JsonDocument.Parse(findingsJson ?? string.Empty);
-            array = document.RootElement.Clone();
+            return (null, problem);
         }
-        catch (JsonException)
+
+        if (kind is not null && findings.Count == 0)
         {
             return (null, invalidFindings);
         }
 
-        if (array.ValueKind != JsonValueKind.Array || array.GetArrayLength() > MaxFindings || (kind is not null && array.GetArrayLength() == 0))
+        if (!TryKnown(knownJson, out var known))
         {
-            return (null, invalidFindings);
+            return (null, InvalidKnown);
+        }
+
+        return (new ReviewFindings(
+            kind, $"{parts[0]}/{parts[1]}", number, Blank(commit), verdict.Trim(), Blank(read), known, findings), null);
+    }
+
+    /// <summary>
+    /// The findings of a JSON array of at most <see cref="MaxFindings"/>, each passing the desktop's rules and with an id
+    /// of its own; otherwise null and one sentence naming the first problem, <paramref name="invalid"/> when the text is
+    /// not such an array.
+    /// </summary>
+    internal static (IReadOnlyList<ReviewFinding>? Findings, string? Problem) ParseFindings(string? json, string invalid)
+    {
+        JsonElement array;
+        try
+        {
+            using var document = JsonDocument.Parse(json ?? string.Empty);
+            array = document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return (null, invalid);
+        }
+
+        if (array.ValueKind != JsonValueKind.Array || array.GetArrayLength() > MaxFindings)
+        {
+            return (null, invalid);
         }
 
         var findings = new List<ReviewFinding>();
@@ -133,13 +160,7 @@ internal sealed partial record ReviewFindings(
             findings.Add(finding);
         }
 
-        if (!TryKnown(knownJson, out var known))
-        {
-            return (null, InvalidKnown);
-        }
-
-        return (new ReviewFindings(
-            kind, $"{parts[0]}/{parts[1]}", number, Blank(commit), verdict.Trim(), Blank(read), known, findings), null);
+        return (findings, null);
     }
 
     private static bool TryKnown(string? knownJson, out IReadOnlyList<string>? known)

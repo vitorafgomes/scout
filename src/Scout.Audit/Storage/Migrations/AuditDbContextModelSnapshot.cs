@@ -169,6 +169,10 @@ namespace Scout.Audit.Storage.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("Inputs")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("inputs");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

@@ -34,8 +34,8 @@ public sealed class AuditWorkerReviewTests : IDisposable
     private static ReviewPullRequest At(string head, int count, params int[] withoutPatch) =>
         new(head, [.. Enumerable.Range(1, count).Select(i => new ReviewFile($"src/M{i}/F.cs", withoutPatch.Contains(i) ? null : $"@@ -1 +1 @@\n+line {i}"))]);
 
-    private static async Task<AuditJob> ReviewAsync(SqliteAuditStore store, int batches, ReviewPreflight? preflight = null) =>
-        (await store.JobAsync(await store.CreateJobAsync("acme", "shop", 12, Head, "local:session", Batches(batches), preflight, CancellationToken.None), CancellationToken.None))!;
+    private static async Task<AuditJob> ReviewAsync(SqliteAuditStore store, int batches, ReviewPreflight? preflight = null, ReviewInputs? inputs = null) =>
+        (await store.JobAsync(await store.CreateJobAsync("acme", "shop", 12, Head, "local:session", Batches(batches), preflight, CancellationToken.None, inputs), CancellationToken.None))!;
 
     private static AuditWorker Worker(
         IAuditJobStore store, ScriptedChat chat, RecordingNotifier notifier, IReviewPullRequests pullRequests, Kernel? kernel = null, ISkillCatalog? skills = null,
@@ -1033,5 +1033,142 @@ public sealed class AuditWorkerReviewTests : IDisposable
         public IReadOnlyList<Skill> All() => Skills;
 
         public Skill? Find(string name) => Skills.FirstOrDefault(s => s.Name == name);
+    }
+
+    private static readonly ReviewInputs Kept = new(
+        new ReviewPurpose("Checkout total", "Totals are never negative."),
+        new ReviewRules([new("AGENTS.md", "Every write is declared.", Cut: false, ChangedHere: false)], [], Unreadable: false),
+        new ReviewRemoved([], 0, 0, false));
+
+    /// <summary>The line of JSON under <paramref name="sentence"/> in a batch's request, or null when the request has no such sentence.</summary>
+    private static string? LineAfter(string request, string sentence)
+    {
+        var lines = request.ReplaceLineEndings("\n").Split('\n');
+        var at = Array.IndexOf(lines, sentence);
+        return at < 0 ? null : lines[at + 1];
+    }
+
+    [Fact]
+    public async Task A_batch_after_a_pause_and_a_new_worker_gets_the_inputs_kept_at_the_start()
+    {
+        var store = Store();
+        var job = await ReviewAsync(store, 3, inputs: Kept);
+        var limited = true;
+        var chat = new ScriptedChat((history, kernel, turn) => limited && BatchOf(history) == 2
+            ? throw new LlmQuotaExceededException("usage_limit_reached")
+            : Kernels.PresentingAnEmptyReview(history, kernel, turn));
+        await Worker(store, chat, new RecordingNotifier(), new FakePullRequests(() => At(Head, 3))).RunReviewAsync(job, CancellationToken.None);
+        (await store.JobAsync(job.Id, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Paused);
+
+        limited = false;
+        await store.ResumeAsync(job.Id, "local:session", CancellationToken.None);
+        await Worker(Store(), chat, new RecordingNotifier(), new FakePullRequests(() => At(Head, 3))).RunReviewAsync((await store.JobAsync(job.Id, CancellationToken.None))!, CancellationToken.None);
+
+        chat.Turns.Select(t => BatchOf(t.Request)).ShouldBe([1, 2, 2, 3], "the review paused at batch 2 and a new worker ran it again and the batch after it");
+        var purpose = JsonSerializer.Serialize(Kept.Purpose, JsonSerializerOptions.Web);
+        chat.Turns.Select(t => LineAfter(t.Request, AuditBatchRunner.PurposeIsData)).ShouldAllBe(
+            line => line == purpose, "every batch, before and after the pause and the new worker, is handed the purpose kept at the start");
+        chat.Turns.Select(t => LineAfter(t.Request, AuditBatchRunner.RulesAreData)).Distinct().ShouldHaveSingleItem("every batch is handed the same rule files").ShouldNotBeNull();
+        (await store.JobAsync(job.Id, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
+    }
+
+    [Fact]
+    public async Task A_batch_is_handed_only_the_removals_of_its_own_files_and_of_the_code_they_tested()
+    {
+        var store = Store();
+        AuditBatchPlan[] plan =
+        [
+            new("src/Cart", ["src/Cart/Cart.cs"], 10),
+            new("src/Orders", ["src/Orders/Order.cs"], 10),
+            new("src/Tax", ["src/Tax/Tax.cs"], 10),
+        ];
+        var inputs = Kept with
+        {
+            Removed = new ReviewRemoved(
+            [
+                new("tests/Shop.Tests/OrderTests.cs", RemovedEntry.TestFileDeleted, ["src/Orders/Order.cs"], 0, 0),
+                new("src/Cart/Cart.cs", RemovedEntry.FileDeleted, [], 0, 0),
+                new("src/Legacy/Export.cs", RemovedEntry.FileDeleted, [], 0, 0),
+            ], 0, 0, false),
+        };
+        var id = await store.CreateJobAsync("acme", "shop", 12, Head, "local:session", plan, null, CancellationToken.None, inputs);
+        var files = new ReviewPullRequest(Head, [.. plan.Select(b => new ReviewFile(b.Files[0], "@@ -1 +1 @@\n+line"))]);
+        var chat = new ScriptedChat(Kernels.PresentingAnEmptyReview);
+
+        await Worker(store, chat, new RecordingNotifier(), new FakePullRequests(() => files)).RunReviewAsync((await store.JobAsync(id, CancellationToken.None))!, CancellationToken.None);
+
+        string[] Handed(int batch)
+        {
+            var line = LineAfter(chat.Turns.Single(t => BatchOf(t.Request) == batch).Request, AuditBatchRunner.RemovedIsData);
+            if (line is null)
+            {
+                return [];
+            }
+
+            using var data = JsonDocument.Parse(line);
+            return [.. data.RootElement.EnumerateArray().Select(e => e.GetProperty("path").GetString()!)];
+        }
+
+        Handed(1).ShouldBe(["src/Cart/Cart.cs"], "a batch is handed the removal of its own file");
+        Handed(2).ShouldBe(["tests/Shop.Tests/OrderTests.cs"], "a batch with the code a deleted test covered is handed that test's removal");
+        Handed(3).ShouldBeEmpty("a batch with no related removal is handed none, and no sentence for it");
+    }
+
+    [Fact]
+    public async Task The_cards_notes_count_what_was_removed_and_never_name_a_path()
+    {
+        var store = Store();
+        var preflight = new ReviewPreflight([new(PreflightName.Duplicate, PreflightOutcome.Warning, "A review of acme/shop#12 at abc1234 was stopped; this start reviews it again.")]);
+        var inputs = new ReviewInputs(
+            new ReviewPurpose("Checkout total", null, 7, IssueUnread: true),
+            new ReviewRules([], [], Unreadable: true),
+            new ReviewRemoved(
+            [
+                new("tests/Shop.Tests/CartTests.cs", RemovedEntry.TestFileDeleted, ["src/Shop/Cart.cs"], 0, 0),
+                new("src/Legacy/Export.cs", RemovedEntry.FileDeleted, [], 0, 0),
+            ], 0, 0, false));
+        var job = await ReviewAsync(store, 1, preflight, inputs);
+        var notifier = new RecordingNotifier();
+
+        await Worker(store, new ScriptedChat(Kernels.PresentingAnEmptyReview), notifier, new FakePullRequests(() => At(Head, 1))).RunReviewAsync(job, CancellationToken.None);
+
+        var notes = Notes(Card(notifier.Posts.Last().Text));
+        notes.ShouldBe(
+        [
+            "A review of acme/shop#12 at abc1234 was stopped; this start reviews it again.",
+            "The pull request deletes 2 files, 1 of them a test file.",
+            "1 deleted or emptied test file leaves code named like it in the repository.",
+            "The linked issue could not be read.",
+            "The project's rule files could not be read.",
+        ], "the card's notes count what was removed and say which input could not be read, after the checks' warnings");
+        notes.Skip(1).ShouldNotContain(
+            n => n.Contains('/', StringComparison.Ordinal) || n.Contains("Checkout", StringComparison.Ordinal) || n.Contains("Cart", StringComparison.Ordinal),
+            "a note of the inputs never names a path or a word of the pull request");
+    }
+
+    [Fact]
+    public async Task An_inputs_read_the_database_refuses_leaves_the_review_running_and_the_next_wake_runs_it()
+    {
+        var sqlite = Store();
+        var job = await ReviewAsync(sqlite, 1, inputs: Kept);
+        var store = new RacingStore(sqlite)
+        {
+            BeforeInputs = () => throw new AuditStoreException("Scout could not read the audit database (SQLite error 8).", new InvalidOperationException()),
+        };
+        var chat = new ScriptedChat(Kernels.PresentingAnEmptyReview);
+        var notifier = new RecordingNotifier();
+        var worker = Worker(store, chat, notifier, new FakePullRequests(() => At(Head, 1)));
+
+        await Should.ThrowAsync<AuditStoreException>(() => worker.RunReviewAsync(job, CancellationToken.None));
+
+        chat.Turns.ShouldBeEmpty("no batch runs without its inputs");
+        (await sqlite.JobAsync(job.Id, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Running, "an inputs read the database refuses leaves the review running");
+        (await sqlite.BatchesAsync(job.Id, CancellationToken.None)).ShouldAllBe(b => b.Status == AuditStatus.Pending, "no batch was begun");
+
+        store.BeforeInputs = null;
+        await worker.RunReviewAsync(job, CancellationToken.None);
+
+        LineAfter(chat.Turns.ShouldHaveSingleItem("the next wake runs the batch").Request, AuditBatchRunner.PurposeIsData).ShouldNotBeNull("the batch is handed its inputs");
+        (await sqlite.JobAsync(job.Id, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
     }
 }

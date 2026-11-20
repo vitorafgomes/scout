@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub: Public contract"
-version: "1.2"
+version: "1.3"
 date: 2026-11-13
-updated: 2026-11-17
-changes: "v1.2 (2026-11-17): IPullRequestReviews and the review job's functions"
+updated: 2026-11-20
+changes: "v1.3 (2026-11-20): pointer to the review note page. v1.2 (2026-11-17): IPullRequestReviews and the review job's functions"
 page_type: service
 status: active
 description: "Read when a change touches: Public contract."
@@ -22,3 +22,5 @@ reliability: high
 - **Declared in the catalog:** the `github` feature's `Contents`, `Pull requests` and `Issues` rows name every read above, so the Features screen shows the owner what the functions reach (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:18`); since 2026-11-07 the `Pull requests` row also names reading the signing identity, the check runs and statuses and the reviews already given (`:63`). A read the catalog does not name is a Rule A finding.
 - **Configuration keys:** `Scout:Plugins:GitHub` with `Token` (`src/Scout.Plugin.GitHub/GitHubOptions.cs:14`) and `TokenFile` (`src/Scout.Plugin.GitHub/GitHubOptions.cs:21`), the path of a JSON file with an `access_token` field. The desktop sets `SCOUT__PLUGINS__GITHUB__TOKENFILE` while the owner is connected through the browser, or `SCOUT__PLUGINS__GITHUB__TOKEN` when the owner pasted a token on the Features screen ([[pages/decisions/0019-github-app-device-flow]]). The optional bot ([[pages/decisions/0044-scout-acts-on-github-as-its-own-app]]): `BotTokenFile` (`src/Scout.Plugin.GitHub/GitHubOptions.cs:42`), `BotWrites`, a comma-separated subset of `review`, `verdict`, `comment`, `issue` (`:45`), `BotRepos`, the `owner/repo` the bot's installation covers (`:48`), and `BotLogin` (`:51`), set by the desktop as `SCOUT__PLUGINS__GITHUB__BOT*`.
 - **External boundaries:** HTTPS to the GitHub REST API with a bearer token, 30 second timeout, API version header (`src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:54`); the reads are GETs (`src/Scout.Plugin.GitHub/GitHubClient.cs:145`, `:163`; the reads part calls those two, `src/Scout.Plugin.GitHub/GitHubClient.Reads.cs:227` for the one `JsonDocument` read): `pulls/{n}`, `pulls/{n}/files`, `pulls/{n}/comments`, `pulls/{n}/reviews`, `issues/{n}`, `issues/{n}/comments`, `contents/{path}?ref=`, `commits/{ref}`, `commits/{sha}/check-runs`, `commits/{sha}/status`, `user` and `tarball/{sha}` (`src/Scout.Plugin.GitHub/GitHubClient.Reads.cs:253`, `:274`, `:55`, `:61`, `:70`, `:83`, `:86`) beside the four listing endpoints; the POSTs are the write client's, below. The token files, the snapshots folder and the profiles folder on the local filesystem; a container run through the host's `ISandboxRunner`.
+
+The review note, its preview and the purpose a review start hands over: [[pages/services/plugin-github/the-review-note]].

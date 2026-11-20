@@ -79,13 +79,15 @@ public sealed class GitHubClientPullRequestHeadTests : IDisposable
     }
 
     [Fact]
-    public async Task The_Reviews_Of_A_Pull_Request_Are_Read_With_Who_Gave_Them_The_Event_And_The_Commit()
+    public async Task The_Reviews_Of_A_Pull_Request_Are_Read_With_Who_Gave_Them_The_Event_The_Commit_And_The_Text()
     {
-        _handler.EnqueueJson(HttpStatusCode.OK, """[{"id":5,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"abc1234","html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-5"}]""");
+        _handler.EnqueueJson(HttpStatusCode.OK, """[{"id":5,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"abc1234","html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-5","body":"The note.\n\n<!-- scout-review 0123456789abcdef -->"}]""");
 
         var reviews = await Client().ListReviewsAsync("octocat", "hello", 42, CancellationToken.None);
 
-        reviews.ShouldNotBeNull().ShouldHaveSingleItem().ShouldBe(new PullRequestReview(5, "octocat", "APPROVED", "abc1234", "https://github.com/octocat/hello/pull/42#pullrequestreview-5"));
+        reviews.ShouldNotBeNull().ShouldHaveSingleItem().ShouldBe(
+            new PullRequestReview(5, "octocat", "APPROVED", "abc1234", "https://github.com/octocat/hello/pull/42#pullrequestreview-5", "The note.\n\n<!-- scout-review 0123456789abcdef -->"),
+            "a review is read with its text, where a note's marker is");
         _handler.LastRequest!.Method.ShouldBe(HttpMethod.Get);
         _handler.LastRequest.RequestUri!.ToString().ShouldBe("https://api.github.com/repos/octocat/hello/pulls/42/reviews?per_page=100&page=1");
     }

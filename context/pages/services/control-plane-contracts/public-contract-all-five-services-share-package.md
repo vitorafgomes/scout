@@ -1,9 +1,9 @@
 ---
 title: "ControlPlane.Contracts: Public contract: All five services share package scout.controlplane.v1"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-20
+changes: "v1.2 (2026-11-20): GiveVerdictRequest carries findings and measurements, body and comments_json reserved (ADR 0063). v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: service
 status: active
 description: "Read when a change touches: All five services share package scout.controlplane.v1; Providers; Models; Features."
@@ -29,3 +29,5 @@ All five services share package `scout.controlplane.v1` and C# namespace `Scout.
   - `WriteLogEntry` (`:245`): one write a feature performed, or one decision on an action, `approved_by` `owner` or unset, and since 2026-11-08 the optional `signed_as` (field 8), the login that signed the write ([[pages/decisions/0044-scout-acts-on-github-as-its-own-app]]), and since 2026-11-11 the optional `group_id` (field 10, `:255`) of the action the entry is about; `ListWritesRequest.limit` (`:259`) is the number of newest entries to return, 0 or less means 50.
   - `GetVerdict` and `GetVerdictFor` (`src/Scout.ControlPlane.Contracts/protos/features.proto:26`, `:27`) answer `GetVerdictResponse` (`:168`) and `GetVerdictForResponse` (`:272`), a review card's verdict by its action id or by repository, number and commit. Since 2026-11-14 `GetVerdictResponse` carries `signed_as` (field 8, `:176`), the login the write log keeps on the given verdict's record, and `tests_line` (field 9, `:177`): `posted` when the verdict's tests line is on the pull request's conversation, `notPosted` when posting it failed, `none` when the verdict carried none; both are empty until the verdict is given; `GetVerdictForResponse` has neither, as nothing reads them there ([[pages/decisions/0043-the-verdict-on-a-pull-request]], amendment of 2026-11-14).
   - `ControlJob` (`src/Scout.ControlPlane.Contracts/protos/features.proto:28`, 2026-11-10) takes `ControlJobRequest` (`:283`: `kind` `audit` or `tests`, `owner`, `repo`, the optional `number`, a test run's pull request, left unset for an audit and never 0, and `action` `pause`, `continue` or `stop`) and answers `ControlJobResponse` (`:291`): `accepted`, the `reason` in a sentence the desktop shows as it is, and the optional `control_id` when it was queued, the id the write log entry of the control carries as `action_id`. A control that does not apply is answered `accepted` false with its reason, never an error status: another kind or action, a repository outside the audit's name rule, a test run without a number above zero or with any action but `stop`, an audit with a number, a store that could not keep it ([[pages/services/control-plane]]). Since 2026-11-10 `WriteLogEntry` carries the optional `control_status` (field 9, `:254`), set only on the record of an owner control: `applied`, `not applied`, `not confirmed` or `expired`; every other entry, and every record written before it, leaves it unset.
+
+2026-11-20: `GiveVerdictRequest` (`src/Scout.ControlPlane.Contracts/protos/features.proto:150`) carries `findings_json` (8), `files_read` (9), `files_changed` (10) and `notes` (11); fields 4 and 5, `body` and `comments_json`, are reserved. `GetVerdictResponse` (`:172`) answers the `verdict` the control plane recorded for the action ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).

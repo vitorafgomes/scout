@@ -72,7 +72,7 @@ public sealed class GitHubBotIdentityTests : IDisposable
 
     private static async Task WriteEveryKindAsync(GitHubActionsPlugin plugin, string repo = "hello", int number = 42)
     {
-        await plugin.SubmitPullRequestReviewAsync("octocat", repo, number, "Looks fine.", "[]", CancellationToken.None);
+        await plugin.SubmitPullRequestReviewAsync("octocat", repo, number, "[]", CancellationToken.None);
         await plugin.CommentOnPullRequestAsync("octocat", repo, number, "Thanks.", CancellationToken.None);
         await plugin.CreateIssueAsync("octocat", repo, "A title", "A body.", "", CancellationToken.None);
     }
@@ -84,7 +84,7 @@ public sealed class GitHubBotIdentityTests : IDisposable
         var plugin = provider.GetRequiredService<GitHubActionsPlugin>();
 
         await WriteEveryKindAsync(plugin);
-        await plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "Fix it.", "[]", Sha, CancellationToken.None);
+        await plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", Sha, CancellationToken.None);
 
         _requests.ShouldNotBeEmpty();
         _requests.Select(r => r.Authorization).Distinct().ShouldBe(["Bearer " + OwnerToken]);
@@ -98,7 +98,7 @@ public sealed class GitHubBotIdentityTests : IDisposable
         var plugin = provider.GetRequiredService<GitHubActionsPlugin>();
 
         await WriteEveryKindAsync(plugin);
-        await plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", Sha, CancellationToken.None);
+        await plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", Sha, CancellationToken.None);
 
         AuthorizationOf(_requests, "POST", "/repos/octocat/hello/issues/42/comments").ShouldBe("Bearer " + BotToken);
         AuthorizationOf(_requests, "POST", "/repos/octocat/hello/issues").ShouldBe("Bearer " + OwnerToken);
@@ -113,12 +113,12 @@ public sealed class GitHubBotIdentityTests : IDisposable
         using var provider = Compose(withBot: true);
         var plugin = provider.GetRequiredService<GitHubActionsPlugin>();
 
-        var ownersPullRequest = await plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", Sha, CancellationToken.None);
+        var ownersPullRequest = await plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", Sha, CancellationToken.None);
         _respond = r => r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath == "/repos/octocat/hello/pulls/42"
             ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$$"""{"number":42,"user":{"login":"scout-octocat[bot]"},"head":{"sha":"{{{Sha}}}"},"mergeable":true}""") }
             : Answer(r);
         var botsPullRequest = await Should.ThrowAsync<WriteFailedException>(() =>
-            plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", Sha, CancellationToken.None));
+            plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", Sha, CancellationToken.None));
 
         ownersPullRequest.ShouldStartWith("Approved octocat/hello#42 with 0 comment(s)");
         botsPullRequest.Message.ShouldBe(GitHubActionsPlugin.SelfApproval);
@@ -177,7 +177,7 @@ public sealed class GitHubBotIdentityTests : IDisposable
         var plugin = provider.GetRequiredService<GitHubActionsPlugin>();
 
         var ex = await Should.ThrowAsync<WriteFailedException>(() =>
-            plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", Sha, CancellationToken.None));
+            plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", Sha, CancellationToken.None));
 
         (ex.Message, ex.Outcome).ShouldBe(("The Scout bot's login is unknown; give the verdict as yourself or recreate the bot.", "refused"));
         _requests.ShouldNotContain(r => r.Method == "POST");

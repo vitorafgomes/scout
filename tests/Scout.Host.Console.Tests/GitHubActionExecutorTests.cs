@@ -62,11 +62,14 @@ public sealed class GitHubActionExecutorTests : IDisposable
             repo = "hello",
             number = 42,
             verdict,
-            body = "Ready to merge.",
-            comments = new[] { new { path = "src/Checkout.cs", line = 3, body = "c is new" } },
+            findings = new[] { new { id = "a", severity = "fix", title = "c is new", path = "src/Checkout.cs", line = 3, why = "Why.", fix = "Fix." } },
             commit,
             testsLine,
         });
+
+    /// <summary>The marker of the note <see cref="CardPayload"/> composes, as a verdict given before carries it.</summary>
+    private static string GivenMarker =>
+        ReviewNote.Marker(ReviewNote.Digest(ReviewNote.Approve, [new ReviewFinding("a", "fix", "c is new", "src/Checkout.cs", 3, null, "Why.", "Fix.", null)], null, null, null));
 
     private static ApprovedAction Verdict(string? payload, string scope = "Pull request verdicts") =>
         new("act-1", "github", scope, "octocat/hello#42", "Approve octocat/hello#42") { Payload = payload };
@@ -80,8 +83,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
     private static string ReviewArguments() =>
         JsonSerializer.Serialize(new
         {
-            body = "Two findings.",
-            comments = """[{"path":"src/Checkout.cs","line":3,"body":"c is new"}]""",
+            findings_json = """[{"id":"a","severity":"fix","title":"c is new","path":"src/Checkout.cs","line":3,"why":"Why.","fix":"Fix."}]""",
             number = "42",
             owner = "octocat",
             repo = "hello",
@@ -125,7 +127,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
         var review = JsonDocument.Parse(_github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldHaveSingleItem()).RootElement;
         review.GetProperty("event").GetString().ShouldBe("APPROVE");
         review.GetProperty("commit_id").GetString().ShouldBe(Sha);
-        review.GetProperty("body").GetString().ShouldBe("Ready to merge.");
+        review.GetProperty("body").GetString()!.ShouldStartWith("### :robot: Scout review: approved\n", customMessage: "the verdict carries the note Scout composed");
         var tests = JsonDocument.Parse(_github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldHaveSingleItem()).RootElement;
         tests.GetProperty("body").GetString().ShouldBe("Tests: 3 checks passed.");
         _github.Order.IndexOf("POST repos/octocat/hello/issues/42/comments").ShouldBeLessThan(_gate.RecordedAtStep, "the tests line is posted before the verdict is recorded");
@@ -149,9 +151,9 @@ public sealed class GitHubActionExecutorTests : IDisposable
     }
 
     [Theory]
-    [InlineData(true, "Ready to merge.")]
-    [InlineData(false, "Two findings.")]
-    public async Task A_Click_On_Post_Or_An_Approved_Review_Asked_In_Chat_Posts_The_Review_As_Comments_Only_And_Records_Its_Link_And_Signer(bool clicked, string body)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_Click_On_Post_Or_An_Approved_Review_Asked_In_Chat_Posts_The_Review_As_Comments_Only_And_Records_Its_Link_And_Signer(bool clicked)
     {
         var action = clicked ? PostClicked() : ReviewAsked();
         _gate.Claims.Enqueue(action);
@@ -163,10 +165,10 @@ public sealed class GitHubActionExecutorTests : IDisposable
         _gate.GrantReads.ShouldBe(["act-1"]);
         var review = JsonDocument.Parse(_github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldHaveSingleItem()).RootElement;
         review.GetProperty("event").GetString().ShouldBe("COMMENT");
-        review.GetProperty("body").GetString().ShouldBe(body);
+        review.GetProperty("body").GetString()!.ShouldStartWith("### :robot: Scout review: commented, not approved\n", customMessage: "the review carries the note Scout composed");
         var comment = review.GetProperty("comments").EnumerateArray().ShouldHaveSingleItem();
         (comment.GetProperty("path").GetString(), comment.GetProperty("line").GetInt32(), comment.GetProperty("body").GetString())
-            .ShouldBe(("src/Checkout.cs", 3, "c is new"));
+            .ShouldBe(("src/Checkout.cs", 3, ":wrench: **Fix** · c is new\n\n**What is wrong:** Why.\n\n**Proposed fix:** Fix."));
         _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldBeEmpty();
     }
 
@@ -226,6 +228,23 @@ public sealed class GitHubActionExecutorTests : IDisposable
 
         _gate.Records.ShouldHaveSingleItem().ShouldBe((scope, "GitHubActions." + function, "failed: github 502", "act-1", "GitHub is currently unavailable. Try again later."));
         _github.Sent("POST", route).Count.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("create_issue", "New issues", "repos/octocat/hello/issues")]
+    [InlineData("comment_on_pull_request", "Pull request comments", "repos/octocat/hello/issues/42/comments")]
+    public async Task An_Approved_Write_GitHub_Accepts_With_An_Unreadable_Answer_Is_Recorded_As_Possibly_Sent(string function, string scope, string route)
+    {
+        _github.On("POST", route, HttpStatusCode.Created, "{not json");
+        _gate.Claims.Enqueue(Asked(function, scope, function == "create_issue" ? IssuePayload() : CommentPayload()));
+
+        await Executor().RunOnceAsync(CancellationToken.None);
+
+        _gate.Records.ShouldHaveSingleItem().ShouldBe(
+            (scope, "GitHubActions." + function, "failed: github 201", "act-1",
+                "GitHub did not give a readable answer after the request was sent, so it may already be there: check the repository before asking again."),
+            "a write GitHub accepted with an answer Scout cannot read is recorded as possibly sent, never as not sent");
+        _github.Sent("POST", route).Count.ShouldBe(1, "the write is sent once");
     }
 
     [Fact]
@@ -317,7 +336,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
     [Fact]
     public async Task A_Verdict_The_Model_Asked_For_In_Chat_Runs_From_The_Function_s_Arguments_And_Without_A_Tests_Line_Records_Succeeded()
     {
-        _gate.Claims.Enqueue(Verdict("""{"body":"Fix the sum.","comments_json":"[]","commit":"0123456","number":"42","owner":"octocat","repo":"hello","verdict":"request_changes"}"""));
+        _gate.Claims.Enqueue(Verdict("""{"findings_json":"[]","commit":"0123456","number":"42","owner":"octocat","repo":"hello","verdict":"request_changes"}"""));
 
         await Executor().RunOnceAsync(CancellationToken.None);
 
@@ -397,7 +416,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
     public async Task A_Verdict_Sent_Before_A_Crash_Is_Found_On_GitHub_And_Recorded_As_Given_Without_A_Second_Post()
     {
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK,
-            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
+            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}","body":"{{{GivenMarker}}}"}]""");
         _github.On("GET", "repos/octocat/hello/issues/42/comments?per_page=100&page=1", HttpStatusCode.OK, "[]");
         _gate.Claims.Enqueue(Verdict(CardPayload()));
 
@@ -415,7 +434,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
             """[{"id":1,"user":{"login":"bob"},"state":"COMMENTED","commit_id":"x","html_url":"u1"}]""",
             $"<https://api.github.com/{Reviews}?per_page=100&page=2>; rel=\"next\", <https://api.github.com/{Reviews}?per_page=100&page=2>; rel=\"last\"");
         _github.On("GET", Reviews + "?per_page=100&page=2", HttpStatusCode.OK,
-            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
+            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}","body":"{{{GivenMarker}}}"}]""");
         _github.On("GET", "repos/octocat/hello/issues/42/comments?per_page=100&page=1", HttpStatusCode.OK, "[]");
         _gate.Claims.Enqueue(Verdict(CardPayload()));
 
@@ -432,7 +451,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
     public async Task A_Verdict_Found_Already_Given_Posts_Its_Tests_Line_Only_When_The_Signer_Has_Not_Posted_It_And_Either_Way_Records_It_As_Posted(string commenter, bool posted)
     {
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK,
-            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
+            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}","body":"{{{GivenMarker}}}"}]""");
         _github.On("GET", "repos/octocat/hello/issues/42/comments?per_page=100&page=1", HttpStatusCode.OK,
             $$$"""[{"user":{"login":"{{{commenter}}}"},"body":"Approved.\n\nTests: 3 checks passed.","created_at":"2026-11-07T10:00:00Z"}]""");
         _gate.Claims.Enqueue(Verdict(CardPayload()));
@@ -450,7 +469,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
     public async Task A_Failed_Read_Of_The_Comments_Posts_No_Tests_Line_And_Logs_It(HttpStatusCode status)
     {
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK,
-            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
+            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}","body":"{{{GivenMarker}}}"}]""");
         _github.On("GET", "repos/octocat/hello/issues/42/comments?per_page=100&page=1", status, "");
         _gate.Claims.Enqueue(Verdict(CardPayload()));
         var logger = new RecordingLogger();
@@ -468,7 +487,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
     public async Task A_Read_Of_The_Comments_That_Times_Out_Posts_No_Tests_Line_And_Logs_It()
     {
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK,
-            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
+            $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}","body":"{{{GivenMarker}}}"}]""");
         _github.Throw("GET", "repos/octocat/hello/issues/42/comments?per_page=100&page=1", new TaskCanceledException("timed out"));
         _gate.Claims.Enqueue(Verdict(CardPayload()));
         var logger = new RecordingLogger();

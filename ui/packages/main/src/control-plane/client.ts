@@ -873,6 +873,11 @@ const TESTS_LINES: readonly NonNullable<GitHubVerdictProgress['testsLine']>[] = 
   'notPosted',
   'none',
 ];
+const VERDICTS: readonly NonNullable<GitHubVerdictProgress['verdict']>[] = [
+  'approve',
+  'request_changes',
+  'comment',
+];
 
 export function createControlPlaneClient(options: ControlPlaneClientOptions): ControlPlaneClient {
   const { socketPath, token, protoDir, deadlineMs = 10_000, platform = process.platform } = options;
@@ -1047,11 +1052,19 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     approveAction: (id, reason) => decide('ApproveAction', id, reason),
     rejectAction: (id, reason) => decide('RejectAction', id, reason),
     async giveVerdict(request): Promise<GitHubVerdictAction> {
-      const { comments, ...rest } = request;
+      const { findings, coverage, notes, repository, number, verdict, commit, testsLine } = request;
       try {
         const response = await call<{ actionId: string }>(features, 'GiveVerdict', {
-          ...rest,
-          commentsJson: JSON.stringify(comments),
+          repository,
+          number,
+          verdict,
+          commit,
+          testsLine,
+          findingsJson: JSON.stringify(findings),
+          ...(coverage === undefined
+            ? {}
+            : { filesRead: coverage.read, filesChanged: coverage.of }),
+          notes: notes ?? [],
         });
         return { actionId: response.actionId };
       } catch (err: unknown) {
@@ -1072,7 +1085,9 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
         reason: string;
         signedAs: string;
         testsLine: string;
+        verdict: string;
       }>(features, 'GetVerdict', { actionId });
+      const verdict = response.verdict as NonNullable<GitHubVerdictProgress['verdict']>;
       const testsLine = response.testsLine as NonNullable<GitHubVerdictProgress['testsLine']>;
       return {
         actionId,
@@ -1083,6 +1098,7 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
         reason: response.reason.length > 0 ? response.reason : null,
         signedAs: response.signedAs.length > 0 ? response.signedAs : null,
         testsLine: TESTS_LINES.includes(testsLine) ? testsLine : null,
+        verdict: VERDICTS.includes(verdict) ? verdict : null,
       };
     },
     async listWrites(limit): Promise<WriteLogEntryDto[]> {

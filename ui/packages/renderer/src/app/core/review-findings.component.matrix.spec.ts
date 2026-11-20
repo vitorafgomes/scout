@@ -205,7 +205,7 @@ function makeBridge() {
   const verdictListeners: ((status: GitHubVerdictStatus) => void)[] = [];
   const waitingListeners: ((status: GitHubWaitingApproval) => void)[] = [];
   let actions = 0;
-  let key: Omit<GitHubVerdictStatus, keyof GitHubVerdictProgress> = VERDICT_KEY;
+  let key: GitHubVerdictKey & { verdict: GitHubVerdictRequest['verdict'] } = VERDICT_KEY;
   const push = (next: readonly LocalTurn[]) => {
     turns = next;
     listeners.forEach((listener) => listener(turns));
@@ -294,7 +294,7 @@ function makeBridge() {
     waiting: (status: GitHubWaitingApproval) => waitingListeners.forEach((l) => l(status)),
     pushStatus: (status: Omit<GitHubVerdictStatus, 'signedAs' | 'testsLine'>) =>
       verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...status })),
-    verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'>) =>
+    verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine' | 'verdict'>) =>
       verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...key, ...status })),
     appOpenExternal: vi.fn(async (): Promise<void> => undefined),
   };
@@ -386,7 +386,7 @@ const POST_KEY = {
 function postProgress(
   phase: Phase,
   actionId: string,
-): Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'> {
+): Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine' | 'verdict'> {
   return phase === 'posted'
     ? { actionId, state: 'given', url: PR_URL, reason: null }
     : phase === 'failed'
@@ -485,7 +485,7 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
     const footer: Footer =
       row.kind === 'review' && row.phase === 'posting'
         ? 'posting'
-        : row.phase === 'posted'
+        : row.phase === 'posted' && row.kind === 'audit'
           ? 'posted'
           : row.decisions === 'all No'
             ? 'all-dismissed'
@@ -526,7 +526,7 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
             ? 'Nothing to open; every finding was dismissed.'
             : 'Nothing to post; every finding was dismissed.'
           : null,
-      posted: footer === 'posted',
+      posted: row.phase === 'posted',
     });
     if (footer === 'footer') {
       const post = all(root, 'post')[0] as HTMLButtonElement;
@@ -552,7 +552,7 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
         post: all(root, 'post').length,
       }).toEqual({ box: 1, line: true, target: 'acme/shop · PR #5 · commit ec7f951', post: 0 });
     }
-    if (footer === 'posted') {
+    if (row.phase === 'posted') {
       expect({
         title: text(posted!.querySelector('strong')),
         links: Array.from(posted!.querySelectorAll('a')).map((a) => text(a)),
@@ -576,13 +576,12 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
     if (row.window === 'this window' && row.phase !== 'before posting' && row.kind === 'review') {
       expect(sent).toEqual([]);
       expect(clicked).toHaveLength(1);
-      expect({ ...clicked[0]!, body: '', comments: clicked[0]!.comments.length }).toEqual({
+      expect({ ...clicked[0]!, findings: clicked[0]!.findings.length }).toEqual({
         ...POST_KEY,
-        body: '',
-        comments: chosen,
+        findings: chosen,
         testsLine: '',
       });
-      expect(JSON.stringify(clicked[0]!.comments).includes('Edited by the owner')).toBe(
+      expect(JSON.stringify(clicked[0]!.findings).includes('Edited by the owner')).toBe(
         row.decisions === 'one edited Yes',
       );
     } else if (row.window === 'this window' && row.phase !== 'before posting') {
@@ -814,7 +813,7 @@ describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} 
     const here = row.clicked === 'this window' && row.phase !== 'none';
 
     const review = row.kind === 'review';
-    const open = review && row.phase !== 'given';
+    const open = review;
     const giving = row.phase === 'queued' || row.phase === 'running';
     const given = all(root, 'verdict-given')[0];
     const enabled = (test: string) =>
@@ -851,19 +850,17 @@ describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} 
         open && !row.selfAuthored && !giving && CHECK_LINE[row.checks] === null ? [true] : [],
       approveWhenGreen:
         open && !row.selfAuthored && !giving && row.checks === 'pending' ? [true] : [],
-      checkLine: row.phase === 'given' ? null : CHECK_LINE[row.checks],
+      checkLine: CHECK_LINE[row.checks],
       requestChanges: open && !giving && !row.clean ? [true] : [],
-      post: row.phase === 'given' || row.clean ? [] : [!giving],
+      post: row.clean ? [] : [!giving],
       giving: giving ? 'Giving the verdict…' : null,
       failed: row.phase === 'failed' ? FAILED_REASON : null,
       given: row.phase === 'given' ? GIVEN_TITLE[row.button] : null,
-      link: row.phase === 'given' ? PR_URL : null,
+      link: row.phase === 'given' ? 'See the review on GitHub' : null,
       posted: 0,
-      cardButtons: row.phase !== 'given' && !row.clean,
+      cardButtons: !row.clean,
     });
-    expect(text(all(root, 'clean')[0])).toBe(
-      row.clean && row.phase !== 'given' ? 'No findings.' : null,
-    );
+    expect(text(all(root, 'clean')[0])).toBe(row.clean ? 'No findings.' : null);
     expect(verdictsBeforeClick).toBe(0);
     expect(bridge.localAsk).not.toHaveBeenCalled();
     expect(bridge.githubVerdictFor.mock.calls.map(([key]) => key)).toEqual(
@@ -877,8 +874,7 @@ describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} 
               repository: 'acme/shop',
               number: 5,
               verdict: VERDICT[row.button],
-              body: expect.any(String),
-              comments: row.clean
+              findings: row.clean
                 ? []
                 : [expect.objectContaining({ path: 'src/orders/Checkout.cs', line: 88 })],
               commit: 'ec7f951',
@@ -891,7 +887,7 @@ describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} 
     const clickedAgain = row.phase !== 'none' && again !== undefined;
     if (clickedAgain) await click(fixture, again);
     expect(bridge.githubGiveVerdict).toHaveBeenCalledTimes(
-      (here ? 1 : 0) + (row.phase === 'failed' && clickedAgain ? 1 : 0),
+      (here ? 1 : 0) + ((row.phase === 'failed' || row.phase === 'given') && clickedAgain ? 1 : 0),
     );
   });
 });

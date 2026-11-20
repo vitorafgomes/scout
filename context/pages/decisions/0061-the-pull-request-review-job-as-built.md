@@ -1,9 +1,9 @@
 ---
 title: "ADR 0061 - The pull request review job as built"
-version: "1.2"
+version: "1.3"
 date: 2026-11-18
-updated: 2026-11-19
-changes: "v1.2 (2026-11-19) dated line: amended by ADR 0062"
+updated: 2026-11-20
+changes: "v1.3 (2026-11-20) dated line: amended by ADR 0064. v1.2 (2026-11-19) dated line: amended by ADR 0062"
 page_type: adr
 status: accepted
 description: "The review job of ADR 0055 as built: a closed read-only batch turn that counts as read only when the model presented its block, the files read once and the head before each later batch, 10 batches and 60 minutes of running time, and one card that fits, built before the job is done, with the verdict and the read line computed by code."
@@ -30,24 +30,26 @@ Accepted on 2026-11-18. It amends ADR 0055, whose text stays as it was decided; 
 
 Amended 2026-11-19 by [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]: the bounds are replaced by a pause at 60 minutes of clock time since the last resume, and the batches run in waves, code first.
 
+Amended 2026-11-20 by [[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]: a batch's request also carries the purpose, the project's rules and what was removed, each as data.
+
 ## The problem
 
 ADR 0055 described the review job before it existed. Building it showed what the text left open: how often GitHub is read, what a batch whose model answered in prose counts as, how many findings fit on one card, what a failure while the card is built does to the job, and whether a paused review spends its 60 minutes.
 
 ## The decision
 
-- **The batch turn** (`src/Scout.Audit/AuditBatchRunner.cs:90`) is offered the audit batch's five reads and `present_review_findings` only (`:67`), held to the job's repository and pull request (`:412`). Its request carries each file's patch as one line of JSON data (`:204`), and the titles of the job's findings so far, the most recent first and at most 100, on one more line of data, so a later batch is not told nothing (`src/Scout.Audit/AuditWorker.Reviews.cs:122`).
-- **A batch reads only the job's repository.** A call to any offered read that names another repository, by its owner and repo or by the project of the Knowledge functions, is answered with one sentence and never runs; a read of the job's repository runs at any reference (`src/Scout.Audit/AuditBatchRunner.cs:436`). An audit batch is held the same way.
-- **A batch is read only when the model presented it.** A turn that ends with no review block accepted for the job's repository, pull request and commit, answered in prose or naming another commit, is a failed attempt for "the AI model presented no findings for this batch" (`src/Scout.Audit/AuditBatchRunner.cs:95`, `:118`). It is tried once more like any failed turn; a second one leaves the batch not covered and no file read. An accepted empty list is a batch read with no findings (`src/Scout.Audit/FindingsBlock.cs:30`).
+- **The batch turn** (`src/Scout.Audit/AuditBatchRunner.cs:112`) is offered the audit batch's five reads and `present_review_findings` only (`:67`), held to the job's repository and pull request (`:412`). Its request carries each file's patch as one line of JSON data (`:204`), and the titles of the job's findings so far, the most recent first and at most 100, on one more line of data, so a later batch is not told nothing (`src/Scout.Audit/AuditWorker.Reviews.cs:122`).
+- **A batch reads only the job's repository.** A call to any offered read that names another repository, by its owner and repo or by the project of the Knowledge functions, is answered with one sentence and never runs; a read of the job's repository runs at any reference (`src/Scout.Audit/AuditBatchRunner.cs:616`). An audit batch is held the same way.
+- **A batch is read only when the model presented it.** A turn that ends with no review block accepted for the job's repository, pull request and commit, answered in prose or naming another commit, is a failed attempt for "the AI model presented no findings for this batch" (`src/Scout.Audit/AuditBatchRunner.cs:118`, `:141`). It is tried once more like any failed turn; a second one leaves the batch not covered and no file read. An accepted empty list is a batch read with no findings (`src/Scout.Audit/FindingsBlock.cs:30`).
 - **The worker's order.** A running review is picked before any audit, and an audit yields after its batch (`src/Scout.Audit/AuditWorker.cs:70`, `:105`).
 - **GitHub is read once, then the head only.** ADR 0055 said "the head is read again before each batch". The changed files and their patches are read once each time the worker takes the review up, and that read's head serves the first batch; before every later batch only the head commit is read (`src/Scout.Audit/AuditWorker.Reviews.cs:78`). A batch is handed only its own files' patches (`:99`). A first read that already names another head than the job's is the moved head: the batch and every one after it are kept not read naming both commits. A job no longer running after the head read runs no turn (`:94`).
 - **The bounds.** 10 batches, and 60 minutes of running time: the sum of the batches' turns, each from its start to its end as the batch rows keep them, so a paused time never counts and the sum survives a restart (`src/Scout.Audit/AuditWorker.Reviews.cs:151`, `src/Scout.Audit/SqliteAuditStore.cs:331`). This is the owner's decision of 2026-11-17.
 - **The batch cap.** ADR 0055 said the plan is "sized by patch length". A batch is capped by the configured characters, 60,000 unless configured, each file sized by its entry as the request sends it (`src/Scout.Audit/AuditOptions.cs:22`). A cap from the model's context window is not built. A file whose patch alone passes the cap, and one whose path has a control character, are kept not read in batches of their own.
 - **One card, verdict by code.** ADR 0055 said "the verdict and "read N of M files" computed by code". The verdict is one of three, from the kept findings' severities and whether every changed file was read: `ready after the blocking findings`, `ready to merge`, `no blocking findings in the files read` (`src/Scout.Audit/AuditWorker.Reviews.cs:14`, `:17`, `:20`, `:260`).
   - The card takes the most severe findings first while their JSON stays within 20,000 characters, at most 50, under the block the plugin accepts (`:32`, `:221`). A note counts the findings left off.
-  - A card the function refuses, for the checks and the kept test run it adds, is presented again with half as many findings until a block is attached; the plain sentence is only for a function that refuses even an empty list (`src/Scout.Audit/AuditWorker.Reviews.cs:209`).
+  - A card the function refuses, for the checks and the kept test run it adds, is presented again with half as many findings until a block is attached; the plain sentence is only for a function that refuses even an empty list (`src/Scout.Audit/AuditWorker.Reviews.cs:213`).
   - The card is built before the job is marked done, and posted only when the finish took (`:62`). A failure while it is built leaves the job running with every batch done, for the next wake.
-- **From the chat.** `start_pull_request_review` and `get_pull_request_review_status` (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Reviews.cs:26`, `:64`). The start is a declared write on the `github` feature's `Scout's data folder` row (`src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:155`, `src/Scout.ControlPlane/Features/FeatureCatalog.cs:98`); the status is a read in the chat's general set.
+- **From the chat.** `start_pull_request_review` and `get_pull_request_review_status` (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Reviews.cs:28`, `:110`). The start is a declared write on the `github` feature's `Scout's data folder` row (`src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:155`, `src/Scout.ControlPlane/Features/FeatureCatalog.cs:98`); the status is a read in the chat's general set.
 
 ## Calls that leave the process
 

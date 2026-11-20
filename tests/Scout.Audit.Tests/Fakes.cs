@@ -93,15 +93,18 @@ internal sealed class RacingStore(SqliteAuditStore store) : IAuditJobStore
 
     public Func<Task>? BeforePreflight { get; set; }
 
+    public Func<Task>? BeforeInputs { get; set; }
+
     public async Task<string> CreateJobAsync(
-        string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct)
+        string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct,
+        ReviewInputs? inputs = null)
     {
         if (BeforeCreate is not null)
         {
             await BeforeCreate();
         }
 
-        return await store.CreateJobAsync(owner, repo, pullRequest, commit, origin, batches, preflight, ct);
+        return await store.CreateJobAsync(owner, repo, pullRequest, commit, origin, batches, preflight, ct, inputs);
     }
 
     public async Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct)
@@ -158,6 +161,16 @@ internal sealed class RacingStore(SqliteAuditStore store) : IAuditJobStore
         }
 
         return await store.PreflightAsync(jobId, ct);
+    }
+
+    public async Task<ReviewInputs?> InputsAsync(string jobId, CancellationToken ct)
+    {
+        if (BeforeInputs is not null)
+        {
+            await BeforeInputs();
+        }
+
+        return await store.InputsAsync(jobId, ct);
     }
 
     public Task NotCoveredAsync(string jobId, int order, IReadOnlyList<string> filesRead, string reason, CancellationToken ct) =>

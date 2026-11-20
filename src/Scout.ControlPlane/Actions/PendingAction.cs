@@ -45,7 +45,7 @@ public sealed record PendingAction(
     public const int MaxPayloadLength = 200_000;
 
     /// <summary>The payload fields an executed action keeps, what says which pull request, commit and verdict it was; the rest is dropped.</summary>
-    public static readonly IReadOnlyList<string> KeptAfterExecution = ["owner", "repo", "number", "commit", "verdict"];
+    public static readonly IReadOnlyList<string> KeptAfterExecution = ["owner", "repo", "number", "commit", "verdict", "content"];
 
     /// <summary>
     /// What the worker needs to run the action, as JSON, kept with the action; never part of the summary, never logged,
@@ -139,6 +139,11 @@ public sealed record PendingAction(
 
             var (title, titleCut) = Text(document.RootElement, "title", maxTitle);
             var (body, bodyCut) = Text(document.RootElement, "body", maxBody);
+            if (body is null)
+            {
+                (body, bodyCut) = Text(document.RootElement, "findings_json", maxBody);
+            }
+
             return (title, body, titleCut || bodyCut);
         }
         catch (JsonException)

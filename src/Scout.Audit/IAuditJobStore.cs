@@ -48,11 +48,13 @@ internal interface IAuditJobStore
 {
     /// <summary>
     /// Keep a running job with its batches in one transaction, each pending, or not covered with its reason when the plan gave
-    /// it a failure, and the checks a review ran before it started in the same save; answers the job's id. A job with
-    /// <paramref name="pullRequest"/> is a review of that pull request, one without it an audit, which keeps no checks.
+    /// it a failure, and the checks a review ran before it started and the inputs its batches are handed in the same save;
+    /// answers the job's id. A job with <paramref name="pullRequest"/> is a review of that pull request, one without it an
+    /// audit, which keeps no checks and no inputs.
     /// </summary>
     Task<string> CreateJobAsync(
-        string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct);
+        string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct,
+        ReviewInputs? inputs = null);
 
     /// <summary>The running jobs, oldest first.</summary>
     Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct);
@@ -111,6 +113,9 @@ internal interface IAuditJobStore
 
     /// <summary>The checks a review ran before it started, as they were kept with it; null for an audit or a job with none kept.</summary>
     Task<ReviewPreflight?> PreflightAsync(string jobId, CancellationToken ct);
+
+    /// <summary>The inputs a review's batches are handed, as they were kept with it; null for an audit, a job with none kept, or a kept value that cannot be read.</summary>
+    Task<ReviewInputs?> InputsAsync(string jobId, CancellationToken ct);
 
     /// <summary>
     /// The clock time during which any of the job's batches ran since it last resumed, batches that ran at once counted

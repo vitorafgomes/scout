@@ -772,7 +772,7 @@ public sealed class WriteGateServiceTests : IDisposable
                 await new ActionDecisionService(_states, _actions, log).ApproveAsync(waiting!, reason: null, CancellationToken.None),
             "a card verdict" => await new PullRequestVerdictService(_states, _actions, log).GiveAsync(
                 new PullRequestVerdictRequest(
-                    "octocat", "hello", 42, "approve", "Ready to merge.", [new VerdictComment("src/Checkout.cs", 3, "c is new")],
+                    "octocat", "hello", 42, "approve", [new VerdictFinding("a", "fix", "c is new", "src/Checkout.cs", 3, null, "Why.", "Fix.", null)],
                     "0123456789abcdef0123456789abcdef01234567", "Tests: 3 checks passed."),
                 CancellationToken.None),
             _ => (await new OperatorService(store, new WriteGateService(new FeatureCatalog(), _states, _actions, log), log)

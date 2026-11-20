@@ -59,6 +59,8 @@ internal sealed partial class AuditWorker
     internal async Task RunReviewAsync(AuditJob job, CancellationToken ct)
     {
         var instructions = await runner.ReviewInstructionsAsync(job, ct).ConfigureAwait(false);
+        var inputs = await store.InputsAsync(job.Id, ct).ConfigureAwait(false);
+        var constant = inputs is null ? null : AuditBatchRunner.ConstantBlock(inputs);
         string? ended = null;
         ReviewPullRequest? read = null;
         AuditJob? current;
@@ -112,7 +114,7 @@ internal sealed partial class AuditWorker
                         continue;
                     }
 
-                    if (!await RunWaveAsync(current, instructions, wave, read!, ct).ConfigureAwait(false))
+                    if (!await RunWaveAsync(current, instructions, inputs, constant, wave, read!, ct).ConfigureAwait(false))
                     {
                         return;
                     }
@@ -135,8 +137,10 @@ internal sealed partial class AuditWorker
     /// <summary>
     /// One wave: every batch begun, then their turns run together, each saved as it ends under one lock with its progress
     /// line; false when a batch asked to pause and the job's pause took, its one notice posted after the others were saved.
+    /// Each batch is handed the <paramref name="inputs"/> kept at the review's start, with their <paramref name="constant"/> block built once per run.
     /// </summary>
-    private async Task<bool> RunWaveAsync(AuditJob job, string instructions, IReadOnlyList<AuditBatch> wave, ReviewPullRequest read, CancellationToken ct)
+    private async Task<bool> RunWaveAsync(
+        AuditJob job, string instructions, ReviewInputs? inputs, string? constant, IReadOnlyList<AuditBatch> wave, ReviewPullRequest read, CancellationToken ct)
     {
         var count = (await store.BatchesAsync(job.Id, ct).ConfigureAwait(false)).Count;
         var titles = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false))
@@ -154,7 +158,7 @@ internal sealed partial class AuditWorker
         await Task.WhenAll(wave.Select(async batch =>
         {
             var patches = read.Files.Where(f => batch.Files.Contains(f.Path, StringComparer.Ordinal)).ToList();
-            var outcome = await runner.RunReviewAsync(job, instructions, batch, count, titles, patches, ct).ConfigureAwait(false);
+            var outcome = await runner.RunReviewAsync(job, instructions, batch, count, titles, patches, ct, inputs, constant).ConfigureAwait(false);
             await saves.WaitAsync(ct).ConfigureAwait(false);
             try
             {
@@ -252,7 +256,7 @@ internal sealed partial class AuditWorker
     /// fit the card (<see cref="CardFindings"/>), presented through <c>present_review_findings</c> with
     /// the read line, then the block completed with the files read of the files changed, the notes and, when the plugin
     /// kept no test run, the tests as not run. The notes are Scout's sentences: each warning the checks kept at the start,
-    /// the files not read per reason, a moved head and a bound reached among them, and how many findings the card leaves
+    /// the inputs' counts of what was removed and of what could not be read, the files not read per reason, a moved head and a bound reached among them, and how many findings the card leaves
     /// out. A block the function refuses, or none, becomes one sentence with the verdict, the files read and the findings kept.
     /// </summary>
     private async Task<string> ReviewCardAsync(AuditJob job, CancellationToken ct, bool stopped = false)
@@ -260,12 +264,14 @@ internal sealed partial class AuditWorker
         var batches = await store.BatchesAsync(job.Id, ct).ConfigureAwait(false);
         var findings = await store.FindingsAsync(job.Id, ct).ConfigureAwait(false);
         var preflight = await store.PreflightAsync(job.Id, ct).ConfigureAwait(false);
+        var inputs = await store.InputsAsync(job.Id, ct).ConfigureAwait(false);
         var read = FilesRead(batches);
         var of = batches.Sum(b => b.Files.Count);
         var verdict = ReviewVerdict(findings, read == of);
         List<string> notes =
         [
             .. preflight?.Checks.Where(c => c.Outcome == PreflightOutcome.Warning).Select(c => c.Sentence) ?? [],
+            .. inputs?.Notes() ?? [],
             .. NotRead(batches, stopped),
         ];
         var shown = CardFindings(findings);

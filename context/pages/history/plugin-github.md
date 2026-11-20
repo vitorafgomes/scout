@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub - history"
-version: "1.5"
+version: "1.6"
 date: 2026-11-10
-updated: 2026-11-19
-changes: "v1.5 (2026-11-19): the review start counts the files GitHub did not list. v1.4 (2026-11-17): a pull request whose diffs were left out is reviewed as a job. v1.3 (2026-11-15): no approval over a conflict; unrunnable in the answer and the block. v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-20
+changes: "v1.6 (2026-11-20): the review note, the review inputs and an unreadable answer. v1.5 (2026-11-19): the review start counts the files GitHub did not list. v1.4 (2026-11-17): a pull request whose diffs were left out is reviewed as a job. v1.3 (2026-11-15): no approval over a conflict; unrunnable in the answer and the block. v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the GitHub plugin and when."
@@ -18,6 +18,17 @@ reliability: high
 # Plugin.GitHub - history
 
 > Dated changes to [[pages/services/plugin-github]]; the service page states how it works now.
+
+## 2026-11-20 - The review note, the review inputs and an unreadable answer
+
+- **Asked for:** the owner's decisions of 2026-11-19 ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]], [[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]).
+- **What it was:** the review and the verdict posted a body the desktop or the model wrote; a success GitHub answered with an unreadable body escaped as a `JsonException` and was recorded as a failure that sent nothing.
+- **What it is:**
+  - `ReviewNote` composes the note and each comment from `findings_json`; the note ends with its digest marker, and a verdict already given is matched by it ([[pages/services/plugin-github/the-review-note]]).
+  - `GitHubVerdictRunner.PreviewAsync` composes the note a verdict would post and sends nothing.
+  - `start_pull_request_review` reads the issue the description names, at most once, and hands the review job the purpose and each file's status.
+  - A success with an empty or unreadable body is a failure saying "GitHub did not give a readable answer after the request was sent, so it may already be there: check the repository before asking again." (`src/Scout.Plugin.GitHub/GitHubWriteClient.cs`).
+- **Tests:** `ReviewNoteTests`, `ReviewNoteInlineTests`, `GitHubReviewNoteWritesTests`, `GitHubActionsPluginReviewJobTests` (four new), `GitHubWriteClientTests::A_Write_GitHub_Accepts_With_An_Unreadable_Answer_Says_It_May_Already_Be_There`.
 
 ## 2026-11-19 - The review start counts the files GitHub did not list
 

@@ -35,7 +35,8 @@ public sealed class LocalChatAdapterTests
             Func<MeetingRecord, string>? renderMeeting = null,
             IConversationMemoryStore? memory = null,
             ISpeechSynthesizer? speech = null,
-            ICarriedSkills? carried = null)
+            ICarriedSkills? carried = null,
+            IReviewNotePreview? preview = null)
         {
             Stdout = new LineCapture();
             _reader = new AnonymousPipeClientStream(PipeDirection.In, _stdin.ClientSafePipeHandle);
@@ -52,7 +53,8 @@ public sealed class LocalChatAdapterTests
                 memory,
                 memory is null && carried is null ? null : new ConversationKeyProvider(),
                 speech,
-                carried);
+                carried,
+                preview);
             Adapter.StartAsync(handler, CancellationToken.None).GetAwaiter().GetResult();
         }
 
@@ -939,6 +941,111 @@ public sealed class LocalChatAdapterTests
 
         failed.GetProperty("text").GetString().ShouldBe("Scout could not read the text on the screen; see Scout logs.");
         harness.Stdout.KindsFor("r-1").ShouldBe(["fail"]);
+    }
+
+    private sealed class FakePreview(Func<string, string> answer) : IReviewNotePreview
+    {
+        public List<string> Requests { get; } = [];
+
+        public Task<string> PreviewAsync(string requestJson, CancellationToken ct)
+        {
+            Requests.Add(requestJson);
+            return Task.FromResult(answer(requestJson));
+        }
+    }
+
+    private const string NoteVerdict = """{"owner":"octocat","repo":"hello","number":42,"verdict":"approve","findings":[],"commit":"abc1234"}""";
+
+    private static string Note(string id) => $$"""{"type":"note","id":"{{id}}","note":{{NoteVerdict}}}""";
+
+    [Fact]
+    public async Task A_Note_Request_Is_Answered_With_The_Previewer_s_Text_And_Neither_Is_Logged()
+    {
+        const string preview = """{"body":"### :robot: Scout review: approved","comments":[],"dropped":[]}""";
+        var previewer = new FakePreview(_ => preview);
+        var logger = new RecordingLogger<LocalChatAdapter>();
+        var received = new List<ChatMessage>();
+        await using var harness = new Harness(Answering("never", received), logger: logger, preview: previewer);
+
+        harness.Send(Note("n-1"));
+        var answered = await harness.Stdout.WaitForAsync("n-1", "note");
+        await harness.Adapter.StopAsync(CancellationToken.None);
+
+        answered.GetProperty("text").GetString().ShouldBe(preview, "the note event carries the previewer's JSON as text");
+        previewer.Requests.ShouldBe([NoteVerdict], "the previewer gets the verdict as the card would queue it");
+        received.ShouldBeEmpty("a preview is never a question for the model");
+        List<string> lines;
+        lock (logger.Entries)
+        {
+            lines = logger.Entries.Select(e => e.Message).ToList();
+        }
+
+        lines.ShouldContain(line => line.Contains("n-1", StringComparison.Ordinal) && line.Contains($"answerLen={preview.Length}", StringComparison.Ordinal));
+        lines.ShouldAllBe(line => !line.Contains("octocat", StringComparison.Ordinal) && !line.Contains("Scout review", StringComparison.Ordinal),
+            "neither the request nor the reply is logged");
+    }
+
+    [Fact]
+    public async Task A_Note_Without_A_Previewer_Answers_Fail_With_Its_Sentence()
+    {
+        await using var harness = new Harness(Answering("never"));
+
+        harness.Send(Note("n-1"));
+        var refused = await harness.Stdout.WaitForAsync("n-1", "fail");
+
+        refused.GetProperty("text").GetString().ShouldBe("Review previews are not available in this Scout.");
+    }
+
+    [Fact]
+    public async Task A_Note_Request_Whose_Previewer_Fails_Answers_Fail()
+    {
+        const string sentence = "The review is over 60,000 characters; keep fewer findings.";
+        var logger = new RecordingLogger<LocalChatAdapter>();
+        await using var harness = new Harness(Answering("never"), logger: logger, preview: new FakePreview(_ => throw new WriteFailedException(sentence, "refused")));
+
+        harness.Send(Note("n-1"));
+        var refused = await harness.Stdout.WaitForAsync("n-1", "fail");
+        await harness.Adapter.StopAsync(CancellationToken.None);
+
+        refused.GetProperty("text").GetString().ShouldBe(sentence, "a preview that fails answers its sentence, so the card can show why");
+        List<string> lines;
+        lock (logger.Entries)
+        {
+            lines = logger.Entries.Select(e => e.Message).ToList();
+        }
+
+        lines.ShouldAllBe(line => !line.Contains("octocat", StringComparison.Ordinal), "the request is not logged when the preview fails");
+    }
+
+    [Fact]
+    public async Task A_Note_Request_Whose_Previewer_Fails_Without_A_Sentence_Answers_The_Fixed_Sentence_And_Logs_The_Type()
+    {
+        var logger = new RecordingLogger<LocalChatAdapter>();
+        await using var harness = new Harness(Answering("never"), logger: logger, preview: new FakePreview(_ => throw new InvalidOperationException("Sequence contains no elements")));
+
+        harness.Send(Note("n-1"));
+        var refused = await harness.Stdout.WaitForAsync("n-1", "fail");
+        await harness.Adapter.StopAsync(CancellationToken.None);
+
+        refused.GetProperty("text").GetString().ShouldBe("Scout could not compose the preview.", "a failure that carries no sentence Scout wrote never shows its raw message on the card");
+        List<string> lines;
+        lock (logger.Entries)
+        {
+            lines = logger.Entries.Select(e => e.Message).ToList();
+        }
+
+        lines.ShouldContain(line => line.Contains("InvalidOperationException", StringComparison.Ordinal), "the type of the failure is logged");
+    }
+
+    [Fact]
+    public async Task A_Note_Without_A_Verdict_Answers_Fail()
+    {
+        await using var harness = new Harness(Answering("never"), preview: new FakePreview(_ => "{}"));
+
+        harness.Send("""{"type":"note","id":"n-1"}""");
+        var refused = await harness.Stdout.WaitForAsync("n-1", "fail");
+
+        refused.GetProperty("text").GetString().ShouldBe("A preview needs the verdict to compose.");
     }
 
     [Fact]

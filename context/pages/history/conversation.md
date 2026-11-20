@@ -1,9 +1,9 @@
 ---
 title: "Conversation - history"
-version: "1.3"
+version: "1.4"
 date: 2026-11-09
-updated: 2026-11-17
-changes: "v1.3 (2026-11-17): the general set offers the review job's status. v1.2 (2026-11-11) a task the turn started keeps no owner authority after the turn."
+updated: 2026-11-20
+changes: "v1.4 (2026-11-20): the note preview abstraction. v1.3 (2026-11-17): the general set offers the review job's status. v1.2 (2026-11-11) a task the turn started keeps no owner authority after the turn."
 page_type: reference
 status: artefact
 description: "What changed in the conversation core and when."
@@ -22,6 +22,11 @@ reliability: high
 # Conversation - history
 
 > Dated changes to [[pages/services/conversation]]; the service page states how it works now.
+
+## 2026-11-20 - The note preview abstraction
+
+- **What changed:** `IReviewNotePreview` (`src/Scout.Conversation/Abstractions/IReviewNotePreview.cs`) is the abstraction the local adapter asks for a note preview, implemented by the GitHub plugin ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **Tests:** through the adapter's and the plugin's tests.
 
 ## 2026-11-17 - The general set offers the review job's status
 

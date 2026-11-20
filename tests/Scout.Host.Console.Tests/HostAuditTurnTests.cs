@@ -263,6 +263,30 @@ public sealed class HostAuditTurnTests : IDisposable
     }
 
     [Fact]
+    public async Task A_review_started_through_the_plugin_keeps_its_inputs_on_the_job()
+    {
+        Snapshot("AGENTS.md", "src/Orders/Checkout.cs");
+        var gate = new AllowingGate();
+        using var host = AuditHost(new ToolCallingModel(), gate);
+        var kernel = host.Services.GetRequiredService<Kernel>();
+
+        var started = await kernel.InvokeAsync<string>("GitHubActions", "start_pull_request_review", new KernelArguments { ["owner"] = "acme", ["repo"] = "shop", ["number"] = 16 });
+
+        started.ShouldStartWith("review started:", Case.Sensitive, customMessage: "the review starts through the plugin, the host adapter and the write gate");
+        var store = host.Services.GetRequiredService<IAuditJobStore>();
+        var job = (await store.LatestJobAsync("acme", "shop", 16, CancellationToken.None)).ShouldNotBeNull();
+        var inputs = (await store.InputsAsync(job.Id, CancellationToken.None)).ShouldNotBeNull("the job row keeps the inputs");
+        inputs.Purpose.ShouldBe(
+            new ReviewPurpose("Checkout total", "Fixes #7.", 7, "Totals are negative", "A refund makes the total negative."),
+            "the title, the description and the linked issue read through the plugin reach the job");
+        inputs.Rules.Files.Select(f => f.Path).ShouldBe(["AGENTS.md"], "the rule files are read from the snapshot at the head");
+        inputs.Removed.Entries.Select(e => (e.Path, e.What, string.Join(",", e.StillPresent))).ShouldBe(
+            [("tests/CheckoutTests.cs", RemovedEntry.TestFileDeleted, "src/Orders/Checkout.cs")], "the removed file's status crosses the host and the code it tested is found in the snapshot");
+        gate.Requests.Count(r => r.Contains("start_pull_request_review", StringComparison.Ordinal)).ShouldBe(1, "the start is the one declared write");
+        _gitHubPaths.Count(p => p == "/repos/acme/shop/issues/7").ShouldBe(1, "the linked issue is read once");
+    }
+
+    [Fact]
     public async Task A_review_start_the_write_gate_refuses_runs_nothing_and_answers_the_gates_reason()
     {
         const string Reason = "GitHub writes into Scout's data folder are not allowed: allow them on the Features screen of Scout Desktop.";
@@ -474,6 +498,7 @@ public sealed class HostAuditTurnTests : IDisposable
             {
                 "/repos/acme/shop" => """{"full_name":"acme/shop","default_branch":"main"}""",
                 "/repos/acme/shop/commits/main" => $$"""{"sha":"{{Sha}}"}""",
+                var head when head == $"/repos/acme/shop/commits/{Sha}" => $$"""{"sha":"{{Sha}}"}""",
                 "/repos/acme/shop/pulls/12" => $$"""{"number":12,"title":"Checkout","user":{"login":"octo"},"head":{"ref":"feature","sha":"{{Sha}}"},"base":{"ref":"main"},"changed_files":2}""",
                 "/repos/acme/shop/pulls/15" => """{"number":15,"title":"No head","user":{"login":"octo"},"head":{"ref":"feature"},"base":{"ref":"main"},"changed_files":0}""",
                 var checks when checks == $"/repos/acme/shop/commits/{Sha}/check-runs" => "{\"total_count\":40,\"check_runs\":["
@@ -481,6 +506,9 @@ public sealed class HostAuditTurnTests : IDisposable
                     + "]}",
                 var status when status == $"/repos/acme/shop/commits/{Sha}/status" => """{"statuses":[]}""",
                 "/user" => """{"login":"scout-owner"}""",
+                "/repos/acme/shop/pulls/16" => $$"""{"number":16,"title":"Checkout total","body":"Fixes #7.","user":{"login":"octo"},"head":{"ref":"feature","sha":"{{Sha}}"},"base":{"ref":"main"},"changed_files":2}""",
+                "/repos/acme/shop/pulls/16/files" => "[{\"filename\":\"src/Orders/Checkout.cs\",\"status\":\"modified\",\"additions\":1,\"deletions\":0,\"patch\":\"@@ -1 +1 @@\\n+" + new string('a', 12_100) + "\"},{\"filename\":\"tests/CheckoutTests.cs\",\"status\":\"removed\",\"additions\":0,\"deletions\":3}]",
+                "/repos/acme/shop/issues/7" => """{"number":7,"title":"Totals are negative","body":"A refund makes the total negative.","user":{"login":"acme-dev"},"state":"open","labels":[],"comments":0,"html_url":"https://github.com/acme/shop/issues/7"}""",
                 "/repos/acme/shop/pulls/12/files" => """[{"filename":"src/A.cs","status":"modified","additions":1,"deletions":0,"patch":"@@ -1 +1 @@\n+a"},{"filename":"img.png","status":"added","additions":0,"deletions":0}]""",
                 _ => null,
             };

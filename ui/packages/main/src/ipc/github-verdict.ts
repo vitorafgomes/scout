@@ -5,10 +5,12 @@ import {
   encodeIpcErrorMessage,
   serializeError,
   type GitHubVerdictAction,
-  type GitHubVerdictComment,
   type GitHubVerdictKey,
+  type GitHubVerdictProgress,
   type GitHubVerdictRequest,
   type GitHubVerdictStatus,
+  type ReviewCoverage,
+  type ReviewFinding,
 } from '@scout/shared';
 import type { ControlPlaneClient } from '../control-plane/client.js';
 import type { WaitingApprovals } from '../github/waiting-approvals.js';
@@ -16,9 +18,9 @@ import type { Logger } from '../util/logger.js';
 import {
   guardChannels,
   senderCheck,
+  VERDICT_WINDOW_GUARD,
   type RefuseUnlessFrom,
   type SenderHooks,
-  type SenderKind,
 } from './sender-check.js';
 
 export type VerdictClient = Pick<ControlPlaneClient, 'giveVerdict' | 'getVerdict'>;
@@ -28,13 +30,16 @@ export interface VerdictTimers {
   clearTimeout(handle: unknown): void;
 }
 
-/** The windows that show a review's verdict buttons: the Chat screen of the main window, and quick ask. */
-const VERDICT_WINDOWS: readonly SenderKind[] = ['main', 'quick-ask'];
 const POLL_MS = 2_000;
 const MAX_POLL_FAILURES = 5;
-const MAX_BODY_CHARS = 65_000;
-const MAX_COMMENTS = 50;
+const MAX_FINDINGS = 50;
+const MAX_TITLE_CHARS = 200;
+const MAX_FINDING_TEXT_CHARS = 4_000;
+const MAX_RULE_CHARS = 300;
+const MAX_NOTES = 20;
+const MAX_NOTE_CHARS = 300;
 const MAX_TESTS_LINE_CHARS = 4_000;
+const FINDING_ID = /^[A-Za-z0-9-]{1,40}$/;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 const COMMIT_PATTERN = /^[0-9a-f]{7,40}$/;
 const ACTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -54,25 +59,73 @@ function isText(value: unknown, max: number, min = 0): value is string {
   return typeof value === 'string' && value.length >= min && value.length <= max;
 }
 
-function toComment(raw: unknown): GitHubVerdictComment {
+function isFilled(value: unknown, max: number): value is string {
+  return isText(value, max) && value.trim().length > 0;
+}
+
+/** One finding as the card's parser accepts it, with `why` and `fix` of at most 4,000 characters each. */
+function toFinding(raw: unknown): ReviewFinding {
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-  const { path, line, body } = r;
+  const { id, severity, title, path, line, context, why, fix, rule } = r;
   if (
-    !isText(path, 1_000, 1) ||
+    typeof id !== 'string' ||
+    !FINDING_ID.test(id) ||
+    (severity !== 'block' && severity !== 'fix' && severity !== 'nit') ||
+    !isFilled(title, MAX_TITLE_CHARS) ||
+    !isFilled(path, 1_000) ||
+    path.includes('..') ||
     typeof line !== 'number' ||
     !Number.isInteger(line) ||
     line < 1 ||
-    !isText(body, MAX_BODY_CHARS, 1)
+    (context !== undefined && !isText(context, MAX_FINDING_TEXT_CHARS)) ||
+    !isFilled(why, MAX_FINDING_TEXT_CHARS) ||
+    !isFilled(fix, MAX_FINDING_TEXT_CHARS) ||
+    (rule !== undefined && !isFilled(rule, MAX_RULE_CHARS))
   ) {
     invalid();
   }
-  return { path, line, body };
+  return {
+    id,
+    severity,
+    title,
+    path,
+    line,
+    ...(context === undefined ? {} : { context }),
+    why,
+    fix,
+    ...(rule === undefined ? {} : { rule }),
+  };
 }
 
-/** Checks a verdict from the renderer field by field and keeps only the known fields. */
+function toCoverage(raw: unknown): ReviewCoverage {
+  const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const { read, of } = r;
+  if (
+    !Number.isInteger(read) ||
+    !Number.isInteger(of) ||
+    (read as number) < 0 ||
+    (read as number) > (of as number)
+  ) {
+    invalid();
+  }
+  return { read: read as number, of: of as number };
+}
+
+function toNotes(raw: unknown): readonly string[] {
+  if (
+    !Array.isArray(raw) ||
+    raw.length > MAX_NOTES ||
+    !raw.every((n) => isFilled(n, MAX_NOTE_CHARS))
+  ) {
+    invalid();
+  }
+  return raw as string[];
+}
+
+/** Checks a verdict from the renderer field by field and keeps only the known fields; it carries findings, never a body. */
 export function toVerdictRequest(raw: unknown): GitHubVerdictRequest {
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-  const { repository, number, verdict, body, comments, commit, testsLine } = r;
+  const { repository, number, verdict, findings, coverage, notes, commit, testsLine } = r;
   if (
     typeof repository !== 'string' ||
     !REPOSITORY_PATTERN.test(repository) ||
@@ -81,9 +134,8 @@ export function toVerdictRequest(raw: unknown): GitHubVerdictRequest {
     !Number.isInteger(number) ||
     number < 1 ||
     (verdict !== 'approve' && verdict !== 'request_changes' && verdict !== 'comment') ||
-    !isText(body, MAX_BODY_CHARS) ||
-    !Array.isArray(comments) ||
-    comments.length > MAX_COMMENTS ||
+    !Array.isArray(findings) ||
+    findings.length > MAX_FINDINGS ||
     typeof commit !== 'string' ||
     !COMMIT_PATTERN.test(commit) ||
     !isText(testsLine, MAX_TESTS_LINE_CHARS)
@@ -94,8 +146,9 @@ export function toVerdictRequest(raw: unknown): GitHubVerdictRequest {
     repository,
     number,
     verdict,
-    body,
-    comments: comments.map(toComment),
+    findings: findings.map(toFinding),
+    ...(coverage === undefined ? {} : { coverage: toCoverage(coverage) }),
+    ...(notes === undefined ? {} : { notes: toNotes(notes) }),
     commit,
     testsLine,
   };
@@ -107,7 +160,7 @@ export function refuseUnlessVerdictWindow(
   event: unknown,
   channel: string,
 ): void {
-  refuseUnlessFrom(FROM_VERDICT_WINDOWS.allowed, event, channel, FROM_VERDICT_WINDOWS.refusal);
+  refuseUnlessFrom(VERDICT_WINDOW_GUARD.allowed, event, channel, VERDICT_WINDOW_GUARD.refusal);
 }
 
 /** A window main can push to; Electron's BrowserWindow is one. */
@@ -159,21 +212,13 @@ export interface GitHubVerdictHandlers {
   dispose(): void;
 }
 
-const FROM_VERDICT_WINDOWS = {
-  allowed: VERDICT_WINDOWS,
-  refusal: () =>
-    new ScoutError(
-      'github/not-verdict-window',
-      'A verdict can be given only from the Scout window or quick ask.',
-    ),
-};
-
 /**
  * The card's verdict, or its Post as the verdict `comment`: the owner's click goes to the control plane as an already-approved action, and main follows
- * that action every 2 seconds, pushing each change to every window, until it is given or failed. One pull request
- * at one reviewed commit gets one action: a click from either window while it is queued, running or given answers
- * that action instead of asking again; a failed one allows a new click. Approve when the checks pass hands an approval
- * to `waiting`, and only the windows that give verdicts may ask for it or cancel it.
+ * that action every 2 seconds, pushing each change to every window, until it is given or failed. The control plane
+ * decides what is identical: every click is sent, a different verdict or other findings at a commit that has one is a
+ * new action, and an identical one answers the action already there; two identical clicks in flight are sent once.
+ * Approve when the checks pass hands an approval to `waiting`, refused only while an approval of the commit stands,
+ * and only the windows that give verdicts may ask for it or cancel it.
  */
 export function registerGitHubVerdictHandlers(
   ownIpcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
@@ -185,14 +230,23 @@ export function registerGitHubVerdictHandlers(
   timers: VerdictTimers = { setTimeout, clearTimeout },
 ): GitHubVerdictHandlers {
   const ipcMain = guardChannels(ownIpcMain, senderCheck(senders, logger), {
-    [CHANNEL.githubGiveVerdict]: FROM_VERDICT_WINDOWS,
-    [CHANNEL.githubApproveWhenChecksPass]: FROM_VERDICT_WINDOWS,
-    [CHANNEL.githubCancelWaitingApproval]: FROM_VERDICT_WINDOWS,
+    [CHANNEL.githubGiveVerdict]: VERDICT_WINDOW_GUARD,
+    [CHANNEL.githubApproveWhenChecksPass]: VERDICT_WINDOW_GUARD,
+    [CHANNEL.githubCancelWaitingApproval]: VERDICT_WINDOW_GUARD,
   });
   const following = new Map<string, unknown>();
   const verdicts = new Map<string, GitHubVerdictStatus>();
   const byKey = new Map<string, string>();
   const giving = new Map<string, Promise<GitHubVerdictAction>>();
+
+  /** The known status updated by `progress`, keeping its verdict when the control plane reports none. */
+  function merged(
+    known: GitHubVerdictStatus,
+    progress: GitHubVerdictProgress,
+  ): GitHubVerdictStatus {
+    const { verdict, ...rest } = progress;
+    return { ...known, ...rest, verdict: verdict ?? known.verdict, actionId: known.actionId };
+  }
 
   function record(status: GitHubVerdictStatus): void {
     const previous = verdicts.get(status.actionId);
@@ -210,7 +264,7 @@ export function registerGitHubVerdictHandlers(
             const progress = await (await getClient()).getVerdict(actionId);
             const known = verdicts.get(actionId);
             if (!following.has(actionId) || known === undefined) return;
-            record({ ...known, ...progress, actionId });
+            record(merged(known, progress));
             if (progress.state === 'given' || progress.state === 'failed') {
               following.delete(actionId);
               return;
@@ -234,11 +288,7 @@ export function registerGitHubVerdictHandlers(
     request: GitHubVerdictRequest,
     afterChecks = false,
   ): Promise<GitHubVerdictAction> {
-    const key = keyOf(request);
-    const existing = verdicts.get(byKey.get(key) ?? '');
-    if (existing !== undefined && existing.state !== 'failed') {
-      return { actionId: existing.actionId };
-    }
+    const key = `${keyOf(request)} ${request.verdict} ${JSON.stringify(request.findings)}`;
     const inFlight = giving.get(key);
     if (inFlight !== undefined) return inFlight;
     const sending = (async () => {
@@ -297,7 +347,7 @@ export function registerGitHubVerdictHandlers(
       if (known === undefined) {
         throw new ScoutError('github/unknown-verdict', 'Scout has no verdict with that id.');
       }
-      record({ ...known, ...(await (await getClient()).getVerdict(actionId)), actionId });
+      record(merged(known, await (await getClient()).getVerdict(actionId)));
       return verdicts.get(actionId);
     } catch (err: unknown) {
       logger.warn('github: verdict status not answered', {
@@ -321,7 +371,7 @@ export function registerGitHubVerdictHandlers(
       const request = toVerdictRequest(raw);
       if (request.verdict !== 'approve') invalid();
       const sent = verdicts.get(byKey.get(keyOf(request)) ?? '');
-      if (sent !== undefined && sent.state !== 'failed') {
+      if (sent !== undefined && sent.verdict === 'approve' && sent.state !== 'failed') {
         throw new ScoutError('github/verdict-exists', ALREADY_SENT);
       }
       return waiting.start(request);

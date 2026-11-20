@@ -113,6 +113,7 @@ export const CHANNEL = {
   githubBotRemove: 'scout:github.bot.remove',
   githubBotSetWrites: 'scout:github.bot.setWrites',
   githubGiveVerdict: 'scout:github.giveVerdict',
+  githubPreviewVerdict: 'scout:github.previewVerdict',
   githubVerdictStatus: 'scout:github.verdictStatus',
   githubVerdictFor: 'scout:github.verdictFor',
   githubVerdict: 'scout:github.verdict',
@@ -1320,26 +1321,35 @@ export interface GitHubBotSetWritesRequest {
   readonly writes: readonly GitHubBotWrite[];
 }
 
-/** One line comment of a verdict, as the review's comments carry it. */
-export interface GitHubVerdictComment {
-  readonly path: string;
-  readonly line: number;
-  readonly body: string;
-}
-
 /**
  * The verdict the owner gives on the card: the click is the owner's approval of this one action, pinned to the
  * reviewed commit; the tests line is posted as a comment after an approval or a request for changes. `comment` is
- * the card's Post: a review that only comments, with no tests line.
+ * the card's Post: a review that only comments, with no tests line. It carries the findings the owner kept, with the
+ * text the owner edited, and a review job's measured coverage and notes; Scout composes the note and the comments
+ * from them, so it carries no body.
  */
 export interface GitHubVerdictRequest {
   readonly repository: string;
   readonly number: number;
   readonly verdict: 'approve' | 'request_changes' | 'comment';
-  readonly body: string;
-  readonly comments: readonly GitHubVerdictComment[];
+  readonly findings: readonly ReviewFinding[];
+  readonly coverage?: ReviewCoverage;
+  readonly notes?: readonly string[];
   readonly commit: string;
   readonly testsLine: string;
+}
+
+/** The note and the comments a verdict would post now, as the worker composes them; nothing is sent. */
+export interface GitHubNotePreview {
+  readonly body: string;
+  readonly comments: readonly {
+    readonly id: string;
+    readonly path: string;
+    readonly line: number;
+    readonly body: string;
+  }[];
+  /** The findings not on a line of the diff, as `path:line`. */
+  readonly dropped: readonly string[];
 }
 
 export interface GitHubVerdictAction {
@@ -1364,6 +1374,8 @@ export interface GitHubVerdictProgress {
   readonly reason: string | null;
   readonly signedAs: string | null;
   readonly testsLine: 'posted' | 'notPosted' | 'none' | null;
+  /** The verdict the control plane reports for the action; null when it does not say. */
+  readonly verdict: GitHubVerdictRequest['verdict'] | null;
 }
 
 /** A verdict's action with the pull request, commit and verdict it is for, as every window receives it. */
@@ -2324,6 +2336,8 @@ export interface ScoutBridge {
   githubBotRemove(): Promise<GitHubBotStatus>;
   githubBotSetWrites(req: GitHubBotSetWritesRequest): Promise<GitHubBotStatus>;
   githubGiveVerdict(req: GitHubVerdictRequest): Promise<GitHubVerdictAction>;
+  /** The note and comments `req` would post now, composed by the worker; a read that sends nothing. */
+  githubPreviewVerdict(req: GitHubVerdictRequest): Promise<GitHubNotePreview>;
   githubVerdictStatus(req: GitHubVerdictAction): Promise<GitHubVerdictStatus>;
   githubVerdictFor(req: GitHubVerdictKey): Promise<GitHubVerdictStatus | null>;
   onGitHubVerdict(listener: (status: GitHubVerdictStatus) => void): () => void;

@@ -41,8 +41,7 @@ public sealed class ApprovalsGrpcTests
         Repository = "octocat/hello",
         Number = number,
         Verdict = "approve",
-        Body = "Ready to merge.",
-        CommentsJson = "[]",
+        FindingsJson = "[]",
         Commit = Sha,
         TestsLine = "Tests: 3 checks passed.",
     };

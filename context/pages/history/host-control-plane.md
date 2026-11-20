@@ -1,9 +1,9 @@
 ---
 title: "Host.ControlPlane - history"
-version: "1.2"
+version: "1.3"
 date: 2026-11-09
-updated: 2026-11-14
-changes: "v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-20
+changes: "v1.3 (2026-11-20): the verdict service takes findings. v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the control-plane host and when."
@@ -26,6 +26,11 @@ reliability: high
 # Host.ControlPlane - history
 
 > Dated changes to [[pages/services/host-control-plane]]; the service page states how it works now.
+
+## 2026-11-20 - The verdict service takes findings
+
+- **What changed:** the `GiveVerdict` call of the features service passes the findings and measurements of the new `GiveVerdictRequest` to the verdict service and answers the recorded verdict on `GetVerdict` ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **Tests:** `VerdictGrpcTests`, whose request now carries `findings_json`.
 
 ## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
 

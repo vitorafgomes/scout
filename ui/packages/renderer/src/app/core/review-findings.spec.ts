@@ -9,19 +9,16 @@ import {
 
 import {
   checksOutcome,
-  commentBody,
   issueBody,
   issuesAsk,
   parseReviewFindings,
-  reviewBody,
   testsLine,
   verdictRequest,
   verdictTestsLine,
 } from './review-findings';
 
-const RED = '\u{1F534}';
-const YELLOW = '\u{1F7E1}';
-const GREEN = '\u{1F7E2}';
+const RED = ':no_entry:';
+const GREEN = ':bulb:';
 const UNRUNNABLE =
   '122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.';
 
@@ -120,39 +117,34 @@ describe('review findings', () => {
     ).toHaveLength(50);
   });
 
-  it('commentBody and reviewBody follow the posted-comment shape with the severity mark', () => {
-    expect(commentBody(total)).toBe(
-      `${RED} Discounts applied after the sum\n\nNot from this PR, but this is where it shows.\n\n\`total\` is summed before the discount loop runs.\n\n**Fix:** Apply the discounts before the sum.`,
+  it('an issue marks its severity with a shortcode, never an emoji character', () => {
+    const marks = (['block', 'fix', 'nit'] as const).map(
+      (severity) => /## Problem\n\n(\S+) /.exec(issueBody(audit, { ...naming, severity }))?.[1],
     );
-    expect(commentBody(naming)).toBe(
-      `${GREEN} Name says the wrong thing\n\n\`items\` holds ids.\n\n**Fix:** Rename it \`itemIds\`.`,
-    );
-    expect(commentBody({ ...naming, severity: 'fix' }).startsWith(`${YELLOW} `)).toBe(true);
-    expect(reviewBody(review, [total, naming])).toBe(
-      `**Verdict:** merge after the blocking finding\n\n- ${RED} Discounts applied after the sum · \`src/orders/Checkout.cs:88\`\n- ${GREEN} Name says the wrong thing · \`src/orders/Cart.cs:12\`\n\n6 of 6 files read`,
-    );
-    const { read: _read, ...unread } = review;
-    expect(reviewBody(unread, [naming])).toBe(
-      `**Verdict:** merge after the blocking finding\n\n- ${GREEN} Name says the wrong thing · \`src/orders/Cart.cs:12\``,
-    );
+
+    expect(marks, 'each severity opens the issue with its GitHub shortcode').toEqual([
+      ':no_entry:',
+      ':wrench:',
+      ':bulb:',
+    ]);
+    expect(
+      /\p{Extended_Pictographic}/u.test(issueBody(audit, total)),
+      'no emoji character is in the issue body',
+    ).toBe(false);
   });
 
-  it('the request a click on Post sends is the verdict comment: the review body, the chosen findings as comments in order, the reviewed commit and no tests line; none without a commit', () => {
+  it('the request a click on Post sends is the verdict comment: the chosen findings in order, the reviewed commit and no tests line; none without a commit', () => {
     const reviewed = { ...review, commit: 'ec7f951', tests: { ran: true, passed: true } };
     const chosen = [
       { finding: total, body: 'edited body' },
-      { finding: naming, body: commentBody(naming) },
+      { finding: naming, body: 'body' },
     ];
 
     expect(verdictRequest(reviewed, chosen, 'comment')).toEqual({
       repository: 'acme/shop',
       number: 5,
       verdict: 'comment',
-      body: reviewBody(reviewed, [total, naming]),
-      comments: [
-        { path: 'src/orders/Checkout.cs', line: 88, body: 'edited body' },
-        { path: 'src/orders/Cart.cs', line: 12, body: commentBody(naming) },
-      ],
+      findings: [total, naming],
       commit: 'ec7f951',
       testsLine: '',
     });
@@ -329,10 +321,34 @@ describe('review findings', () => {
     ]);
   });
 
-  it('verdictRequest is the verdict pinned to the reviewed commit, with the review body, the chosen findings as comments in order and the tests line; none on an audit or a review without a commit', () => {
+  it("a verdict carries the findings with the owner's edited text, a review job's coverage and notes, and never a body", () => {
+    const edited = { ...naming, why: 'Edited by the owner.', fix: 'Rename it as the owner says.' };
+    const job: ReviewFindings = {
+      ...review,
+      coverage: { read: 51, of: 133 },
+      notes: ['82 files not read: the review was stopped.'],
+    };
+
+    const request = verdictRequest(job, [{ finding: edited, body: 'body' }], 'request_changes');
+
+    expect(request, 'the findings as the owner left them, with what code measured').toEqual({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'request_changes',
+      findings: [edited],
+      coverage: { read: 51, of: 133 },
+      notes: ['82 files not read: the review was stopped.'],
+      commit: 'ec7f951',
+      testsLine: '',
+    });
+    expect(request).not.toHaveProperty('body');
+    expect(request).not.toHaveProperty('comments');
+  });
+
+  it('verdictRequest is the verdict pinned to the reviewed commit, with the chosen findings in order and the tests line; none on an audit or a review without a commit', () => {
     const chosen = [
       { finding: naming, body: 'Edited by the owner' },
-      { finding: total, body: commentBody(total) },
+      { finding: total, body: 'body' },
     ];
     const checked: ReviewFindings = {
       ...review,
@@ -349,11 +365,7 @@ describe('review findings', () => {
       repository: 'acme/shop',
       number: 5,
       verdict: 'approve',
-      body: reviewBody(checked, [naming, total]),
-      comments: [
-        { path: 'src/orders/Cart.cs', line: 12, body: 'Edited by the owner' },
-        { path: 'src/orders/Checkout.cs', line: 88, body: commentBody(total) },
-      ],
+      findings: [naming, total],
       commit: 'ec7f951',
       testsLine:
         'Checks: build passed, lint failed, e2e pending\nTests passed in 42s (dotnet test)',
@@ -362,8 +374,7 @@ describe('review findings', () => {
       repository: 'acme/shop',
       number: 5,
       verdict: 'request_changes',
-      body: reviewBody(review, []),
-      comments: [],
+      findings: [],
       commit: 'ec7f951',
       testsLine: '',
     });
@@ -463,7 +474,7 @@ describe('review findings', () => {
     );
   });
 
-  it('a review with no finding parses and an audit with none is refused; a clean review posts its verdict, No findings. and what was read, with no blank gap, and the all-dismissed body is unchanged', () => {
+  it('a review with no finding parses and an audit with none is refused; the worker composes what a clean review posts', () => {
     const clean: ReviewFindings = { ...review, verdict: 'ready to merge', findings: [] };
 
     expect(parseReviewFindings(reply(clean))).toEqual({
@@ -471,14 +482,6 @@ describe('review findings', () => {
       markdown: '## Review of acme/shop\n\nOne blocker.\n\nAsk me to post it.',
     });
     expect(parseReviewFindings(reply({ ...audit, findings: [] }))).toBeNull();
-    expect(reviewBody(clean, [])).toBe(
-      '**Verdict:** ready to merge\n\nNo findings.\n\n6 of 6 files read',
-    );
-    const { read: _read, ...unread } = clean;
-    expect(reviewBody(unread, [])).toBe('**Verdict:** ready to merge\n\nNo findings.');
-    expect(reviewBody(review, [])).toBe(
-      '**Verdict:** merge after the blocking finding\n\n\n\n6 of 6 files read',
-    );
   });
 
   it("parseReviewFindings keeps a review job's coverage and notes from a notice, and drops a malformed coverage or notes without refusing the review", () => {

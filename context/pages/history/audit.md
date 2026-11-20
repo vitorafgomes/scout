@@ -1,9 +1,9 @@
 ---
 title: "Audit - history"
-version: "1.5"
+version: "1.6"
 date: 2026-11-08
-updated: 2026-11-19
-changes: "v1.5 (2026-11-19): the review runs to its end, code first, in waves, with the owner's controls and a pause at 60 minutes. v1.4 (2026-11-18): a batch read only when presented, a card that fits, running time only. v1.3 (2026-11-17): the review job runs its batches and posts one card. v1.2 (2026-11-15): the notifier is resolved on use, so the worker starts with GitHub and the local chat. v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
+updated: 2026-11-20
+changes: "v1.6 (2026-11-20): a review batch is handed the purpose, the rules and what was removed. v1.5 (2026-11-19): the review runs to its end, code first, in waves, with the owner's controls and a pause at 60 minutes. v1.4 (2026-11-18): a batch read only when presented, a card that fits, running time only. v1.3 (2026-11-17): the review job runs its batches and posts one card. v1.2 (2026-11-15): the notifier is resolved on use, so the worker starts with GitHub and the local chat. v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
 page_type: reference
 status: artefact
 description: "What changed in the audit job's project and when."
@@ -20,6 +20,13 @@ reliability: high
 # Audit - history
 
 > Dated changes to [[pages/services/audit]]; the service page states how it works now.
+
+## 2026-11-20 - A review batch is handed the purpose, the rules and what was removed
+
+- **Asked for:** the owner's decision of 2026-11-19 ([[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]).
+- **What it was:** a batch was handed its patches and the earlier titles only.
+- **What it is:** the start keeps the purpose, the rule files and what was removed on the job row (`inputs`, migration `20261119120000_ReviewInputs`); every batch is handed them as lines of JSON bounded by their sent length, and the card counts what was removed ([[pages/services/audit/how-it-works-review-inputs]]).
+- **Tests:** `ReviewInputsTests` (new), and new tests in `SqliteAuditStoreTests`, `AuditBatchRunnerTests`, `RepositoryReviewsTests` and `AuditWorkerReviewTests`; `Scout.Audit.Tests` 427 passed.
 
 ## 2026-11-19 - The review runs to its end, code first, in waves, with the owner's controls
 

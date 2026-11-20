@@ -1,8 +1,8 @@
 ---
 title: "Adapter.Local: Testing footprint"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Split out of the Adapter.Local service page."
+changes: "v1.1 (2026-11-20): the tests of the review notes and review inputs. Split out of the Adapter.Local service page."
 page_type: service
 status: active
 description: "Read when a change touches: Testing footprint."
@@ -32,3 +32,5 @@ reliability: high
 - A `reset` line empties the local conversation in a real memory store, keeps another conversation's turns and writes no event (`tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:147`); a `reset` cancels the answer still running, with and without a memory store: its token fires, it ends with `fail` "Cancelled." and no `complete`, and the next question is answered (`:171`); a reset whose cancel callback throws still clears the memory and the next question is answered (`:201`); an ask's `context` reaches the handler apart from the question, and a follow-up without one has none (`:283`).
 - The fixes of 2026-11-11: a listen whose transcriber's `Start` throws ends with the transcription `fail`, nothing else, and an Error line with the id (`tests/Scout.Adapter.Local.Tests/LocalLiveSessionTests.cs:686`); the adapter's stop returns only once the open live session has ended and the reader has stopped (`:703`), and waits while the reader is still handling a line (`:731`); a session whose audio feed fails is stopped before its `fail` (`:717`); a stdin whose pending read never sees the cancellation still lets the stop end the reader (`tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:1374`); delete all answers the count the store's delete reports and never asks for a list of every meeting (`:1332`).
 - Every ask, text or audio, carries `local:session`; a later post writes exactly one `notice` line with a null id, is capped at 32,000 characters, returns false with a Warning when stdout cannot be written, and posts nothing for another payload or a stopped adapter (`LocalOriginPosterTests.cs`).
+
+- **2026-11-20 (ADR 0063):** `LocalChatAdapterTests::A_Note_Request_Whose_Previewer_Fails_Answers_Fail` and the note request's other tests in that class.

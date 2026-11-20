@@ -1,9 +1,9 @@
 ---
 title: "ControlPlane - history"
-version: "1.5"
+version: "1.6"
 date: 2026-11-09
-updated: 2026-11-19
-changes: "v1.5 (2026-11-19): the owner controls a review job. v1.4 (2026-11-17): the GitHub feature declares the review job. v1.3 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-20
+changes: "v1.6 (2026-11-20): one verdict per request, not per commit. v1.5 (2026-11-19): the owner controls a review job. v1.4 (2026-11-17): the GitHub feature declares the review job. v1.3 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in Scout.ControlPlane and when; the service page states how it works now."
@@ -32,6 +32,13 @@ reliability: high
 # ControlPlane - history
 
 > Dated changes to [[pages/services/control-plane]]; the service page states how it works now.
+
+## 2026-11-20 - One verdict per request, not per commit
+
+- **Asked for:** the owner's decision of 2026-11-19 that a verdict at a commit can be followed by another ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]).
+- **What it was:** one pull request at one commit got one action from the card, whichever button was clicked.
+- **What it is:** a card verdict keeps the digest of what it sends; a different verdict or other content at that commit is its own action, approved and logged on its own, and an identical request answers the action already there (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:116`). `GiveVerdict` takes findings and what code measured, never a body.
+- **Tests:** `tests/Scout.ControlPlane.Tests/WriteGate/PullRequestVerdictServiceTests.cs:127`, `:155`.
 
 ## 2026-11-19 - The owner controls a review job
 

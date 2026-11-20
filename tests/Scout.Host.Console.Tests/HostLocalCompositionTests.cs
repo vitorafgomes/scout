@@ -92,6 +92,39 @@ public sealed class HostLocalCompositionTests
         host.Services.GetRequiredService<LocalChatAdapter>().LiveTranscriber.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_Local_Adapter_Receives_The_Review_Note_Preview_Only_With_The_GitHub_Plugin(bool github)
+    {
+        using var host = new HostBuilder()
+            .ConfigureServices((_, services) =>
+            {
+                services.AddLogging();
+                services.AddScoutHost(new ConfigurationBuilder()
+                    .AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Scout:Llm:Provider"] = "None",
+                        ["Scout:Adapters:Local:Enabled"] = "true",
+                        ["Scout:Plugins:GitHub:Token"] = github ? "github-dummy-not-real" : null,
+                    })
+                    .Build());
+            })
+            .Build();
+
+        var preview = host.Services.GetRequiredService<LocalChatAdapter>().NotePreview;
+
+        if (github)
+        {
+            preview.ShouldNotBeNull("the composed host hands the GitHub plugin's note preview to the local adapter")
+                .ShouldBeSameAs(host.Services.GetRequiredService<Scout.Conversation.Abstractions.IReviewNotePreview>());
+        }
+        else
+        {
+            preview.ShouldBeNull("without the GitHub plugin there is no note preview");
+        }
+    }
+
     [Fact]
     public void With_Only_The_Local_Adapter_Enabled_The_Host_Builds_And_Local_Is_The_Only_Adapter()
     {
