@@ -140,7 +140,8 @@ public sealed partial class DockerSandboxRunner
             var exit = await RunAsync(container, runFolder, stack, command, network: false, offline: true, output, linked.Token).ConfigureAwait(false);
             container = null;
             var unstarted = exit is 126 or 127;
-            return result = new SandboxResult(true, unstarted ? $"The test command could not be started (exit {exit}: a command it names was not found or is not executable)." : null, stack.Image, command, exit, Seconds(started), Last(output, failed: exit != 0), note, exit != 0 && !unstarted ? Unrunnable(output.ToString()) : null);
+            var tests = unstarted ? null : output.Counts();
+            return result = new SandboxResult(true, unstarted ? $"The test command could not be started (exit {exit}: a command it names was not found or is not executable)." : null, stack.Image, command, exit, Seconds(started), Last(output, failed: exit != 0), note, exit != 0 && tests is { } counted && IsUnrunnable(counted) ? counted.Sentence : null, tests);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && deadline.IsCancellationRequested)
         {
@@ -163,7 +164,7 @@ public sealed partial class DockerSandboxRunner
                     {
                         var outcome = !result.Ran ? "notRun" : result.ExitCode == 0 && result.Reason is null ? "passed" : "failed";
                         await WriteRunRecordAsync(recordPath, new RunRecord(
-                            request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, result.Command, outcome, result.Reason, result.ExitCode, result.DurationSeconds, testStarted, _time.GetUtcNow())).ConfigureAwait(false);
+                            request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, result.Command, outcome, result.Reason, result.ExitCode, result.DurationSeconds, testStarted, _time.GetUtcNow(), result.Unrunnable)).ConfigureAwait(false);
                     }
                     else if (running)
                     {
@@ -307,7 +308,7 @@ public sealed partial class DockerSandboxRunner
         "DotNet.Testcontainers", "Docker.DotNet", "Cannot connect to the Docker daemon", "Docker is either not running or misconfigured", "docker.sock",
     ];
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(Passed|Failed)!\s+-\s+Failed:\s+(\d{1,9}),\s+Passed:\s+(\d{1,9}),", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(?:Passed|Failed)!\s+-\s+Failed:\s+(\d{1,9}),\s+Passed:\s+(\d{1,9}),\s+Skipped:\s+(\d{1,9}),.*?\s-\s+(\S+?)(?:\.dll)?\s+\(")]
     private static partial System.Text.RegularExpressions.Regex AssemblySummary();
 
     [System.Text.RegularExpressions.GeneratedRegex(@"^\s*Failed\s+\S")]
@@ -316,52 +317,154 @@ public sealed partial class DockerSandboxRunner
     [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(?:Passed|Failed)!")]
     private static partial System.Text.RegularExpressions.Regex SummaryStart();
 
+    private const string NoDockerReason = "they need a Docker daemon, which the container does not have.";
+
+    private const string PartialCounts = " More test projects printed a summary than Scout counts; only the first 200 are counted.";
+
+    /// <summary>The test projects whose summary is counted at most, so an output that prints summaries without end cannot fill memory.</summary>
+    internal const int MaxProjects = 200;
+
+    /// <summary>The characters of one output line read at most; the rest of a longer line is not read.</summary>
+    internal const int MaxLineLength = 4_096;
+
     /// <summary>
-    /// The sentence that says the failed tests could not run for want of a Docker daemon, read from a failed run's
-    /// <c>dotnet test</c> output: only when the output holds at least one failed test's block (from its <c>Failed</c>
-    /// line to the next one or to a summary line) and every block names a missing Docker daemon, at least one assembly
-    /// failed, and every assembly that failed passed no test; null otherwise, so a real failure is never called unrunnable.
-    /// When the kept output holds fewer blocks than the failures counted, the sentence says how many it read.
+    /// Reads a <c>dotnet test</c> output piece by piece as it arrives, so no summary is lost however long the output: each
+    /// test project from its summary line, the failed tests' blocks printed before it (from a <c>Failed</c> line to the next
+    /// one or to a summary line) deciding, each as it ends, whether the project's failures could not run. Keeps counts and
+    /// flags, never the text: one line of at most <see cref="MaxLineLength"/> characters, and at most
+    /// <see cref="MaxProjects"/> projects. A line is put together across pieces, a surrogate pair split between two pieces
+    /// included. Not safe for concurrent callers: its owner serialises the pieces.
     /// </summary>
-    private static string? Unrunnable(string output)
+    internal sealed class TestSummaryReader
     {
-        var blocks = new List<bool>();
-        var inBlock = false;
-        foreach (var line in output.Split('\n'))
+        private readonly System.Text.StringBuilder _line = new();
+        private readonly List<SandboxTestProject> _projects = [];
+        private readonly List<int> _read = [];
+        private int _blocks;
+        private bool _allNoDocker = true;
+        private bool _inBlock;
+        private bool _blockNamed;
+        private bool _partial;
+
+        /// <summary>Reads one piece of the output.</summary>
+        public void Read(string piece)
         {
-            if (SummaryStart().IsMatch(line))
+            foreach (var c in piece)
             {
-                inBlock = false;
+                if (c == '\n')
+                {
+                    Line(_line.ToString());
+                    _line.Clear();
+                }
+                else if (_line.Length < MaxLineLength)
+                {
+                    _line.Append(c);
+                }
+            }
+        }
+
+        /// <summary>The test projects read so far, a last line without its line break included; null when no summary was read.</summary>
+        public SandboxTestCounts? Counts()
+        {
+            if (_line.Length > 0)
+            {
+                Line(_line.ToString());
+                _line.Clear();
+            }
+
+            return _projects.Count == 0 ? null : new SandboxTestCounts([.. _projects], _partial, Sentence(_projects, _read, _partial));
+        }
+
+        private void Line(string line)
+        {
+            if (AssemblySummary().Match(line) is { Success: true } summary)
+            {
+                EndBlock();
+                long Count(int group) => long.Parse(summary.Groups[group].Value, System.Globalization.CultureInfo.InvariantCulture);
+                var (failed, passed) = (Count(1), Count(2));
+                if (_projects.Count < MaxProjects)
+                {
+                    _projects.Add(new SandboxTestProject(summary.Groups[4].Value, passed, failed, Count(3), failed > 0 && passed == 0 && _blocks > 0 && _allNoDocker));
+                    _read.Add(_blocks);
+                }
+                else
+                {
+                    _partial = true;
+                }
+
+                (_blocks, _allNoDocker) = (0, true);
+            }
+            else if (SummaryStart().IsMatch(line))
+            {
+                EndBlock();
             }
             else if (FailedTestStart().IsMatch(line))
             {
-                blocks.Add(NamesNoDocker(line));
-                inBlock = true;
+                EndBlock();
+                (_blocks, _inBlock, _blockNamed) = (_blocks + 1, true, NamesNoDocker(line));
             }
-            else if (inBlock && NamesNoDocker(line))
+            else if (_inBlock && NamesNoDocker(line))
             {
-                blocks[^1] = true;
+                _blockNamed = true;
             }
         }
 
-        if (blocks.Count == 0 || blocks.Contains(false))
+        private void EndBlock()
         {
-            return null;
+            if (_inBlock)
+            {
+                _allNoDocker &= _blockNamed;
+                _inBlock = false;
+            }
+        }
+    }
+
+    /// <summary>A run whose failures all could not run: at least one test project could not run and none failed for real.</summary>
+    private static bool IsUnrunnable(SandboxTestCounts counts) =>
+        counts.Projects.Any(p => p.Unrunnable) && !counts.Projects.Any(p => p.Failed > 0 && !p.Unrunnable);
+
+    /// <summary>
+    /// What the run's test projects say, in one sentence: how many passed; how many failed and in which project, when some
+    /// failed for real; and how many could not run for want of a Docker daemon, saying how many of their failures the output
+    /// shows when it shows fewer than were counted.
+    /// </summary>
+    private static string Sentence(List<SandboxTestProject> projects, List<int> read, bool partial)
+    {
+        static string N(long value) => value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        static string Tests(long count) => count == 1 ? "test" : "tests";
+        static string Projects(int count) => count == 1 ? "1 test project" : $"{N(count)} test projects";
+
+        var passed = projects.Sum(p => p.Passed);
+        var failed = projects.Where(p => p.Failed > 0 && !p.Unrunnable).ToList();
+        var unrunnable = projects.Select((p, i) => (Project: p, Read: read[i])).Where(u => u.Project.Unrunnable).ToList();
+        var notRun = unrunnable.Sum(u => u.Project.Failed);
+        var notRunRead = unrunnable.Sum(u => u.Read);
+        var couldNot = notRunRead < notRun
+            ? $"did not pass, and the {N(notRunRead)} whose failure the output shows could not run: {NoDockerReason}"
+            : $"could not run: {NoDockerReason}";
+
+        string sentence;
+        if (failed.Count > 0)
+        {
+            sentence = $"{N(passed)} {Tests(passed)} passed and {N(failed.Sum(p => p.Failed))} failed: {string.Join(", ", failed.Select(p => $"{N(p.Failed)} in {p.Name}"))}.";
+            if (unrunnable.Count > 0)
+            {
+                sentence += $" {N(notRun)} {Tests(notRun)} in {Projects(unrunnable.Count)} {couldNot}";
+            }
+        }
+        else if (unrunnable.Count > 0)
+        {
+            var ran = projects.Count(p => !p.Unrunnable);
+            sentence = passed > 0
+                ? $"{N(passed)} {Tests(passed)} passed in {Projects(ran)}; {N(notRun)} in {Projects(unrunnable.Count)} {couldNot}"
+                : $"{N(notRun)} {Tests(notRun)} in {Projects(unrunnable.Count)} {couldNot}";
+        }
+        else
+        {
+            sentence = $"{N(passed)} {Tests(passed)} passed in {Projects(projects.Count)}.";
         }
 
-        var failed = AssemblySummary().Matches(output)
-            .Where(summary => summary.Groups[1].Value == "Failed")
-            .Select(summary => (Failed: long.Parse(summary.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), Passed: long.Parse(summary.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture)))
-            .ToList();
-        if (failed.Count == 0 || failed.Any(assembly => assembly.Passed > 0))
-        {
-            return null;
-        }
-
-        var total = failed.Sum(assembly => assembly.Failed);
-        return blocks.Count < total
-            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{total} test(s) did not pass; the {blocks.Count} whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.")
-            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{total} test(s) could not run: they need a Docker daemon, which the container does not have.");
+        return partial ? sentence + PartialCounts : sentence;
     }
 
     private static bool NamesNoDocker(string line) =>
@@ -416,7 +519,8 @@ public sealed partial class DockerSandboxRunner
     /// <summary>
     /// The record of one run, written beside its log: the command that ran last, null when none started; the result,
     /// <c>running</c> while the test command runs, then <c>passed</c>, <c>failed</c> or <c>notRun</c>; when the test command
-    /// started, null when it never did; and when the run ended, null while it runs.
+    /// started, null when it never did; when the run ended, null while it runs; and, for a failed run whose failures all
+    /// could not run, the sentence that says so, since the desktop reads only those four results.
     /// </summary>
     private sealed record RunRecord(
         string? Repository,
@@ -429,7 +533,8 @@ public sealed partial class DockerSandboxRunner
         int? ExitCode,
         double DurationSeconds,
         DateTimeOffset? StartedAt,
-        DateTimeOffset? FinishedAt);
+        DateTimeOffset? FinishedAt,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Unrunnable = null);
 
     /// <summary>The last characters written, bounded while reading so a test that prints without end cannot fill memory.</summary>
     private sealed class OutputTail(int capacity)
@@ -437,17 +542,42 @@ public sealed partial class DockerSandboxRunner
         private readonly Queue<string> _chunks = new();
         private readonly Lock _gate = new();
         private int _length;
+        private long _written;
+        private readonly TestSummaryReader _summaries = new();
+
+        /// <summary>Whether more was written than is kept: the start of the output is gone.</summary>
+        public bool Dropped
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _written > capacity;
+                }
+            }
+        }
 
         public void Append(string text)
         {
             lock (_gate)
             {
+                _summaries.Read(text);
                 _chunks.Enqueue(text);
                 _length += text.Length;
+                _written += text.Length;
                 while (_chunks.Count > 1 && _length - _chunks.Peek().Length >= capacity)
                 {
                     _length -= _chunks.Dequeue().Length;
                 }
+            }
+        }
+
+        /// <summary>The test projects whose summary the whole output printed, however much of it is kept.</summary>
+        public SandboxTestCounts? Counts()
+        {
+            lock (_gate)
+            {
+                return _summaries.Counts();
             }
         }
 

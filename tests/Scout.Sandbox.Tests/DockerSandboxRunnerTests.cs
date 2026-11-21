@@ -347,7 +347,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
 
     private const string IntegrationTestsFailed = "Failed!  - Failed:   122, Passed:     0, Skipped:     0, Total:   122, Duration: 3 s - Shop.IntegrationTests.dll (net10.0)\n";
 
-    private Task<SandboxResult> RunDotNetTests(string testOutput, int exit)
+    private Task<SandboxResult> RunDotNetTests(string testOutput, int exit, int pieces = int.MaxValue)
     {
         var dotnet = Directory.CreateDirectory(Path.Combine(_base, "dotnet")).FullName;
         File.WriteAllText(Path.Combine(dotnet, "Shop.slnx"), "<Solution />");
@@ -355,7 +355,11 @@ public sealed class DockerSandboxRunnerTests : IDisposable
         {
             if (FakeProcessRunner.IsRun(call, "test"))
             {
-                onOutput(testOutput);
+                for (var at = 0; at < testOutput.Length; at += pieces)
+                {
+                    onOutput(testOutput.Substring(at, Math.Min(pieces, testOutput.Length - at)));
+                }
+
                 return Task.FromResult(exit);
             }
 
@@ -371,12 +375,156 @@ public sealed class DockerSandboxRunnerTests : IDisposable
         var result = await RunDotNetTests(UnitTestsPassed + string.Concat(Enumerable.Repeat(NoDockerFailure, 3)) + IntegrationTestsFailed, exit: 1);
 
         result.Unrunnable.ShouldBe(
-            "122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.",
+            "634 tests passed in 1 test project; 122 in 1 test project did not pass, and the 3 whose failure the output shows could not run: they need a Docker daemon, which the container does not have.",
             "a run that could not run its tests for want of a Docker daemon is not a failed run, and the sentence never claims more failures were read than the kept output holds");
         result.ExitCode.ShouldBe(1, "the exit code stays the real one");
         result.Ran.ShouldBeTrue();
         result.Reason.ShouldBeNull();
         result.Command.ShouldBe("dotnet test 'Shop.slnx' --no-restore");
+    }
+
+    private const string ApiTestsPassed = "Passed!  - Failed:     0, Passed:  1130, Skipped:     0, Total:  1130, Duration: 12 s - Shop.Api.Tests.dll (net10.0)\n";
+
+    private static string ShopUnitPassed => UnitTestsPassed.Replace("634", "827", StringComparison.Ordinal);
+
+    private const string IntegrationTests133 = "Failed!  - Failed:   133, Passed:     0, Skipped:     0, Total:   133, Duration: 2 s - Shop.IntegrationTests.dll (net10.0)\n";
+
+    private const string RealFailure =
+        "  Failed Shop.Api.Tests.CartTests.Totals_the_cart [1 ms]\n  Error Message:\n   Assert.Equal() Failure: Expected 10, Actual 9\n";
+
+    [Fact]
+    public async Task The_measured_run_says_what_passed_and_what_could_not_run_and_keeps_each_test_project_as_data()
+    {
+        var output = ShopUnitPassed + ApiTestsPassed + string.Concat(Enumerable.Repeat(NoDockerFailure, 133)) + IntegrationTests133;
+
+        var result = await RunDotNetTests(output, exit: 1);
+
+        result.Unrunnable.ShouldBe(
+            "1,957 tests passed in 2 test projects; 133 in 1 test project could not run: they need a Docker daemon, which the container does not have.",
+            "the sentence says what passed before what could not run");
+        result.Tests.ShouldNotBeNull().Projects.ShouldBe(
+            [
+                new SandboxTestProject("Shop.Tests", 827, 0, 0, false),
+                new SandboxTestProject("Shop.Api.Tests", 1130, 0, 0, false),
+                new SandboxTestProject("Shop.IntegrationTests", 0, 133, 0, true),
+            ],
+            "each test project's counts are kept as data, with whether its failures could not run");
+        result.Tests.Partial.ShouldBeFalse("the whole output was kept");
+        result.Tests.Sentence.ShouldBe(result.Unrunnable, "the counts' own sentence is the one shown");
+    }
+
+    [Fact]
+    public async Task A_real_failure_beside_a_test_project_that_could_not_run_is_a_failed_run_that_says_both()
+    {
+        var output = ShopUnitPassed + RealFailure + RealFailure
+            + "Failed!  - Failed:     2, Passed:    10, Skipped:     0, Total:    12, Duration: 1 s - Shop.Api.Tests.dll (net10.0)\n"
+            + string.Concat(Enumerable.Repeat(NoDockerFailure, 133)) + IntegrationTests133;
+
+        var result = await RunDotNetTests(output, exit: 1);
+
+        result.Unrunnable.ShouldBeNull("a real failure is never called unrunnable, whatever another test project could not run");
+        result.Tests.ShouldNotBeNull().Sentence.ShouldBe(
+            "837 tests passed and 2 failed: 2 in Shop.Api.Tests. 133 tests in 1 test project could not run: they need a Docker daemon, which the container does not have.",
+            "the failed run says how many passed, how many failed and where, and what could not run");
+        result.Tests.Projects.Select(p => (p.Name, p.Unrunnable)).ShouldBe(
+            [("Shop.Tests", false), ("Shop.Api.Tests", false), ("Shop.IntegrationTests", true)], "only the project whose every failure needs Docker could not run");
+    }
+
+    [Fact]
+    public async Task A_run_whose_every_test_project_passed_says_the_total()
+    {
+        var result = await RunDotNetTests(ShopUnitPassed + ApiTestsPassed, exit: 0);
+
+        (result.Unrunnable, result.Tests?.Sentence).ShouldBe(((string?)null, (string?)"1,957 tests passed in 2 test projects."), "a passed run says how many passed");
+    }
+
+    [Fact]
+    public async Task An_output_of_3_MB_counts_the_test_project_whose_summary_came_first_and_the_list_is_whole()
+    {
+        var failures = string.Concat(Enumerable.Repeat(NoDockerFailure + new string('x', 23_000) + "\n", 133));
+        var output = ShopUnitPassed + ApiTestsPassed + failures + IntegrationTests133;
+        output.Length.ShouldBeGreaterThan(3_000_000, "the measured run printed about 2.4 MB");
+
+        var result = await RunDotNetTests(output, exit: 1, pieces: 8_192);
+
+        result.Tests.ShouldNotBeNull().ShouldSatisfyAllConditions(
+            "the first project's summary is counted however long the output that follows it",
+            t => t.Projects.ShouldBe(
+                [
+                    new SandboxTestProject("Shop.Tests", 827, 0, 0, false),
+                    new SandboxTestProject("Shop.Api.Tests", 1130, 0, 0, false),
+                    new SandboxTestProject("Shop.IntegrationTests", 0, 133, 0, true),
+                ]),
+            t => t.Partial.ShouldBeFalse(),
+            t => t.Sentence.ShouldBe("1,957 tests passed in 2 test projects; 133 in 1 test project could not run: they need a Docker daemon, which the container does not have."));
+        result.Output.Length.ShouldBeLessThanOrEqualTo(DockerSandboxRunner.FailedOutputLimit, "the output kept is unchanged by the counting");
+    }
+
+    [Fact]
+    public void A_summary_line_split_across_two_pieces_is_counted_once()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+        var cut = ApiTestsPassed.IndexOf("Shop.Api", StringComparison.Ordinal);
+
+        reader.Read(ShopUnitPassed[..10]);
+        reader.Read(ShopUnitPassed[10..] + ApiTestsPassed[..cut]);
+        reader.Read(ApiTestsPassed[cut..]);
+
+        reader.Counts().ShouldNotBeNull().Projects.Select(p => (p.Name, p.Passed)).ShouldBe(
+            [("Shop.Tests", 827L), ("Shop.Api.Tests", 1130L)], "a line cut between two pieces is put together before it is read");
+    }
+
+    [Fact]
+    public void A_failed_block_split_mid_line_and_mid_character_still_names_the_missing_daemon()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+        var block = "  Failed Shop.IntegrationTests.Saves [1 ms]\n  Error Message:\n   caf\u00e9 \uD83D\uDE00 Docker is either not running or misconfigured.\n";
+        var pair = block.IndexOf('\uDE00', StringComparison.Ordinal);
+
+        reader.Read(block[..pair]);
+        reader.Read(block[pair..^20]);
+        reader.Read(block[^20..] + IntegrationTests133.Replace("133", "1", StringComparison.Ordinal));
+
+        reader.Counts().ShouldNotBeNull().Projects.ShouldHaveSingleItem().Unrunnable.ShouldBeTrue(
+            "a block whose line is split, a surrogate pair cut between pieces among it, is judged as one block");
+    }
+
+    [Fact]
+    public void A_line_longer_than_the_limit_is_read_to_the_limit_and_the_next_line_is_read_whole()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+
+        reader.Read(new string('x', DockerSandboxRunner.MaxLineLength * 50));
+        reader.Read("\n" + UnitTestsPassed);
+
+        reader.Counts().ShouldNotBeNull().Projects.ShouldHaveSingleItem().Name.ShouldBe("Shop.Tests", "a line past the limit is cut, and the line after it is read whole");
+        DockerSandboxRunner.MaxLineLength.ShouldBe(4_096);
+    }
+
+    [Fact]
+    public void A_last_line_without_a_line_break_is_read_and_more_summaries_than_counted_are_said()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+        foreach (var n in Enumerable.Range(1, DockerSandboxRunner.MaxProjects + 1))
+        {
+            reader.Read(UnitTestsPassed.Replace("Shop.Tests", $"P{n}.Tests", StringComparison.Ordinal));
+        }
+
+        reader.Read(UnitTestsPassed.TrimEnd('\n'));
+
+        reader.Counts().ShouldNotBeNull().ShouldSatisfyAllConditions(
+            "the projects kept are bounded, and the list says it is not whole",
+            t => t.Projects.Count.ShouldBe(DockerSandboxRunner.MaxProjects),
+            t => t.Partial.ShouldBeTrue(),
+            t => t.Sentence.ShouldEndWith(" More test projects printed a summary than Scout counts; only the first 200 are counted.", Case.Sensitive));
+    }
+
+    [Fact]
+    public async Task A_stack_that_is_not_dotnet_keeps_no_test_projects()
+    {
+        var result = await Run();
+
+        result.Tests.ShouldBeNull("only dotnet test's summaries are read");
     }
 
     [Fact]
@@ -386,7 +534,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
 
         var result = await RunDotNetTests(UnitTestsPassed + NoDockerFailure + NoDockerFailure + TwoFailed, exit: 1);
 
-        result.Unrunnable.ShouldBe("2 test(s) could not run: they need a Docker daemon, which the container does not have.", "when every failure counted is in the kept output, the sentence says they all could not run");
+        result.Unrunnable.ShouldBe("634 tests passed in 1 test project; 2 in 1 test project could not run: they need a Docker daemon, which the container does not have.", "when every failure counted is in the kept output, the sentence says what passed and that the rest could not run");
     }
 
     [Theory]

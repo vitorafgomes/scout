@@ -85,6 +85,33 @@ public sealed class SandboxRunRecordTests : IDisposable
     }
 
     [Fact]
+    public async Task A_run_whose_only_failures_could_not_run_stays_failed_for_the_desktop_and_says_why_in_its_own_field()
+    {
+        const string Output =
+            "Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5, Duration: 1 s - Shop.Tests.dll (net10.0)\n"
+            + "  Failed Shop.IntegrationTests.OrdersTests.Saves [1 ms]\n  Error Message:\n   Docker is either not running or misconfigured.\n"
+            + "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - Shop.IntegrationTests.dll (net10.0)\n";
+        _processes.Behaviour = (call, onOutput, _) =>
+        {
+            if (FakeProcessRunner.IsRun(call, "test"))
+            {
+                onOutput(Output);
+                return Task.FromResult(1);
+            }
+
+            return Task.FromResult(0);
+        };
+
+        await Run();
+
+        var record = Record();
+        (record.GetProperty("result").GetString(), record.GetProperty("unrunnable").GetString()).ShouldBe(
+            ("failed", "5 tests passed in 1 test project; 1 in 1 test project could not run: they need a Docker daemon, which the container does not have."),
+            "the result stays one the desktop reads, and the record says the failures could not run in a field of its own");
+        record.EnumerateObject().Select(p => p.Name).ShouldBe([.. Fields, "unrunnable"]);
+    }
+
+    [Fact]
     public async Task While_the_test_command_runs_the_record_says_running_with_the_test_command_and_when_it_started()
     {
         JsonElement? running = null;
