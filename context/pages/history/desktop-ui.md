@@ -59,6 +59,12 @@ reliability: high
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
 
 
+## 2026-11-21 - Package updates within the current majors
+
+- **What it was:** Electron 45.2.3; Angular 22.2.5 (the build tools 22.2.6, material and cdk ~22.2); eslint 10.14.0, typescript-eslint 8.72.1, vitest 5.1.0, jsdom 31.0.0, marked 18.1.3, @analogjs/vite-plugin-angular 2.9.6, @types/bun 1.4.4; one moderate advisory in minimatch below 11.0.1 through eslint, typescript-eslint and electron-builder.
+- **What it is:** Electron 45.4.1, and the packaged Electron of `ui/build/electron-builder.yml` with it; Angular 22.3.0, every package together, material and cdk ~22.3; eslint 10.15.0, typescript-eslint 8.73.0, vitest 5.1.1, jsdom 31.0.1, marked 18.2.1, @analogjs/vite-plugin-angular 2.9.7, @types/bun 1.4.5. The lint tools now take minimatch 11.0.9. electron-builder 26.18.1, its newest, still asks for minimatch 10 and 9 through app-builder-lib and @electron/universal: the advisory stays on that packaging path only, which is not in the app and reads Scout's own build patterns. Prettier is held at ~3.9.10: 3.10.1 reformats two files nobody changed. TypeScript stays on 6.
+- **Tests:** the desktop's typecheck, lint, format and the shared, preload, main and renderer suites, unchanged.
+
 ## 2026-11-21 - The card offers one action, a local MCP server, Settings beside the bell
 
 - **What it was:** the review card drew Approve, Request changes and Post; Settings sat in the side menu; the MCP server was a drawn proposal.

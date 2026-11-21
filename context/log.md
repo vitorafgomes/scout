@@ -1,3 +1,6 @@
+## [2026-11-21] chore | Package updates within the current majors
+Electron 45.4.1, Angular 22.3.0 and the desktop tools; Anthropic 13.12.0, ONNX Runtime 1.32.0, Microsoft.CodeAnalysis.CSharp 5.12.0 and the .NET patches; the minimatch advisory stays only on electron-builder's packaging path ([[pages/history/desktop-ui]], [[pages/history/llm]], [[pages/history/operator]]). Three follow-ups added to [[pages/roadmap/followups]].
+
 ## [2026-11-21] feat | The second reading can note a finding the project records as later work
 [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] amended: a true finding the project records as later work is kept as a nit titled Noted and counted on the card; a refutation or a note citing a place the head does not hold is unconfirmed. Two follow-ups of the waiting review added to [[pages/roadmap/followups]].
 

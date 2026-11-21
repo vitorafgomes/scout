@@ -1526,8 +1526,15 @@ public sealed class AuditWorkerReviewTests : IDisposable
         await worker.RunReviewAsync(job, CancellationToken.None);
         var inOneWorker = calls.Count;
         await Worker(store, chat, new RecordingNotifier(), pullRequests, kernel).RunReviewAsync(job, CancellationToken.None);
+        using (var limit = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+        {
+            while (calls.Count < 2 && !limit.IsCancellationRequested)
+            {
+                await Task.Delay(10, CancellationToken.None);
+            }
+        }
 
-        (inOneWorker, calls.Count).ShouldBe((1, 2), "one run per review in a worker; a new worker keeps nothing of the run, so it runs the tests again");
+        (inOneWorker, calls.Count).ShouldBe((1, 2), "one run per review in a worker; a new worker keeps nothing of the run, so it runs the tests again, in the background it starts them in");
     }
 
     [Fact]

@@ -23,6 +23,24 @@ reliability: medium
 
 ## Entries
 
+### The turn table does not count noted answers (2026-11-21)
+
+- **Gap:** each second reading turn's row counts the findings that held, were refuted and were uncertain, but not the ones noted ([[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]], amended 2026-11-21).
+- **Blocker:** the count is a new nullable column, so a migration, its designer and the model snapshot.
+- **Unblocks with:** that migration, in a change of its own.
+
+### xunit 2 is legacy; its successor is xunit v3 (2026-11-21)
+
+- **Gap:** every test project runs on `xunit` 2.9.3 with `xunit.runner.visualstudio` 4.0.1; its publisher marks the 2 line as legacy in favour of v3.
+- **Blocker:** v3 is a migration: the test projects become executables with new package names, and the runner, the attributes and the `ITestOutputHelper` uses change in every test project under `tests/`.
+- **Unblocks with:** a pull request of its own that moves every test project at once, the totals compared before and after.
+
+### Microsoft.Bot is legacy; Teams moves to its successor (2026-11-21)
+
+- **Gap:** the Teams adapter uses `Microsoft.Bot.Builder`, `Microsoft.Bot.Builder.Integration.AspNet.Core`, `Microsoft.Bot.Connector` and `Microsoft.Bot.Schema` 4.23.1, which their publisher marks as legacy.
+- **Blocker:** its successor is another SDK with another activity model, so it touches `src/Scout.Adapter.Teams` and its tests, and the host's registration of the adapter.
+- **Unblocks with:** a pull request of its own for the Teams adapter.
+
 ### A waiting review stopped is said only when a batch of the running review ends (2026-11-21)
 
 - **Gap:** a review stopped while it waits for another posts its stop as the next batch of the running review ends, up to the review batch turn's bound later, not at once ([[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]). The bell waits long enough for it.
