@@ -199,6 +199,14 @@ export const CHANNEL = {
   notificationsControl: 'scout:notifications.control',
   notifications: 'scout:notifications',
   noticeRecord: 'scout:notice.record',
+  mcpStatus: 'scout:mcp.status',
+  mcpSetEnabled: 'scout:mcp.setEnabled',
+  mcpCreateToken: 'scout:mcp.createToken',
+  mcpRevokeToken: 'scout:mcp.revokeToken',
+  mcpSetStartMode: 'scout:mcp.setStartMode',
+  mcpPickPort: 'scout:mcp.pickPort',
+  mcpAnswerStart: 'scout:mcp.answerStart',
+  mcpChanged: 'scout:mcp.changed',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -1350,6 +1358,8 @@ export interface GitHubNotePreview {
   }[];
   /** The findings not on a line of the diff, as `path:line`. */
   readonly dropped: readonly string[];
+  /** What the worker offers for the findings of this preview; absent from a worker that does not say. */
+  readonly offer?: ReviewOffer;
 }
 
 export interface GitHubVerdictAction {
@@ -1687,6 +1697,17 @@ export interface ReviewFindings {
   readonly coverage?: ReviewCoverage;
   /** On a review job's card, Scout's own sentences, each shown as one line of text. */
   readonly notes?: readonly string[];
+  /** What the worker offers for the review, decided by its code; absent on a card from before Scout decided it. */
+  readonly offer?: ReviewOffer;
+}
+
+/** The one action a review card shows, as the worker decided it: the verdict, why, and whether a comment may go instead. */
+export interface ReviewOffer {
+  readonly verdict: 'approve' | 'request_changes' | 'comment' | 'wait' | 'none';
+  /** One sentence, shown as text. */
+  readonly reason: string;
+  /** True only beside request_changes: the same findings may be sent as a comment instead. */
+  readonly commentInstead: boolean;
 }
 
 /** The files a review job read of the files a pull request changes, as Scout's code counted them. */
@@ -2058,6 +2079,54 @@ export interface JobControlState {
   readonly phase: 'asking' | 'waiting';
 }
 
+/** Whether a review an assistant asks for waits for the owner's Start (`ask`) or starts at once (`free`). */
+export type McpStartMode = 'ask' | 'free';
+
+/** The MCP listener: off, listening on a port of this computer, or failed with the reason the owner reads. */
+export type McpListenerState =
+  | { readonly state: 'off' }
+  | { readonly state: 'listening'; readonly port: number }
+  | { readonly state: 'failed'; readonly port: number; readonly reason: string };
+
+/** A start an assistant asked for, waiting for the owner's Start or Refuse in the Scout window. */
+export interface McpPendingStart {
+  readonly id: string;
+  readonly pullRequest: string;
+  readonly askedAt: number;
+}
+
+/** One call in the MCP activity list: never any part of a header or of the token. */
+export interface McpActivityRow {
+  readonly at: number;
+  readonly tool: string;
+  readonly target: string;
+  readonly result: string;
+}
+
+/** What the Scout window shows of the MCP server: never the token nor its hash. */
+export interface McpStatus {
+  readonly enabled: boolean;
+  readonly startMode: McpStartMode;
+  readonly port: number;
+  readonly hasToken: boolean;
+  readonly tokenCreatedAt: number | null;
+  readonly listener: McpListenerState;
+  readonly pending: McpPendingStart | null;
+  readonly activity: readonly McpActivityRow[];
+}
+
+/** A token just created: the only time it is given, to the Scout window that asked for it. */
+export interface McpCreatedToken {
+  readonly token: string;
+  readonly status: McpStatus;
+}
+
+/** The owner's Start (`start: true`) or Refuse of the waiting start `id`. */
+export interface McpAnswerStartRequest {
+  readonly id: string;
+  readonly start: boolean;
+}
+
 /** Sends one control for an entry main holds; main reads the job from its own entry, never from the request. */
 export interface NotificationsControlRequest {
   readonly id: string;
@@ -2345,6 +2414,14 @@ export interface ScoutBridge {
   githubCancelWaitingApproval(req: GitHubVerdictKey): Promise<void>;
   githubWaitingApprovalFor(req: GitHubVerdictKey): Promise<GitHubWaitingApproval | null>;
   onGitHubWaitingApproval(listener: (status: GitHubWaitingApproval) => void): () => void;
+  mcpStatus(): Promise<McpStatus>;
+  mcpSetEnabled(enabled: boolean): Promise<McpStatus>;
+  mcpCreateToken(): Promise<McpCreatedToken>;
+  mcpRevokeToken(): Promise<McpStatus>;
+  mcpSetStartMode(mode: McpStartMode): Promise<McpStatus>;
+  mcpPickPort(): Promise<McpStatus>;
+  mcpAnswerStart(req: McpAnswerStartRequest): Promise<boolean>;
+  onMcpChanged(listener: (status: McpStatus) => void): () => void;
   youtubeSignIn(): Promise<YouTubeStatus>;
   youtubeStatus(): Promise<YouTubeStatus>;
   youtubeCancelSignIn(): Promise<void>;

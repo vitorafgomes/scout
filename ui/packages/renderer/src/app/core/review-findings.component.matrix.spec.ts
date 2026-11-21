@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ISSUES_MARKER,
+  OLD_CARD_REASON,
   type GitHubVerdictAction,
   type GitHubVerdictKey,
   type GitHubVerdictRequest,
@@ -17,6 +18,7 @@ import {
   type ReviewCheck,
   type ReviewFinding,
   type ReviewFindings,
+  type ReviewOffer,
   type ReviewTests,
 } from '@scout/shared';
 
@@ -297,6 +299,12 @@ function makeBridge() {
     verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine' | 'verdict'>) =>
       verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...key, ...status })),
     appOpenExternal: vi.fn(async (): Promise<void> => undefined),
+    githubPreviewVerdict: vi.fn(async (_req: GitHubVerdictRequest) => ({
+      body: '',
+      comments: [],
+      dropped: [] as string[],
+      offer: COMMENT,
+    })),
   };
 }
 
@@ -351,7 +359,27 @@ function findingsOf(kind: Kind, count: Count): ReviewFindings {
   const findings = FINDINGS.slice(0, count);
   return kind === 'audit'
     ? { kind: 'audit', repository: 'acme/shop', commit: 'ec7f951', verdict: 'v', findings }
-    : { repository: 'acme/shop', number: 5, commit: 'ec7f951', verdict: 'v', findings };
+    : {
+        repository: 'acme/shop',
+        number: 5,
+        commit: 'ec7f951',
+        verdict: 'v',
+        findings,
+        offer: COMMENT,
+      };
+}
+
+/** The offer a posting row's worker gives for every selection: Comment, so the card's one action posts. */
+const COMMENT: ReviewOffer = {
+  verdict: 'comment',
+  reason: 'Comment, not approve: 1 optional suggestion was kept.',
+  commentInstead: false,
+};
+
+/** Waits out the preview's quiet window, so the offer for the current selection has come back. */
+async function offered(fixture: Fixture): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  await settle(fixture);
 }
 
 function otherWindowTurn(
@@ -420,6 +448,7 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
     fixture.componentRef.setInput('review', findingsOf(row.kind, row.count));
     await settle(fixture);
     const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent ?? '', OLD_PROMISE_SAYS).not.toMatch(OLD_PROMISE);
     const cards = () => all(root, 'finding');
 
     if (row.picker === 'the other window') {
@@ -442,10 +471,11 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
       }
     }
 
+    if (row.kind === 'review') await offered(fixture);
     if (row.phase !== 'before posting' && row.kind === 'review') {
       if (row.window === 'this window') {
-        await click(fixture, all(root, 'post')[0]);
-        expect(all(root, 'post')).toEqual([]);
+        await click(fixture, all(root, 'offer')[0]);
+        expect(all(root, 'offer')).toEqual([]);
         if (row.phase !== 'posting') bridge.verdict(postProgress(row.phase, 'action-1'));
       } else {
         bridge.pushStatus({ ...POST_KEY, ...postProgress(row.phase, 'action-9') });
@@ -519,7 +549,7 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
     }).toEqual({
       footer: footer === 'footer',
       allSent: footer === 'all-sent' ? ALL_SENT : null,
-      post: footer === 'footer' ? 1 : 0,
+      post: footer === 'footer' && row.kind === 'audit' ? 1 : 0,
       allDismissed:
         footer === 'all-dismissed'
           ? row.kind === 'audit'
@@ -528,7 +558,25 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
           : null,
       posted: row.phase === 'posted',
     });
-    if (footer === 'footer') {
+    if (footer === 'footer' && row.kind === 'review') {
+      const offer = all(root, 'offer')[0] as HTMLButtonElement;
+      expect({
+        summary: text(all(root, 'summary')[0]),
+        label: text(offer),
+        enabled: !offer.disabled,
+        reason: text(all(root, 'offer-reason')[0]),
+        yesAll: all(root, 'yes-all').length,
+        preview: all(root, 'toggle-preview').length,
+      }).toEqual({
+        summary: (sentNow ? SUMMARY_AFTER_SENDING : SUMMARY)[row.decisions][row.count],
+        label: 'Comment',
+        enabled: row.phase !== 'posting',
+        reason: COMMENT.reason,
+        yesAll: 1,
+        preview: 1,
+      });
+    }
+    if (footer === 'footer' && row.kind === 'audit') {
       const post = all(root, 'post')[0] as HTMLButtonElement;
       expect({
         summary: text(all(root, 'summary')[0]),
@@ -551,6 +599,7 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
         target: text(all(root, 'target')[0]),
         post: all(root, 'post').length,
       }).toEqual({ box: 1, line: true, target: 'acme/shop · PR #5 · commit ec7f951', post: 0 });
+      expect(all(root, 'offer'), 'the offered action gives way to the posting box').toEqual([]);
     }
     if (row.phase === 'posted') {
       expect({
@@ -600,12 +649,9 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
 type ChecksCase = 'absent' | 'all pass' | 'one failing' | 'pending';
 type TestsCase = 'absent' | 'ran pass' | 'ran fail' | 'not ran';
 type VerdictPhase = 'none' | 'queued' | 'running' | 'given' | 'failed';
-type VerdictButton = 'Approve' | 'Request changes';
 
 const CHECKS_CASES: readonly ChecksCase[] = ['absent', 'all pass', 'one failing', 'pending'];
 const TESTS_CASES: readonly TestsCase[] = ['absent', 'ran pass', 'ran fail', 'not ran'];
-const VERDICT_PHASES: readonly VerdictPhase[] = ['none', 'queued', 'running', 'given', 'failed'];
-const VERDICT_BUTTONS: readonly VerdictButton[] = ['Approve', 'Request changes'];
 
 const BUILD: ReviewCheck = {
   name: 'build',
@@ -658,33 +704,248 @@ const TESTS_SENTENCE: Readonly<Record<ChecksCase, string | null>> = {
 const CHECK_LINE: Readonly<Record<ChecksCase, string | null>> = {
   absent: null,
   'all pass': null,
-  'one failing': 'lint did not pass. Scout approves only when every check passed.',
-  pending: '1 check is still running. Scout approves only when every check passed.',
-};
-const VERDICT: Readonly<Record<VerdictButton, GitHubVerdictRequest['verdict']>> = {
-  Approve: 'approve',
-  'Request changes': 'request_changes',
-};
-const GIVEN_TITLE: Readonly<Record<VerdictButton, string>> = {
-  Approve: 'Approved on PR #5',
-  'Request changes': 'Changes requested on PR #5',
-};
-const BUTTON_TEST: Readonly<Record<VerdictButton, string>> = {
-  Approve: 'approve',
-  'Request changes': 'request-changes',
+  'one failing':
+    'lint did not pass. Scout does not approve on its own; a person approves on GitHub.',
+  pending:
+    '1 check is still running. Scout does not approve on its own; a person approves on GitHub.',
 };
 const FAILED_REASON = 'The pull request moved since the review.';
+/** The sentences Scout no longer says: that it approves on its own, and the Post button a review card no longer has. */
+const OLD_PROMISE =
+  /Scout approves only when every check passed|Scout approves when they pass|Post on a review card/;
+const OLD_PROMISE_SAYS = 'no card state says Scout approves on its own or names the Post button';
 
-interface VerdictRow {
-  readonly kind: Kind;
+/** Every offer the worker can give, and the card from before the offer, which shows Comment. */
+type OfferCase = ReviewOffer['verdict'] | 'old card';
+const OFFER_CASES: readonly OfferCase[] = [
+  'approve',
+  'request_changes',
+  'comment',
+  'wait',
+  'none',
+  'old card',
+];
+const OFFERS: Readonly<Record<ReviewOffer['verdict'], ReviewOffer>> = {
+  approve: {
+    verdict: 'approve',
+    reason:
+      'Approve: every changed file was read, nothing needs fixing, the tests passed and every check passed.',
+    commentInstead: false,
+  },
+  request_changes: {
+    verdict: 'request_changes',
+    reason: 'Request changes: 1 finding needs fixing.',
+    commentInstead: true,
+  },
+  comment: COMMENT,
+  wait: {
+    verdict: 'wait',
+    reason: 'Approve when the checks pass: 1 check is still running.',
+    commentInstead: false,
+  },
+  none: {
+    verdict: 'none',
+    reason: 'The pull request changed since the review; review it again.',
+    commentInstead: false,
+  },
+};
+/** The one button each offer shows, and the reason it carries. */
+const OFFER_DRAWN: Readonly<
+  Record<OfferCase, { readonly buttons: readonly string[]; readonly reason: string }>
+> = {
+  approve: { buttons: ['Approve'], reason: OFFERS.approve.reason },
+  request_changes: { buttons: ['Request changes'], reason: OFFERS.request_changes.reason },
+  comment: { buttons: ['Comment'], reason: COMMENT.reason },
+  wait: { buttons: ['Approve when the checks pass'], reason: OFFERS.wait.reason },
+  none: { buttons: [], reason: OFFERS.none.reason },
+  'old card': { buttons: ['Comment'], reason: OLD_CARD_REASON },
+};
+
+interface OfferRow {
+  readonly offer: OfferCase;
+  readonly findings: boolean;
+  readonly tests: TestsCase;
+  readonly given: boolean;
+}
+
+/**
+ * Each offer the worker can give, crossed with what else changes what the card draws beside it: findings or none, the
+ * test run's four states, a verdict given at this commit or not. Which offer applies is the worker's rule
+ * (tests/Scout.Review.Tests/ReviewOfferTests.cs); here it is an input.
+ */
+const OFFER_ROWS: readonly OfferRow[] = OFFER_CASES.flatMap((offer) =>
+  [true, false].flatMap((findings) =>
+    TESTS_CASES.flatMap((tests) =>
+      [false, true].map((given) => ({ offer, findings, tests, given })),
+    ),
+  ),
+);
+
+function offerFindings(
+  offer: OfferCase,
+  findings: boolean,
+  extra: Partial<ReviewFindings> = {},
+): ReviewFindings {
+  const { offer: _given, ...card } = { ...findingsOf('review', 3), ...extra };
+  return {
+    ...card,
+    ...(findings ? {} : { findings: [] }),
+    ...(offer === 'old card' ? {} : { offer: OFFERS[offer] }),
+  };
+}
+
+async function renderCard(
+  bridge: ReturnType<typeof makeBridge>,
+  review: ReviewFindings,
+): Promise<Fixture> {
+  TestBed.configureTestingModule({
+    providers: [
+      provideZonelessChangeDetection(),
+      { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+    ],
+  });
+  const fixture = TestBed.createComponent(ReviewFindingsComponent);
+  fixture.componentRef.setInput('turnId', 'f-1');
+  fixture.componentRef.setInput('review', review);
+  await settle(fixture);
+  const yesAll = all(fixture.nativeElement as HTMLElement, 'yes-all')[0];
+  if (yesAll !== undefined) await click(fixture, yesAll);
+  return fixture;
+}
+
+describe(`review findings offer matrix (${OFFER_ROWS.length} rows)`, () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it.each(
+    OFFER_ROWS.map(
+      (row) =>
+        [
+          `offer ${row.offer}, ${row.findings ? 'three findings' : 'no findings'}, tests ${row.tests}${row.given ? ', a verdict given at this commit' : ''}`,
+          row,
+        ] as const,
+    ),
+  )('%s', async (_name, row) => {
+    const bridge = makeBridge();
+    const tests = TESTS[row.tests];
+    const fixture = await renderCard(
+      bridge,
+      offerFindings(row.offer, row.findings, tests === undefined ? {} : { tests }),
+    );
+    if (row.given) {
+      bridge.pushStatus({
+        ...VERDICT_KEY,
+        verdict: 'request_changes',
+        actionId: 'action-9',
+        state: 'given',
+        url: PR_URL,
+        reason: null,
+      });
+      await settle(fixture);
+    }
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent ?? '', OLD_PROMISE_SAYS).not.toMatch(OLD_PROMISE);
+    const drawn = OFFER_DRAWN[row.offer];
+
+    expect(
+      {
+        buttons: all(root, 'offer').map((b) => text(b)),
+        reason: text(all(root, 'offer-reason')[0]),
+        commentInstead: all(root, 'comment-instead').length,
+        removed: ['post', 'approve', 'request-changes', 'approve-when-green'].map(
+          (t) => all(root, t).length,
+        ),
+      },
+      'the card shows the offered action alone, with its reason, and a comment instead only beside request changes',
+    ).toEqual({
+      buttons: drawn.buttons,
+      reason: drawn.reason,
+      commentInstead: row.offer === 'request_changes' ? 1 : 0,
+      removed: [0, 0, 0, 0],
+    });
+    expect({
+      run: text(all(root, 'tests-run')[0]),
+      output: all(root, 'tests-output').length,
+      clean: text(all(root, 'clean')[0]),
+      cards: all(root, 'finding').length,
+      given: text(all(root, 'verdict-given')[0]?.querySelector('strong')),
+    }).toEqual({
+      run: RUN_CHIP[row.tests],
+      output: row.tests === 'ran fail' ? 1 : 0,
+      clean: row.findings ? null : 'No findings.',
+      cards: row.findings ? 3 : 0,
+      given: row.given ? 'Changes requested on PR #5' : null,
+    });
+    expect(bridge.githubGiveVerdict).not.toHaveBeenCalled();
+  });
+
+  it('an audit card shows no offer row', async () => {
+    const fixture = await renderCard(makeBridge(), findingsOf('audit', 3));
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent ?? '', OLD_PROMISE_SAYS).not.toMatch(OLD_PROMISE);
+
+    expect(['offer', 'offer-reason', 'comment-instead'].map((t) => all(root, t).length)).toEqual([
+      0, 0, 0,
+    ]);
+  });
+});
+
+interface LineRow {
   readonly checks: ChecksCase;
   readonly tests: TestsCase;
-  readonly phase: VerdictPhase;
-  readonly button: VerdictButton;
-  readonly selfAuthored: boolean;
-  readonly clicked: VerdictWindow;
-  readonly clean: boolean;
 }
+const LINE_ROWS: readonly LineRow[] = CHECKS_CASES.flatMap((checks) =>
+  TESTS_CASES.map((tests) => ({ checks, tests })),
+);
+
+describe(`review findings tests line matrix (${LINE_ROWS.length} rows)`, () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it.each(LINE_ROWS.map((row) => [`checks ${row.checks}, tests ${row.tests}`, row] as const))(
+    '%s: the offered verdict posts the checks and the run, a comment instead posts none',
+    async (_name, row) => {
+      const bridge = makeBridge();
+      const checks = CHECKS[row.checks];
+      const tests = TESTS[row.tests];
+      const fixture = await renderCard(
+        bridge,
+        offerFindings('request_changes', true, {
+          ...(checks === undefined ? {} : { checks }),
+          ...(tests === undefined ? {} : { tests }),
+        }),
+      );
+      const root = fixture.nativeElement as HTMLElement;
+      const marks = all(root, 'check-mark').map((mark) => text(mark));
+      const checkLine = text(all(root, 'check-line')[0]);
+
+      await click(fixture, all(root, 'offer')[0]);
+      bridge.verdict({ actionId: 'action-1', state: 'failed', url: null, reason: FAILED_REASON });
+      await settle(fixture);
+      await click(fixture, all(root, 'comment-instead')[0]);
+
+      expect({ marks, checkLine }).toEqual({
+        marks: MARKS[row.checks],
+        checkLine: CHECK_LINE[row.checks],
+      });
+      expect(
+        bridge.githubGiveVerdict.mock.calls.map(([request]) => [
+          request.verdict,
+          request.findings.length,
+          request.testsLine,
+        ]),
+        'the verdict posts the tests line the card shows; the comment posts none',
+      ).toEqual([
+        [
+          'request_changes',
+          3,
+          [TESTS_SENTENCE[row.checks], RUN_LINE[row.tests]]
+            .filter((line) => line !== null)
+            .join('\n'),
+        ],
+        ['comment', 3, ''],
+      ]);
+    },
+  );
+});
 
 type VerdictWindow = 'this window' | 'a window opened after the click' | 'the other window';
 const VERDICT_WINDOWS: readonly VerdictWindow[] = [
@@ -693,202 +954,80 @@ const VERDICT_WINDOWS: readonly VerdictWindow[] = [
   'the other window',
 ];
 
-function possibleVerdict(row: VerdictRow): boolean {
-  if (row.kind === 'audit') {
-    return (
-      row.checks === 'absent' &&
-      row.tests === 'absent' &&
-      row.phase === 'none' &&
-      !row.selfAuthored &&
-      row.button === 'Approve' &&
-      row.clicked === 'this window' &&
-      !row.clean
-    );
-  }
-  if (row.clean && row.button === 'Request changes' && row.clicked === 'this window') return false;
-  if (row.button === 'Approve' && row.phase !== 'none' && CHECK_LINE[row.checks] !== null) {
-    return false;
-  }
-  if (row.phase === 'none') return row.button === 'Approve' && row.clicked === 'this window';
-  return !(row.selfAuthored && row.button === 'Approve');
+interface PhaseRow {
+  readonly phase: Exclude<VerdictPhase, 'none'>;
+  readonly clicked: VerdictWindow;
 }
+const PHASE_ROWS: readonly PhaseRow[] = (['queued', 'running', 'given', 'failed'] as const).flatMap(
+  (phase) => VERDICT_WINDOWS.map((clicked) => ({ phase, clicked })),
+);
 
-const VERDICT_ROWS: readonly VerdictRow[] = KINDS.flatMap((kind) =>
-  CHECKS_CASES.flatMap((checks) =>
-    TESTS_CASES.flatMap((tests) =>
-      VERDICT_PHASES.flatMap((phase) =>
-        VERDICT_BUTTONS.flatMap((button) =>
-          [false, true].flatMap((selfAuthored) =>
-            VERDICT_WINDOWS.flatMap((clicked) =>
-              [false, true].map((clean) => ({
-                kind,
-                checks,
-                tests,
-                phase,
-                button,
-                selfAuthored,
-                clicked,
-                clean,
-              })),
-            ),
-          ),
-        ),
-      ),
-    ),
-  ),
-).filter(possibleVerdict);
-
-function verdictFindings(row: VerdictRow): ReviewFindings {
-  const base = findingsOf(row.kind, 3);
-  const checks = CHECKS[row.checks];
-  const tests = TESTS[row.tests];
-  return {
-    ...base,
-    ...(row.clean ? { findings: [] } : {}),
-    commit: 'ec7f951',
-    ...(checks === undefined ? {} : { checks }),
-    ...(tests === undefined ? {} : { tests }),
-    ...(row.selfAuthored ? { selfAuthored: true } : {}),
-  };
-}
-
-describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} rows)`, () => {
+describe(`review findings verdict progress matrix (${PHASE_ROWS.length} rows)`, () => {
   beforeEach(() => TestBed.resetTestingModule());
 
   it.each(
-    VERDICT_ROWS.map(
-      (row) =>
-        [
-          `${row.kind}${row.clean ? ' with no findings' : ''}, checks ${row.checks}, tests ${row.tests}, ${row.selfAuthored ? 'own pull request' : "someone else's pull request"}, verdict ${row.phase === 'none' ? 'none' : `${row.button} ${row.phase}, clicked in ${row.clicked}`}`,
-          row,
-        ] as const,
+    PHASE_ROWS.map(
+      (row) => [`request changes ${row.phase}, clicked in ${row.clicked}`, row] as const,
     ),
   )('%s', async (_name, row) => {
     const bridge = makeBridge();
     const elsewhere = {
       ...VERDICT_KEY,
-      verdict: VERDICT[row.button],
+      verdict: 'request_changes',
       actionId: 'action-1',
-      state: row.phase === 'none' ? 'queued' : row.phase,
+      state: row.phase,
       url: row.phase === 'given' ? PR_URL : null,
       reason: row.phase === 'failed' ? FAILED_REASON : null,
       signedAs: null,
       testsLine: null,
     } as const;
-    if (row.phase !== 'none' && row.clicked === 'a window opened after the click') {
+    if (row.clicked === 'a window opened after the click')
       bridge.githubVerdictFor.mockResolvedValue(elsewhere);
-    }
-    TestBed.configureTestingModule({
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
-      ],
-    });
-    const fixture = TestBed.createComponent(ReviewFindingsComponent);
-    fixture.componentRef.setInput('turnId', 'f-1');
-    fixture.componentRef.setInput('review', verdictFindings(row));
-    await settle(fixture);
+    const fixture = await renderCard(bridge, offerFindings('request_changes', true));
     const root = fixture.nativeElement as HTMLElement;
-    const first = all(root, 'finding')[0];
-    const yes = first === undefined ? undefined : all(first, 'yes')[0];
-    if (yes !== undefined) await click(fixture, yes);
-    const verdictsBeforeClick = bridge.githubGiveVerdict.mock.calls.length;
-
-    if (row.phase !== 'none' && row.clicked === 'this window') {
-      await click(fixture, all(root, BUTTON_TEST[row.button])[0]);
+    expect(root.textContent ?? '', OLD_PROMISE_SAYS).not.toMatch(OLD_PROMISE);
+    if (row.clicked === 'this window') {
+      await click(fixture, all(root, 'offer')[0]);
       if (row.phase !== 'queued') {
         bridge.verdict({
           actionId: 'action-1',
           state: row.phase,
-          url: row.phase === 'given' ? PR_URL : null,
-          reason: row.phase === 'failed' ? FAILED_REASON : null,
+          url: elsewhere.url,
+          reason: elsewhere.reason,
         });
       }
       await settle(fixture);
     }
-    if (row.phase !== 'none' && row.clicked === 'the other window') {
+    if (row.clicked === 'the other window') {
       bridge.pushStatus(elsewhere);
       await settle(fixture);
     }
-    const here = row.clicked === 'this window' && row.phase !== 'none';
-
-    const review = row.kind === 'review';
-    const open = review;
     const giving = row.phase === 'queued' || row.phase === 'running';
     const given = all(root, 'verdict-given')[0];
-    const enabled = (test: string) =>
-      all(root, test).map((button) => !(button as HTMLButtonElement).disabled);
-    const testsSentence = [TESTS_SENTENCE[row.checks], RUN_LINE[row.tests]]
-      .filter((line) => line !== null)
-      .join('\n');
 
     expect({
-      tests: all(root, 'tests').length,
-      marks: all(root, 'check-mark').map((mark) => text(mark)),
-      run: text(all(root, 'tests-run')[0]),
-      output: all(root, 'tests-output').length,
-    }).toEqual({
-      tests: row.checks === 'absent' && row.tests === 'absent' ? 0 : 1,
-      marks: MARKS[row.checks],
-      run: RUN_CHIP[row.tests],
-      output: row.tests === 'ran fail' ? 1 : 0,
-    });
-    expect({
-      approve: enabled('approve'),
-      approveWhenGreen: enabled('approve-when-green'),
-      checkLine: text(all(root, 'check-line')[0]),
-      requestChanges: enabled('request-changes'),
-      post: enabled('post'),
       giving: text(all(root, 'verdict-giving')[0]),
       failed: text(all(root, 'verdict-failed')[0]),
       given: text(given?.querySelector('strong')),
       link: text(given?.querySelector('a')),
-      posted: all(root, 'posted').length,
-      cardButtons: all(root, 'yes').length > 0,
+      offer: all(root, 'offer').map((b) => !(b as HTMLButtonElement).disabled),
     }).toEqual({
-      approve:
-        open && !row.selfAuthored && !giving && CHECK_LINE[row.checks] === null ? [true] : [],
-      approveWhenGreen:
-        open && !row.selfAuthored && !giving && row.checks === 'pending' ? [true] : [],
-      checkLine: CHECK_LINE[row.checks],
-      requestChanges: open && !giving && !row.clean ? [true] : [],
-      post: row.clean ? [] : [!giving],
       giving: giving ? 'Giving the verdict…' : null,
       failed: row.phase === 'failed' ? FAILED_REASON : null,
-      given: row.phase === 'given' ? GIVEN_TITLE[row.button] : null,
+      given: row.phase === 'given' ? 'Changes requested on PR #5' : null,
       link: row.phase === 'given' ? 'See the review on GitHub' : null,
-      posted: 0,
-      cardButtons: !row.clean,
+      offer: giving ? [] : [true],
     });
-    expect(text(all(root, 'clean')[0])).toBe(row.clean ? 'No findings.' : null);
-    expect(verdictsBeforeClick).toBe(0);
-    expect(bridge.localAsk).not.toHaveBeenCalled();
-    expect(bridge.githubVerdictFor.mock.calls.map(([key]) => key)).toEqual(
-      row.kind === 'review' ? [{ repository: 'acme/shop', number: 5, commit: 'ec7f951' }] : [],
-    );
-    expect(bridge.githubGiveVerdict.mock.calls.map(([request]) => request)).toEqual(
-      !here
-        ? []
-        : [
-            {
-              repository: 'acme/shop',
-              number: 5,
-              verdict: VERDICT[row.button],
-              findings: row.clean
-                ? []
-                : [expect.objectContaining({ path: 'src/orders/Checkout.cs', line: 88 })],
-              commit: 'ec7f951',
-              testsLine: testsSentence,
-            },
-          ],
-    );
-
-    const again = all(root, BUTTON_TEST[row.button])[0];
-    const clickedAgain = row.phase !== 'none' && again !== undefined;
-    if (clickedAgain) await click(fixture, again);
+    expect(bridge.githubVerdictFor.mock.calls.map(([key]) => key)).toEqual([
+      { repository: 'acme/shop', number: 5, commit: 'ec7f951' },
+    ]);
+    const here = row.clicked === 'this window';
+    const again = all(root, 'offer')[0];
+    if (again !== undefined) await click(fixture, again);
     expect(bridge.githubGiveVerdict).toHaveBeenCalledTimes(
-      (here ? 1 : 0) + ((row.phase === 'failed' || row.phase === 'given') && clickedAgain ? 1 : 0),
+      (here ? 1 : 0) + (again !== undefined ? 1 : 0),
     );
+    expect(bridge.localAsk).not.toHaveBeenCalled();
   });
 });
 
@@ -994,6 +1133,7 @@ describe(`review findings sent issues matrix (${SENT_ROWS.length} rows)`, () => 
     fixture.componentRef.setInput('review', findingsCards(bridge.turns()).get('a-1')!.review);
     await settle(fixture);
     const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent ?? '', OLD_PROMISE_SAYS).not.toMatch(OLD_PROMISE);
     const cards = () => all(root, 'finding');
     const firstTitles = FINDINGS.slice(0, row.sent).map((f) => f.title);
 

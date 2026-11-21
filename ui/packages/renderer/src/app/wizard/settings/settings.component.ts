@@ -31,6 +31,7 @@ import { THEME_OPTIONS, ThemeStore } from '../../core/theme.store';
 import { AudioSettingsComponent } from './audio-settings.component';
 import { ChatClientsComponent } from './chat-clients.component';
 import { captureShortcut, keycapsOf } from './quick-ask-shortcut';
+import { McpSettingsComponent } from './mcp-settings.component';
 import { SETTINGS_SWITCH_STYLES } from './settings-switch.styles';
 import { WorkerSettingsComponent } from './worker-settings.component';
 
@@ -89,6 +90,7 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
     ChatClientsComponent,
     IconComponent,
     MatSlideToggleModule,
+    McpSettingsComponent,
     WorkerSettingsComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -98,7 +100,7 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
         <h1>Settings</h1>
         <p class="description">
           Chat connections, the Scout worker, who can use Scout, the quick-ask button, the
-          microphone and speaker, and how this app looks.
+          microphone and speaker, the MCP server, and how this app looks.
         </p>
       </header>
 
@@ -814,6 +816,7 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
               <p class="error" role="alert" data-test="update-error">{{ error }}</p>
             }
           </section>
+          <sc-mcp-settings />
         </div>
       </div>
     </main>

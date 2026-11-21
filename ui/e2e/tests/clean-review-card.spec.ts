@@ -7,6 +7,12 @@ const CLEAN_REVIEW = {
   verdict: 'ready to merge',
   read: 'The whole diff and its tests.',
   findings: [],
+  offer: {
+    verdict: 'approve',
+    reason:
+      'Approve: every changed file was read, nothing needs fixing, the tests passed and every check passed.',
+    commentInstead: false,
+  },
 };
 
 test.use({
@@ -19,7 +25,7 @@ test.use({
   },
 });
 
-test('a review that found nothing still shows its card: no finding card, the No findings line and Approve; no Post and no Request changes', async ({
+test('a review that found nothing still shows its card: no finding card, the No findings line and the Approve the worker offers with its reason, and nothing else', async ({
   desktop,
 }) => {
   const { page } = await desktop.launch();
@@ -32,10 +38,11 @@ test('a review that found nothing still shows its card: no finding card, the No 
     'What Scout says it read: The whole diff and its tests.',
   );
   await expect(page.getByTestId('target')).toHaveText('acme/shop · PR #5 · commit ec7f951');
-  await expect(page.getByTestId('approve')).toBeVisible();
+  await expect(page.getByTestId('offer')).toHaveText('Approve');
+  await expect(page.getByTestId('offer-reason')).toHaveText(CLEAN_REVIEW.offer.reason);
   await expect(page.getByTestId('finding')).toHaveCount(0);
   await expect(page.getByTestId('post')).toHaveCount(0);
-  await expect(page.getByTestId('request-changes')).toHaveCount(0);
+  await expect(page.getByTestId('comment-instead')).toHaveCount(0);
   await expect(page.getByTestId('all-dismissed')).toHaveCount(0);
   await expect(page.locator('pre code')).toHaveCount(0);
 });

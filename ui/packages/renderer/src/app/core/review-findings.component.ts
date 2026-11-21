@@ -13,24 +13,23 @@ import {
 } from '@angular/core';
 
 import {
+  checkMark,
+  checksOutcome,
+  offerOf,
+  parseReviewFindings,
   signerInWords,
+  verdictRequest,
   type GitHubVerdictRequest,
   type ReviewFinding,
   type ReviewFindings,
+  type ReviewOffer,
   type ReviewTests,
 } from '@scout/shared';
 
 import { LocalConversation } from './local-conversation';
 import { MarkdownPipe } from './markdown.pipe';
-import {
-  checkMark,
-  checksOutcome,
-  issueBody,
-  issuesAsk,
-  parseReviewFindings,
-  verdictRequest,
-} from './review-findings';
-import { ReviewFindingsStore, type EditedText } from './review-findings.store';
+import { issueBody, issuesAsk } from './review-findings';
+import { ReviewFindingsStore, selectionKey, type EditedText } from './review-findings.store';
 import { ScoutBridgeService } from './scout-bridge';
 
 /** The verdict given before the one on GitHub at the same commit, as the given line names it. */
@@ -45,7 +44,6 @@ const SEVERITY_LABELS: Readonly<Record<ReviewFinding['severity'], string>> = {
   nit: 'Suggestion',
 };
 const MAX_COMMENT_CHARS = 4000;
-const CHECKS_REFUSAL = 'Scout approves only when every check of the commit passed:';
 const SHIELD = 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5';
 const ALERT = 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5';
 /** `reply | reviewFindings`: the reply's findings block and the text around it, parsed once per reply. */
@@ -355,7 +353,7 @@ export class ReviewFindingsPipe implements PipeTransform {
           >Posting the review… {{ selected().length }}
           {{ selected().length === 1 ? 'comment' : 'comments' }} in one review on PR #{{
             review().number
-          }}; your click on Post was the approval.</span
+          }}; your click was the approval.</span
         >
         <div class="bar" role="progressbar" aria-label="Posting the review"><div></div></div>
       </div>
@@ -387,7 +385,7 @@ export class ReviewFindingsPipe implements PipeTransform {
         } @else {
           <span class="summary" data-test="summary">{{ summary() }}</span>
         }
-        @if (!clean()) {
+        @if (!clean() && !(audit() === false && allDismissed())) {
           <div class="group">
             @if (!allDismissed()) {
               <button
@@ -402,7 +400,7 @@ export class ReviewFindingsPipe implements PipeTransform {
                 <span class="lbl">Yes to all</span>
               </button>
             }
-            @if (!allDismissed()) {
+            @if (!allDismissed() && audit()) {
               <button
                 type="button"
                 class="primary"
@@ -442,56 +440,50 @@ export class ReviewFindingsPipe implements PipeTransform {
               <span class="lbl">Cancel</span>
             </button>
           </div>
-        } @else if (!audit() && !giving() && (approveOffer() !== null || !clean())) {
-          <div class="verdict" role="group" aria-label="Verdict">
-            <span class="verdict-label">Verdict on the reviewed commit</span>
-            @if (approveOffer() === 'wait') {
+        } @else if (!audit() && !giving()) {
+          <div class="verdict" role="group" aria-label="Verdict" data-test="offer-row">
+            @if (offer(); as o) {
+              @if (o.verdict !== 'none') {
+                <button
+                  type="button"
+                  class="primary"
+                  data-test="offer"
+                  [attr.data-offer]="o.verdict"
+                  [disabled]="verdictLocked() || posting() || busy()"
+                  [attr.title]="review().commit ? null : noCommit"
+                  (click)="act(o.verdict)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="shield"></path></svg>
+                  <span class="lbl">{{ offerLabel(o.verdict) }}</span>
+                </button>
+              }
+              <p class="offer-reason" data-test="offer-reason">{{ o.reason }}</p>
+              @if (o.commentInstead) {
+                <button
+                  type="button"
+                  class="quiet"
+                  data-test="comment-instead"
+                  [disabled]="verdictLocked() || posting() || busy()"
+                  (click)="post()"
+                >
+                  Send as a comment instead
+                </button>
+              }
+            } @else {
               <button
                 type="button"
                 class="primary"
-                data-test="approve-when-green"
-                [disabled]="verdictLocked()"
+                data-test="offer"
+                disabled
                 [attr.title]="review().commit ? null : noCommit"
-                [attr.aria-label]="
-                  'Approve ' + review().repository + '#' + review().number + ' when its checks pass'
-                "
-                (click)="approveWhenGreen()"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="shield"></path></svg>
-                <span class="lbl">Approve when the checks pass</span>
+                <span class="lbl">Waiting for Scout's offer</span>
               </button>
-            } @else if (approveOffer() === 'approve') {
-              <button
-                type="button"
-                class="approve"
-                data-test="approve"
-                [disabled]="verdictLocked()"
-                [attr.title]="review().commit ? null : noCommit"
-                (click)="giveVerdict('approve')"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path>
-                </svg>
-                <span class="lbl">Approve</span>
-              </button>
-            }
-            @if (!clean()) {
-              <button
-                type="button"
-                class="request-changes"
-                data-test="request-changes"
-                [disabled]="verdictLocked()"
-                [attr.title]="review().commit ? null : noCommit"
-                (click)="giveVerdict('request_changes')"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path>
-                </svg>
-                <span class="lbl">Request changes</span>
-              </button>
+              <p class="offer-reason" data-test="offer-reason">{{ asking }}</p>
             }
           </div>
         }
+
         @if (giving()) {
           <p class="giving" data-test="verdict-giving" role="status">
             <span class="dot" aria-hidden="true"></span
@@ -563,7 +555,7 @@ export class ReviewFindingsPipe implements PipeTransform {
         </div>
       } @else if (state().preview) {
         <div class="gh" data-test="preview">
-          @if (previewVerdict(); as shown) {
+          @if (askedVerdict(); as shown) {
             <p class="preview-for" data-test="preview-for">
               Preview of the note for {{ verdictLabel(shown) }}, as Scout would post it on PR #{{
                 review().number
@@ -1258,8 +1250,8 @@ export class ReviewFindingsComponent {
     });
     inject(DestroyRef).onDestroy(() => this.store.forgetPreview(this.turnId()));
     effect(() => {
-      const verdict = this.previewVerdict();
-      if (!this.state().preview || verdict === null) return;
+      const verdict = this.askedVerdict();
+      if (verdict === null || (this.everything() && !this.state().preview)) return;
       const request = verdictRequest(this.review(), this.selected(), verdict);
       const turnId = this.turnId();
       if (request !== null) untracked(() => this.store.preview(turnId, request));
@@ -1312,16 +1304,66 @@ export class ReviewFindingsComponent {
       ? `Nothing new was sent: this verdict with these findings is already on PR #${number} at commit ${(commit ?? '').slice(0, 7)}.`
       : null;
   });
-  /** The verdict the preview shows: the approval when the card offers one, else the request for changes. */
-  readonly previewVerdict = computed((): GitHubVerdictRequest['verdict'] | null => {
+  /** The request the card's current selection and edits make, keyed without its verdict; null without a commit. */
+  readonly selection = computed(() => {
+    const request = verdictRequest(this.review(), this.selected(), 'request_changes');
+    return request === null ? null : selectionKey(request);
+  });
+  /** True while every finding is selected and none is edited: the selection the block's offer was decided for. */
+  readonly everything = computed(
+    () =>
+      this.selected().length === this.review().findings.length &&
+      Object.keys(this.state().edited).length === 0,
+  );
+  /**
+   * The one action the worker offers for the current selection: the block's while every finding is selected and none
+   * edited or while the review names no commit to ask about, else the preview answer's for this selection, or none yet while that answer is on its way. The card decides
+   * nothing about the verdict.
+   */
+  readonly offer = computed((): ReviewOffer | null => {
     if (this.audit()) return null;
-    if (this.approveOffer() !== null) return 'approve';
-    return this.clean() ? null : 'request_changes';
+    if (this.everything() || this.selection() === null) return offerOf(this.review());
+    const shown = this.store.notePreview(this.turnId());
+    if (shown === null || shown.key !== this.selection()) return null;
+    if (shown.offer !== undefined) return shown.offer;
+    if (shown.error !== undefined)
+      return { verdict: 'none', reason: shown.error, commentInstead: false };
+    return offerOf({});
+  });
+  /**
+   * The verdict the worker is asked to preview: request changes, always composable, so its answer carries the offer;
+   * once the note preview is open and the offer is Approve or Comment, that verdict, so the note shown is the offered one.
+   */
+  readonly askedVerdict = computed((): GitHubVerdictRequest['verdict'] | null => {
+    if (this.audit()) return null;
+    const offered = this.offer()?.verdict;
+    return this.state().preview && (offered === 'approve' || offered === 'comment')
+      ? offered
+      : 'request_changes';
   });
   readonly notePreview = computed(() => {
     const shown = this.store.notePreview(this.turnId());
-    return shown !== null && shown.verdict === this.previewVerdict() ? shown : null;
+    return shown !== null && shown.verdict === this.askedVerdict() && shown.key === this.selection()
+      ? shown
+      : null;
   });
+  protected readonly asking = 'Asking Scout what it offers for this selection.';
+  /** The primary button's label for each offer. */
+  offerLabel(verdict: ReviewOffer['verdict']): string {
+    return verdict === 'approve'
+      ? 'Approve'
+      : verdict === 'request_changes'
+        ? 'Request changes'
+        : verdict === 'wait'
+          ? 'Approve when the checks pass'
+          : 'Comment';
+  }
+  /** The offered action: approve and request changes give the verdict, comment posts, wait asks for the approval that waits. */
+  act(verdict: ReviewOffer['verdict']): void {
+    if (verdict === 'approve' || verdict === 'request_changes') this.giveVerdict(verdict);
+    else if (verdict === 'comment') void this.post();
+    else if (verdict === 'wait') void this.approveWhenGreen();
+  }
   readonly writing = computed(() => this.posting() || this.busy() || this.giving());
   readonly verdictLocked = computed(() => this.giving() || this.posting() || !this.review().commit);
   /** The checks of the reviewed commit as the worker judges an approval: how many still run, and the first that failed. */
@@ -1336,36 +1378,21 @@ export class ReviewFindingsComponent {
       : status;
   });
   readonly waitingNow = computed(() => this.waiting()?.state === 'waiting');
-  /**
-   * Which approval the Verdict group offers: Approve once every check passed or the review has none, Approve when the
-   * checks pass while some still run, after the worker refused an approval for its checks or after a wait timed out,
-   * and none once a check failed, the head moved, the pull request closed, or on the owner's own pull request.
-   */
-  readonly approveOffer = computed((): 'approve' | 'wait' | null => {
-    if (this.review().selfAuthored === true) return null;
-    const waiting = this.waiting();
-    if (waiting !== null) return waiting.reason === 'timed-out' ? 'wait' : null;
-    const verdict = this.verdict();
-    if (verdict?.state === 'failed' && verdict.reason?.startsWith(CHECKS_REFUSAL)) return 'wait';
-    const { running, failed } = this.checks();
-    if (failed !== null) return null;
-    return running > 0 ? 'wait' : 'approve';
-  });
   /** The line under the checks while no approval waits: the check that failed, or how many still run. */
   readonly checkLine = computed(() => {
     if (this.audit() || this.waiting() !== null) return null;
     const { running, failed } = this.checks();
     if (failed !== null)
-      return `${failed} did not pass. Scout approves only when every check passed.`;
+      return `${failed} did not pass. Scout does not approve on its own; a person approves on GitHub.`;
     if (running === 0) return null;
     const still = running === 1 ? '1 check is' : `${running} checks are`;
-    return `${still} still running. Scout approves only when every check passed.`;
+    return `${still} still running. Scout does not approve on its own; a person approves on GitHub.`;
   });
   readonly waitingLine = computed(() => {
     const running = this.waiting()?.running || this.checks().running;
     return running > 0
-      ? `Waiting for the checks: ${running} still running. Scout approves when they pass.`
-      : 'Waiting for the checks. Scout approves when they pass.';
+      ? `Waiting for the checks: ${running} still running. Your approval is sent when they pass.`
+      : 'Waiting for the checks. Your approval is sent when they pass.';
   });
   /** Why an approval that waited for the checks was not given. */
   readonly endedLine = computed(() => {
@@ -1482,7 +1509,7 @@ export class ReviewFindingsComponent {
       ? 'Approve'
       : verdict === 'request_changes'
         ? 'Request changes'
-        : 'Post';
+        : 'Comment';
   }
 
   signer(login: string): string {
@@ -1520,7 +1547,7 @@ export class ReviewFindingsComponent {
    */
   async post(): Promise<void> {
     const selected = this.selected();
-    if (selected.length === 0 || this.writing() || this.closed()) return;
+    if ((this.audit() && selected.length === 0) || this.writing() || this.closed()) return;
     if (!this.audit()) {
       const request = verdictRequest(this.review(), selected, 'comment');
       if (request !== null) await this.store.giveVerdict(request);
@@ -1551,7 +1578,7 @@ export class ReviewFindingsComponent {
    * every check passed; this click is the owner's approval of that one request. A refusal shows as the card's error.
    */
   async approveWhenGreen(): Promise<void> {
-    if (this.closed() || this.verdictLocked() || this.approveOffer() !== 'wait') return;
+    if (this.closed() || this.verdictLocked() || this.offer()?.verdict !== 'wait') return;
     const request = verdictRequest(this.review(), this.selected(), 'approve');
     if (request === null) return;
     this.error.set(null);

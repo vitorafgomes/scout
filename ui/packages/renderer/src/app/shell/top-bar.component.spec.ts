@@ -1,16 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import {
   ScoutError,
   encodeIpcErrorMessage,
   serializeError,
+  type McpStatus,
   type ThemeChoice,
   type ThemeState,
 } from '@scout/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LlmConfigStore, type LlmProvider } from '../core/llm-config.store';
+import { McpStore } from '../core/mcp.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
 import { ThemeStore } from '../core/theme.store';
 import { TopBarComponent, screenTitle } from './top-bar.component';
@@ -60,6 +63,8 @@ async function render(
     provider?: LlmProvider | null;
     model?: string | null;
     title?: string;
+    settings?: boolean;
+    mcp?: McpStatus | null;
   } = {},
 ) {
   const bridge = themeBridge(options.start ?? 'not loaded', options.refuse ?? false);
@@ -69,11 +74,14 @@ async function render(
       provideZonelessChangeDetection(),
       { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
       { provide: LlmConfigStore, useValue: llm },
+      { provide: McpStore, useValue: { status: signal(options.mcp ?? null) } },
+      provideRouter([]),
     ],
   });
   TestBed.inject(ThemeStore).start();
   const fixture = TestBed.createComponent(TopBarComponent);
   fixture.componentRef.setInput('title', options.title ?? 'Chat');
+  fixture.componentRef.setInput('settings', options.settings ?? false);
   await settle(fixture);
   return { fixture, bridge, llm };
 }
@@ -191,6 +199,79 @@ describe('TopBarComponent', () => {
       }
     }
   });
+});
+
+describe('the Settings button of the top bar', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('is not drawn in a window that does not ask for it, such as the operator window', async () => {
+    const { fixture } = await render();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-test="nav-settings"]'),
+      'only the main window, which has the Settings screen, shows the button',
+    ).toBeNull();
+  });
+});
+
+const MCP_OFF: McpStatus = {
+  enabled: false,
+  startMode: 'ask',
+  port: 47231,
+  hasToken: true,
+  tokenCreatedAt: 1,
+  listener: { state: 'off' },
+  pending: null,
+  activity: [],
+};
+const MCP_ON: McpStatus = {
+  ...MCP_OFF,
+  enabled: true,
+  listener: { state: 'listening', port: 47231 },
+};
+
+describe('the MCP mark of the top bar', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('shows in the main window while the server listens: a link to Settings left of the bell, named for what it opens, with its dot', async () => {
+    const { fixture } = await render({ settings: true, mcp: MCP_ON });
+    const bar = fixture.nativeElement as HTMLElement;
+    const mark = bar.querySelector<HTMLAnchorElement>('[data-test="mcp-mark"]');
+
+    expect(
+      [mark?.getAttribute('aria-label'), mark?.getAttribute('title'), mark?.getAttribute('href')],
+      'the mark links to Settings and says the server is active',
+    ).toEqual([
+      'MCP server is active. Open its settings',
+      'MCP server is active. Open its settings',
+      '/settings',
+    ]);
+    expect(mark?.querySelector('.mcp-dot'), 'the mark carries its dot').not.toBeNull();
+    expect(
+      mark?.nextElementSibling?.tagName.toLowerCase(),
+      'the mark sits at the left of the bell',
+    ).toBe('sc-notification-bell');
+  });
+
+  for (const [why, settings, mcp] of [
+    ['the server is off', true, MCP_OFF],
+    [
+      'the server did not start',
+      true,
+      { ...MCP_ON, listener: { state: 'failed', port: 47231, reason: 'Port 47231 is in use.' } },
+    ],
+    ['main has not answered yet', true, null],
+    ['the window is the operator window, which has no Settings', false, MCP_ON],
+  ] as const) {
+    it(`is not drawn when ${why}`, async () => {
+      const { fixture } = await render({ settings, mcp: mcp as McpStatus | null });
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-test="mcp-mark"]'),
+        'the mark shows only in the main window while the server listens',
+      ).toBeNull();
+    });
+  }
 });
 
 describe('screenTitle', () => {

@@ -98,6 +98,12 @@ export interface JobControls {
   dispose(): void;
 }
 
+/** Which job an entry of the bell stands for, read from its own id as the controls read it: an audit or a review; null for any other entry. */
+export function jobOfEntry(id: string): 'audit' | 'review' | null {
+  const target = targetOf(id, 'pause');
+  return target?.kind === 'audit' || target?.kind === 'review' ? target.kind : null;
+}
+
 function targetOf(id: string, action: JobControlAction): JobControlRequest | null {
   const audit = AUDIT_ID.exec(id);
   if (audit !== null) return { kind: 'audit', owner: audit[1]!, repo: audit[2]!, action };

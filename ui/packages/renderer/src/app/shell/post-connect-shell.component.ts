@@ -3,18 +3,23 @@ import {
   Component,
   DestroyRef,
   computed,
+  effect,
   inject,
   TemplateRef,
   signal,
+  untracked,
 } from '@angular/core';
+import { MatDialog, type MatDialogRef } from '@angular/material/dialog';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
 import { IconComponent, type IconName } from '../core/icon.component';
+import { McpStore } from '../core/mcp.store';
 import { MenuPreferences } from '../core/menu-preferences';
 import { PendingApprovals } from '../core/pending-approvals.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
+import { McpStartDialogComponent, openMcpStartDialog } from './mcp-start-dialog.component';
 import { TopBarComponent, screenTitle } from './top-bar.component';
 import { UpdateNoticeComponent } from './update-notice.component';
 
@@ -35,8 +40,13 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   { path: '/meetings', label: 'Meetings', testId: 'nav-meetings', icon: 'calendar' },
   { path: '/review', label: 'Approvals', testId: 'nav-review', icon: 'check-square' },
   { path: '/logs', label: 'Logs', testId: 'nav-logs', icon: 'list' },
-  { path: '/settings', label: 'Settings', testId: 'nav-settings', icon: 'settings' },
 ] as const);
+
+/** The screens that have a title and no entry in the side menu: Settings opens from the top bar. */
+const TITLED: readonly Pick<NavItem, 'path' | 'label'>[] = [
+  ...NAV_ITEMS,
+  { path: '/settings', label: 'Settings' },
+];
 
 /** The routes whose screens paint with the theme tokens; every other page keeps the dark canvas until it migrates. */
 const THEMED_ROUTES: readonly string[] = Object.freeze([
@@ -117,7 +127,7 @@ const THEMED_ROUTES: readonly string[] = Object.freeze([
         </ul>
       </nav>
       <div class="content">
-        <sc-top-bar [title]="title()" [actions]="pageActions()" />
+        <sc-top-bar [title]="title()" [actions]="pageActions()" [settings]="true" />
         <sc-update-notice />
         <main class="main" [class.sc-dark-canvas]="pinnedDark()" role="main">
           <router-outlet (activate)="routed.set($event)" (deactivate)="routed.set(null)" />
@@ -253,7 +263,14 @@ export class PostConnectShellComponent {
   private readonly router = inject(Router);
   private readonly bridge = inject(ScoutBridgeService);
   private readonly approvals = inject(PendingApprovals);
+  private readonly mcp = inject(McpStore);
+  private readonly dialog = inject(MatDialog);
   private reads = 0;
+  /** The start dialog open now, with the id of the start it asks about. */
+  private startDialog: {
+    readonly id: string;
+    readonly ref: MatDialogRef<McpStartDialogComponent>;
+  } | null = null;
 
   /** How many actions wait for the owner's decision, for the badge on Approvals; the badge hides at zero. */
   readonly waiting = this.approvals.waiting;
@@ -284,7 +301,7 @@ export class PostConnectShellComponent {
   });
 
   /** The current screen's name, from the navigation entry its route belongs to. */
-  readonly title = computed<string>(() => screenTitle(NAV_ITEMS, this.url(), 'Scout'));
+  readonly title = computed<string>(() => screenTitle(TITLED, this.url(), 'Scout'));
 
   /** True while the routed screen is not on the theme tokens yet, so its area stays dark in either theme. */
   readonly pinnedDark = computed<boolean>(
@@ -310,6 +327,25 @@ export class PostConnectShellComponent {
       )
       .subscribe(() => void this.readYouTube());
     void this.readYouTube();
+    this.mcp.start();
+    effect(() => {
+      const pending = this.mcp.status()?.pending ?? null;
+      untracked(() => this.showStart(pending?.id ?? null));
+    });
+  }
+
+  /** Opens the start dialog for the start main reports waiting, and closes it once that start no longer waits. */
+  private showStart(id: string | null): void {
+    if (this.startDialog?.id === id) return;
+    this.startDialog?.ref.close();
+    this.startDialog = null;
+    const pending = this.mcp.status()?.pending;
+    if (id === null || pending == null) return;
+    const ref = openMcpStartDialog(this.dialog, pending);
+    this.startDialog = { id, ref };
+    ref.afterClosed().subscribe(() => {
+      if (this.startDialog?.ref === ref) this.startDialog = null;
+    });
   }
 
   /** Reads the YouTube connection again; only the latest read is shown. */

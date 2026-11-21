@@ -22,6 +22,7 @@ import {
   ScoutError,
   encodeIpcErrorMessage,
   serializeError,
+  toOffer,
   transcriptMarker,
   type LocalAskRequest,
   type LocalBubbleCardResponse,
@@ -256,6 +257,10 @@ export interface QuickAsk {
   isAnswering(): boolean;
   /** Asks `text` as a new turn when no turn runs and answers its id; null while one runs or when it is refused. */
   askWhenIdle(text: string): string | null;
+  /** The turns the conversation keeps, oldest first. */
+  turns(): readonly LocalTurn[];
+  /** The note and comments `request` would post, as the worker composes them; nothing is sent. */
+  previewNote(request: GitHubVerdictRequest): Promise<GitHubNotePreview>;
   /** True when a turn the conversation keeps asked exactly `text` at or after `since`. */
   askedSince(text: string, since: number): boolean;
   /** Main's restart settled: a question held through it is sent if the worker runs, else refused. */
@@ -1904,6 +1909,8 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     },
     isListening: () => sessions.size > 0,
     isAnswering: () => turns.some((turn) => turn.state === 'running'),
+    turns: () => [...turns],
+    previewNote: (request) => previewNote(request),
     askWhenIdle(text: string): string | null {
       if (supervisor.status.state !== 'running' || turns.some((turn) => turn.state === 'running')) {
         return null;
@@ -2057,7 +2064,7 @@ function toNotePreview(text: string): GitHubNotePreview | null {
     return null;
   }
   if (typeof data !== 'object' || data === null) return null;
-  const { body, comments, dropped } = data as Record<string, unknown>;
+  const { body, comments, dropped, offer } = data as Record<string, unknown>;
   if (
     typeof body !== 'string' ||
     !Array.isArray(comments) ||
@@ -2079,5 +2086,11 @@ function toNotePreview(text: string): GitHubNotePreview | null {
     }
     kept.push({ id: c['id'], path: c['path'], line: c['line'] as number, body: c['body'] });
   }
-  return { body, comments: kept, dropped: dropped as string[] };
+  const offered = toOffer(offer);
+  return {
+    body,
+    comments: kept,
+    dropped: dropped as string[],
+    ...(offered === undefined ? {} : { offer: offered }),
+  };
 }

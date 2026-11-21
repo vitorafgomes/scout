@@ -26,6 +26,12 @@ const REVIEW_WITH_UNRUNNABLE_TESTS = {
     unrunnable: UNRUNNABLE,
   },
   findings: [],
+  offer: {
+    verdict: 'approve',
+    reason:
+      'Approve: every changed file was read, nothing needs fixing, and every check passed, which covers the tests that could not run here.',
+    commentInstead: false,
+  },
 };
 
 test.use({
@@ -57,9 +63,11 @@ test('a review whose container run could not run its tests shows tests could not
   ).toHaveText(UNRUNNABLE);
   await expect(page.getByTestId('tests-output').locator('summary')).toHaveText('Last output');
   await expect(
-    page.getByTestId('approve'),
-    'an unrunnable run does not block the approval when every check passed',
-  ).toBeVisible();
-  await expect(page.getByTestId('approve-when-green')).toHaveCount(0);
+    page.getByTestId('offer'),
+    'the card shows the Approve the worker offers for a run that could not run when every check passed',
+  ).toHaveText('Approve');
+  await expect(page.getByTestId('offer-reason')).toHaveText(
+    REVIEW_WITH_UNRUNNABLE_TESTS.offer.reason,
+  );
   await expect(page.getByTestId('check-line')).toHaveCount(0);
 });

@@ -1,11 +1,23 @@
 import { TemplateRef, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { InteractivityChecker } from '@angular/cdk/a11y';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { MatDialog } from '@angular/material/dialog';
 import { Router, provideRouter } from '@angular/router';
 import { Component } from '@angular/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PendingActionDto, UpdateNotice, YouTubeStatus } from '@scout/shared';
+import {
+  ScoutError,
+  encodeIpcErrorMessage,
+  serializeError,
+  type McpStatus,
+  type PendingActionDto,
+  type UpdateNotice,
+  type YouTubeStatus,
+} from '@scout/shared';
 
+import { LAID_OUT } from '../core/laid-out.testing';
 import { LlmConfigStore } from '../core/llm-config.store';
 import { MenuPreferences } from '../core/menu-preferences';
 import { ScoutBridgeService } from '../core/scout-bridge';
@@ -30,6 +42,21 @@ class StubActionsPage {
   readonly topBarActions = viewChild.required<TemplateRef<unknown>>('topBarActions');
 }
 
+const MCP_IDLE: McpStatus = {
+  enabled: true,
+  startMode: 'ask',
+  port: 47231,
+  hasToken: true,
+  tokenCreatedAt: 1,
+  listener: { state: 'listening', port: 47231 },
+  pending: null,
+  activity: [],
+};
+const ASKING: McpStatus = {
+  ...MCP_IDLE,
+  pending: { id: 'start-1', pullRequest: 'https://github.com/acme/api/pull/44', askedAt: 1 },
+};
+
 function updateBridge(notice: UpdateNotice | null) {
   return {
     updateGetState: async () => ({
@@ -47,6 +74,8 @@ function updateBridge(notice: UpdateNotice | null) {
     onFeaturesChanged: () => () => undefined,
     onActionsChanged: () => () => undefined,
     actionsList: async () => ({ actions: [] }),
+    mcpStatus: async () => MCP_IDLE,
+    onMcpChanged: () => () => undefined,
     youtubeStatus: async () => {
       throw new Error('[scout:youtube/status-failed] not in this test');
     },
@@ -60,6 +89,8 @@ async function setup(bridge?: ScoutBridgeService): Promise<{
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
+      { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      { provide: InteractivityChecker, useValue: LAID_OUT },
       ...(bridge === undefined ? [] : [{ provide: ScoutBridgeService, useValue: bridge }]),
       {
         provide: LlmConfigStore,
@@ -159,22 +190,14 @@ describe('PostConnectShellComponent', () => {
     const labels = Array.from(fixture.nativeElement.querySelectorAll('.nav-label')).map((el) =>
       ((el as HTMLElement).textContent ?? '').trim(),
     );
-    expect(labels).toEqual([
-      'Chat',
-      'AI Sources',
-      'Features',
-      'Models',
-      'Meetings',
-      'Approvals',
-      'Settings',
-    ]);
+    expect(labels).toEqual(['Chat', 'AI Sources', 'Features', 'Models', 'Meetings', 'Approvals']);
   });
 
-  it('renders the navigation in the order Chat, AI Sources, Features, Models, Meetings, Approvals, then Logs and Settings, with no Status and no Production entry', async () => {
+  it('renders the navigation in the order Chat, AI Sources, Features, Models, Meetings, Approvals, then Logs, with no Status and no Settings and no Production entry', async () => {
     const { fixture } = await setup();
 
     const links = fixture.nativeElement.querySelectorAll('.nav-link');
-    expect(links.length).toBe(8);
+    expect(links.length).toBe(7);
     const labels = Array.from(links).map((el) =>
       ((el as HTMLElement).querySelector('.nav-label')?.textContent ?? '').trim(),
     );
@@ -186,7 +209,6 @@ describe('PostConnectShellComponent', () => {
       'Meetings',
       'Approvals',
       'Logs',
-      'Settings',
     ]);
   });
 
@@ -204,6 +226,29 @@ describe('PostConnectShellComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-test="nav-status"]')).toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-logs"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-settings"]')).not.toBeNull();
+  });
+
+  it('Settings is a button at the right of the bell in the top bar, not an entry of the side menu', async () => {
+    const { fixture, router } = await setup();
+    const host = fixture.nativeElement as HTMLElement;
+    const button = host.querySelector('[data-test="nav-settings"]') as HTMLAnchorElement;
+
+    expect(button.closest('[data-test="top-bar"]'), 'it lives in the top bar').not.toBeNull();
+    expect(button.closest('nav'), 'and not in the side menu').toBeNull();
+    expect(button.previousElementSibling?.tagName.toLowerCase(), 'right after the bell').toBe(
+      'sc-notification-bell',
+    );
+    expect(button.getAttribute('aria-label')).toBe('Settings');
+    expect(button.getAttribute('href')).toBe('/settings');
+    expect(button.getAttribute('aria-current'), 'not current on another screen').toBeNull();
+
+    await router.navigateByUrl('/settings');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(button.getAttribute('aria-current'), 'current on the Settings screen').toBe('page');
+    expect(host.querySelector('[data-test="top-bar-title"]')?.textContent?.trim()).toBe('Settings');
   });
 
   it('marks the matching nav item as active when navigated', async () => {
@@ -227,7 +272,7 @@ describe('PostConnectShellComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    let active = fixture.nativeElement.querySelector('.nav-link--active');
+    const active = fixture.nativeElement.querySelector('.nav-link--active');
     expect(active?.getAttribute('data-test')).toBe('nav-logs');
 
     await router.navigateByUrl('/settings');
@@ -235,8 +280,13 @@ describe('PostConnectShellComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    active = fixture.nativeElement.querySelector('.nav-link--active');
-    expect(active?.getAttribute('data-test')).toBe('nav-settings');
+    expect(
+      fixture.nativeElement.querySelector('.nav-link--active'),
+      'Settings is not in the side menu, so no entry of it is active',
+    ).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('.settings--active')?.getAttribute('data-test'),
+    ).toBe('nav-settings');
   });
 
   it('one scroll: the shell is fixed to the window, so only the main area scrolls and the page never does', async () => {
@@ -337,7 +387,13 @@ describe('PostConnectShellComponent', () => {
     );
     await open(fixture, router, '/settings');
 
-    expect(order).toEqual(['heading', 'page-action', 'theme', 'sc-notification-bell']);
+    expect(order).toEqual([
+      'heading',
+      'page-action',
+      'theme',
+      'sc-notification-bell',
+      'nav-settings',
+    ]);
     expect(fixture.nativeElement.querySelector('[data-test="page-action"]')).toBeNull();
   });
 
@@ -378,9 +434,10 @@ describe('PostConnectShellComponent', () => {
     ]);
 
     expect(icons.map(([label, tag]) => [label, tag])).toEqual(
-      ['Chat', 'AI Sources', 'Features', 'Models', 'Meetings', 'Approvals', 'Logs', 'Settings'].map(
-        (label) => [label, 'sc-icon'],
-      ),
+      ['Chat', 'AI Sources', 'Features', 'Models', 'Meetings', 'Approvals', 'Logs'].map((label) => [
+        label,
+        'sc-icon',
+      ]),
     );
     expect(icons.every(([, , length]) => (length as number) > 0)).toBe(true);
   });
@@ -388,13 +445,13 @@ describe('PostConnectShellComponent', () => {
   it('the active item is marked as the current page and painted with the nav-active accent', async () => {
     const { fixture, router } = await setup();
 
-    await open(fixture, router, '/settings');
+    await open(fixture, router, '/logs');
 
     const current = Array.from(
       fixture.nativeElement.querySelectorAll('[aria-current="page"]') as NodeListOf<HTMLElement>,
     ).map((link) => link.getAttribute('data-test'));
     const active = fixture.nativeElement.querySelector('.nav-link--active') as HTMLElement;
-    expect(current).toEqual(['nav-settings']);
+    expect(current).toEqual(['nav-logs']);
     expect(declared(active, 'background')).toBe('var(--sc-nav-active)');
   });
 
@@ -513,16 +570,7 @@ describe('PostConnectShellComponent: YouTube operator in the menu only when YouT
     ).map((label) => (label.textContent ?? '').trim());
   }
 
-  const MENU = [
-    'Chat',
-    'AI Sources',
-    'Features',
-    'Models',
-    'Meetings',
-    'Approvals',
-    'Logs',
-    'Settings',
-  ];
+  const MENU = ['Chat', 'AI Sources', 'Features', 'Models', 'Meetings', 'Approvals', 'Logs'];
   const SHOWN: Readonly<Record<YouTube, readonly string[]>> = {
     connected: [...MENU, 'YouTube operator'],
     'not connected': MENU,
@@ -737,5 +785,155 @@ describe('PostConnectShellComponent: YouTube operator in the menu only when YouT
         vi.useRealTimers();
       }
     });
+  });
+});
+
+describe('PostConnectShellComponent: the start an assistant asks for', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    TestBed.inject(MatDialog).closeAll();
+    document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
+  });
+
+  function mcpBridge(start: McpStatus) {
+    const listeners: ((status: McpStatus) => void)[] = [];
+    let release: () => void = () => undefined;
+    const bridge = {
+      ...(updateBridge(null) as unknown as Record<string, unknown>),
+      mcpStatus: vi.fn(async () => start),
+      onMcpChanged: vi.fn((listener: (status: McpStatus) => void) => {
+        listeners.push(listener);
+        return () => undefined;
+      }),
+      mcpAnswerStart: vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            release = () => resolve(true);
+          }),
+      ),
+    };
+    return {
+      bridge,
+      push: (status: McpStatus) => listeners.forEach((listener) => listener(status)),
+      release: () => release(),
+    };
+  }
+
+  async function settled(fixture: ComponentFixture<PostConnectShellComponent>): Promise<void> {
+    for (let i = 0; i < 4; i++) {
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+  }
+
+  const dialog = () => document.querySelector<HTMLElement>('[data-test="mcp-start-dialog"]');
+  const button = (test: string) =>
+    document.querySelector<HTMLButtonElement>(`[data-test="${test}"]`)!;
+  const words = (node: Element | null) => node?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+
+  it('opens on any screen of the main window, names the pull request, and gives the focus to Refuse', async () => {
+    const mcp = mcpBridge(ASKING);
+    const { fixture } = await setup(mcp.bridge as unknown as ScoutBridgeService);
+    await settled(fixture);
+
+    const shown = dialog();
+    expect(
+      [...(shown?.querySelectorAll('h2, p') ?? [])].map(words),
+      'the dialog says who asks, for which pull request, what Scout does and how long it waits',
+    ).toEqual([
+      'An assistant asks to start a review',
+      'Review of acme/api#44. Scout reads GitHub and uses your AI Source; it writes nothing on GitHub.',
+      'Follow it in the bell. The request waits 2 minutes for your answer, then it is refused.',
+    ]);
+    expect(
+      [words(button('mcp-start-refuse')), words(button('mcp-start-start'))],
+      'two answers only',
+    ).toEqual(['Refuse', 'Start the review']);
+    expect(document.activeElement, 'Refuse has the focus when it opens').toBe(
+      button('mcp-start-refuse'),
+    );
+    expect(
+      shown?.closest('[role="dialog"]')?.getAttribute('aria-modal'),
+      'it is a modal dialog',
+    ).toBe('true');
+  });
+
+  it('Escape and a click outside do nothing: only Refuse or Start answers it', async () => {
+    const mcp = mcpBridge(ASKING);
+    const { fixture } = await setup(mcp.bridge as unknown as ScoutBridgeService);
+    await settled(fixture);
+
+    document
+      .querySelector('[role="dialog"]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.querySelector<HTMLElement>('.cdk-overlay-backdrop')?.click();
+    await settled(fixture);
+
+    expect(dialog(), 'the dialog stays until it is answered').not.toBeNull();
+    expect(mcp.bridge.mcpAnswerStart, 'nothing was answered').not.toHaveBeenCalled();
+  });
+
+  it('Start answers once, both buttons wait while main answers, and the dialog leaves', async () => {
+    const mcp = mcpBridge(ASKING);
+    const { fixture } = await setup(mcp.bridge as unknown as ScoutBridgeService);
+    await settled(fixture);
+
+    button('mcp-start-start').click();
+    await settled(fixture);
+    const waiting = [button('mcp-start-refuse').disabled, button('mcp-start-start').disabled];
+    button('mcp-start-start').click();
+    mcp.release();
+    await settled(fixture);
+
+    expect(waiting, 'both buttons wait while main answers').toEqual([true, true]);
+    expect(mcp.bridge.mcpAnswerStart.mock.calls, 'Start answers once').toEqual([
+      [{ id: 'start-1', start: true }],
+    ]);
+    expect(dialog(), 'the dialog leaves once main took the answer').toBeNull();
+  });
+
+  it('an answer main refuses says why inside the dialog and leaves it open', async () => {
+    const mcp = mcpBridge(ASKING);
+    mcp.bridge.mcpAnswerStart.mockRejectedValueOnce(
+      new Error(
+        encodeIpcErrorMessage(
+          serializeError(
+            new ScoutError(
+              'ipc/not-main-window',
+              'The MCP server can be changed only in the Scout window.',
+            ),
+          ),
+        ),
+      ),
+    );
+    const { fixture } = await setup(mcp.bridge as unknown as ScoutBridgeService);
+    await settled(fixture);
+
+    button('mcp-start-refuse').click();
+    await settled(fixture);
+
+    expect(
+      words(dialog()?.querySelector('[role="alert"]') ?? null),
+      'the refusal shows in the dialog',
+    ).toBe('The MCP server can be changed only in the Scout window.');
+    expect(
+      [dialog() === null, button('mcp-start-refuse').disabled],
+      'the dialog stays, ready to answer again',
+    ).toEqual([false, false]);
+  });
+
+  it('leaves when the start no longer waits, as when main refuses it after 2 minutes', async () => {
+    const mcp = mcpBridge(ASKING);
+    const { fixture } = await setup(mcp.bridge as unknown as ScoutBridgeService);
+    await settled(fixture);
+    const opened = dialog() !== null;
+
+    mcp.push(MCP_IDLE);
+    await settled(fixture);
+
+    expect([opened, dialog()], 'the dialog shows while the start waits, and leaves after').toEqual([
+      true,
+      null,
+    ]);
   });
 });

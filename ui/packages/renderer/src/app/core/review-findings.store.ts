@@ -12,10 +12,11 @@ import {
   type LocalFindingDecision,
   type LocalTurn,
   type ReviewFindings,
+  type ReviewOffer,
+  cardOfTurn,
 } from '@scout/shared';
 
 import { LocalConversation } from './local-conversation';
-import { parseReviewFindings } from './review-findings';
 import { ScoutBridgeService } from './scout-bridge';
 
 /** The text the owner wrote for a finding in the editor: what is wrong and the fix. */
@@ -67,8 +68,17 @@ export interface VerdictView {
 /** The note the worker composed for the verdict a card previews, or why it could not compose it. */
 export interface NotePreview {
   readonly verdict: GitHubVerdictRequest['verdict'];
+  /** The request this answer is for, its verdict left out: the selection and its edits. */
+  readonly key: string;
   readonly note?: GitHubNotePreview;
   readonly error?: string;
+  /** What the worker offers for that selection; kept from an earlier answer for the same selection when this one has none. */
+  readonly offer?: ReviewOffer;
+}
+
+/** The key of a request without its verdict: two requests with the same key carry the same selection and edits. */
+export function selectionKey(request: GitHubVerdictRequest): string {
+  return JSON.stringify({ ...request, verdict: undefined });
 }
 
 /**
@@ -271,16 +281,25 @@ export class ReviewFindingsStore {
     if (before?.request === asked.request) return;
     this.previewAsked.set(turnId, asked);
     clearTimeout(this.previewTimers.get(turnId));
-    const keep = (preview: NotePreview) => {
+    const key = selectionKey(request);
+    const keep = (preview: Omit<NotePreview, 'key' | 'offer'>, offer: ReviewOffer | undefined) => {
       if (this.previewAsked.get(turnId) === asked) {
-        this.previews.update((p) => ({ ...p, [turnId]: preview }));
+        this.previews.update((p) => {
+          const earlier = p[turnId];
+          const kept = offer ?? (earlier?.key === key ? earlier.offer : undefined);
+          return {
+            ...p,
+            [turnId]: { ...preview, key, ...(kept === undefined ? {} : { offer: kept }) },
+          };
+        });
       }
     };
     const send = () => {
       this.previewTimers.delete(turnId);
       this.bridge.githubPreviewVerdict(request).then(
-        (note) => keep({ verdict: request.verdict, note }),
-        (err: unknown) => keep({ verdict: request.verdict, error: readIpcError(err).message }),
+        (note) => keep({ verdict: request.verdict, note }, note.offer),
+        (err: unknown) =>
+          keep({ verdict: request.verdict, error: readIpcError(err).message }, undefined),
       );
     };
     if (before === undefined) send();
@@ -493,6 +512,7 @@ export function findingsCards(turns: readonly LocalTurn[]): ReadonlyMap<string, 
   const closed: AuditGroup[] = [];
   const seen = new Map<string, Set<string>>();
   for (const turn of turns) {
+    const review = cardOfTurn(turn);
     if (turn.state !== 'done') continue;
     const opened = turn.issues ? ISSUES_TARGET.exec(turn.question)?.[1]?.toLowerCase() : undefined;
     if (opened !== undefined && outcome(opened, turn) !== null) {
@@ -502,7 +522,6 @@ export function findingsCards(turns: readonly LocalTurn[]): ReadonlyMap<string, 
         open.delete(key);
       }
     }
-    const review = parseReviewFindings(turn.reply, turn.notice === true)?.review;
     if (review === undefined) continue;
     if (review.kind !== 'audit') {
       shown.set(turn.id, { anchor: turn.id, review });

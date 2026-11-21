@@ -1,10 +1,11 @@
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FeatureDto, PendingActionDto, YouTubeStatus } from '@scout/shared';
 
+import { McpStore } from '../core/mcp.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
 
 import { OperatorShellComponent } from './operator-shell.component';
@@ -710,5 +711,52 @@ describe('The operator shell as the five operator artboards draw it, state by st
 
     expect(host.querySelector('[data-test="operator-nav-approvals-badge"]')).toBeNull();
     expect(host.querySelectorAll('.nav-link').length).toBe(6);
+  });
+});
+
+describe('The operator window and the MCP server', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('shows neither the MCP mark nor the start dialog, even while the server listens and a start waits', async () => {
+    const start = vi.fn();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([{ path: 'operator/production', component: StubProduction }]),
+        {
+          provide: McpStore,
+          useValue: {
+            start,
+            status: signal({
+              enabled: true,
+              startMode: 'ask',
+              port: 47231,
+              hasToken: true,
+              tokenCreatedAt: 1,
+              listener: { state: 'listening', port: 47231 },
+              pending: {
+                id: 'start-1',
+                pullRequest: 'https://github.com/acme/api/pull/44',
+                askedAt: 1,
+              },
+              activity: [],
+            }),
+          },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(OperatorShellComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(
+      [
+        (fixture.nativeElement as HTMLElement).querySelector('[data-test="mcp-mark"]'),
+        document.querySelector('[data-test="mcp-start-dialog"]'),
+      ],
+      'the mark and the start dialog belong to the main window only',
+    ).toEqual([null, null]);
+    expect(start, 'the operator window does not follow the MCP server').not.toHaveBeenCalled();
   });
 });
