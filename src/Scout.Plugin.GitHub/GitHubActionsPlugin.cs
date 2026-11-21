@@ -6,6 +6,7 @@ using Microsoft.SemanticKernel;
 using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
+using Scout.Review;
 
 namespace Scout.Plugin.GitHub;
 
@@ -13,8 +14,8 @@ namespace Scout.Plugin.GitHub;
 /// The writes the model may ask for around GitHub, each declared on its own row of the <c>github</c> feature and run
 /// only under the owner's grant: <c>submit_pull_request_review</c> posts a commenting review on a pull request,
 /// <c>create_issue</c> opens an issue, <c>comment_on_pull_request</c> and <c>comment_on_issue</c> comment on a
-/// conversation, <c>reply_to_review_comment</c> answers a review comment and <c>give_pull_request_verdict</c> approves a
-/// pull request or requests changes: each of these is an irreversible write the gate queues, with its arguments, for
+/// conversation, <c>reply_to_review_comment</c> answers a review comment and <c>give_pull_request_verdict</c> gives the
+/// verdict the review offers, refusing an approval the review does not offer, and Scout does not offer one on its own: each of these is an irreversible write the gate queues, with its arguments, for
 /// the owner's approval of that one action, so a call by the model sends nothing; an approved review, issue, comment
 /// or reply is sent by <see cref="GitHubWriteRunner"/> through <see cref="PostReviewAsync"/>,
 /// <see cref="OpenIssueAsync"/>, <see cref="CommentAsync"/> and <see cref="ReplyAsync"/>. The write gate refuses any of
@@ -128,7 +129,7 @@ internal sealed partial class GitHubActionsPlugin(
     internal async Task<(PostedReview Posted, string Answer)> PostReviewAsync(
         string owner, string repo, int number, string? findings, string? commit, NoteExtras? extras, CancellationToken ct)
     {
-        var (body, kept, dropped, _) = await PrepareReviewAsync(owner, repo, number, findings, commit, extras, ct).ConfigureAwait(false);
+        var (body, kept, dropped, _, _) = await PrepareReviewAsync(owner, repo, number, findings, commit, extras, ct).ConfigureAwait(false);
 
         PostedReview posted;
         try
@@ -145,7 +146,7 @@ internal sealed partial class GitHubActionsPlugin(
     }
 
     /// <summary>A commenting review's note and comments, composed with its reads and refused as the post refuses; nothing is sent.</summary>
-    private async Task<(string Body, IReadOnlyList<ReviewComment> Kept, IReadOnlyList<string> Dropped, IReadOnlyList<ReviewFinding> Findings)> PrepareReviewAsync(
+    private async Task<(string Body, IReadOnlyList<ReviewComment> Kept, IReadOnlyList<string> Dropped, IReadOnlyList<Finding> Findings, IReadOnlyList<PullRequestCheck>? Checks)> PrepareReviewAsync(
         string owner, string repo, int number, string? findings, string? commit, NoteExtras? extras, CancellationToken ct)
     {
         if (!GitHubNames.IsValidRepository(owner, repo))
@@ -176,12 +177,15 @@ internal sealed partial class GitHubActionsPlugin(
             throw Refused(HeadMoved);
         }
 
-        var (body, kept, dropped) = await ComposeAsync(
+        var (body, kept, dropped, checks) = await ComposeAsync(
             owner, repo, number, ReviewNote.Commenting, requested, head, reviewed, extras, null, signer, writes.SignerFor(GitHubWriteKind.Review, owner, repo).ByBot, ct).ConfigureAwait(false);
-        return (body, kept, dropped, requested);
+        return (body, kept, dropped, requested, checks);
     }
 
-    /// <summary>Approve a pull request or request changes on it; an irreversible write that runs only after the owner approved this action.</summary>
+    /// <summary>
+    /// Give the verdict the review offers on a pull request: an approval is refused unless the review offers it, and Scout
+    /// does not offer one on its own; an irreversible write that runs only after the owner approved this action.
+    /// </summary>
     /// <param name="owner">Repository owner or organization login.</param>
     /// <param name="repo">Repository name.</param>
     /// <param name="number">Pull request number.</param>
@@ -191,7 +195,7 @@ internal sealed partial class GitHubActionsPlugin(
     /// <param name="ct">Cancels the requests.</param>
     /// <returns>That the verdict was given, with its URL and the comments dropped for pointing outside the diff, or why it was refused.</returns>
     [KernelFunction(GiveVerdict)]
-    [Description("Approve a pull request or request changes on it, pinned to the head commit the review read: pass the findings, and Scout writes the note and one comment on its line for each finding; never pass a body. Call it only when the user asks for that verdict in chat, never on your own judgement; the review card's Approve and Request changes buttons do not go through chat. The verdict is queued for the owner's approval, an Approve card waiting in the chat and in Approvals of Scout Desktop, and sent after the owner approves it; it is refused when the pull request moved past the commit reviewed. GitHub does not let the author approve their own pull request.")]
+    [Description("Give the verdict the review offers on a pull request, pinned to the head commit the review read: request changes with the findings that need them; pass the findings, and Scout writes the note and one comment on its line for each finding; never pass a body. Scout does not approve on its own: an approval is refused unless the review offers it, so a person approves on GitHub. Call it only when the user asks for that verdict in chat, never on your own judgement; the review card's action does not go through chat. The verdict is queued for the owner's approval, an Approve card waiting in the chat and in Approvals of Scout Desktop, and sent after the owner approves it; it is refused when the pull request moved past the commit reviewed. GitHub does not let the author approve their own pull request.")]
     public async Task<string> GivePullRequestVerdictAsync(
         [Description("Repository owner or organization login.")] string owner,
         [Description("Repository name.")] string repo,
@@ -211,6 +215,11 @@ internal sealed partial class GitHubActionsPlugin(
         string owner, string repo, int number, string? verdict, string? findings, string? commit, NoteExtras? extras, CancellationToken ct)
     {
         var prepared = await PrepareVerdictAsync(owner, repo, number, verdict, findings, commit, extras, ct).ConfigureAwait(false);
+        if (prepared.Given == ReviewVerdict.RequestChanges && prepared.Findings.Count == 0)
+        {
+            throw Refused(NothingToChange);
+        }
+
         var (given, signer, body, kept, dropped) = (prepared.Given, prepared.Signer, prepared.Body, prepared.Kept, prepared.Dropped);
         var what = $"{(given == ReviewVerdict.Approve ? "Approved" : "Requested changes on")} {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)}";
         if (await GivenAlreadyAsync(owner, repo, number, given, prepared.Head.Sha, signer, ReviewNote.Digest(prepared.Note, prepared.Findings, extras?.FilesRead, extras?.FilesChanged, extras?.Notes), ct).ConfigureAwait(false) is { } earlier)
@@ -234,8 +243,8 @@ internal sealed partial class GitHubActionsPlugin(
 
     /// <summary>A verdict composed with its reads, and refused as the send refuses it.</summary>
     private sealed record PreparedVerdict(
-        ReviewVerdict Given, string Note, IReadOnlyList<ReviewFinding> Findings, PullRequestHead Head, string Signer,
-        string Body, IReadOnlyList<ReviewComment> Kept, IReadOnlyList<string> Dropped);
+        ReviewVerdict Given, string Note, IReadOnlyList<Finding> Findings, PullRequestHead Head, string Signer,
+        string Body, IReadOnlyList<ReviewComment> Kept, IReadOnlyList<string> Dropped, IReadOnlyList<PullRequestCheck>? Checks);
 
     /// <summary>
     /// The checks and reads of a verdict and its note and comments, composed; refused before anything is sent when a value
@@ -291,38 +300,73 @@ internal sealed partial class GitHubActionsPlugin(
         }
 
         var checks = given == ReviewVerdict.Approve ? await RefuseUnlessEveryCheckPassedAsync(owner, repo, head.Sha, ct).ConfigureAwait(false) : null;
+        if (given == ReviewVerdict.Approve && OfferFor(requested, extras, testRuns?.Find(owner, repo, head.Sha), checks) is { Verdict: not ReviewOffers.Approve } offer)
+        {
+            throw Refused($"{NotOffered} {offer.Reason}");
+        }
+
         var note = given == ReviewVerdict.Approve ? ReviewNote.Approve : ReviewNote.RequestChanges;
-        var (body, kept, dropped) = await ComposeAsync(
+        var (body, kept, dropped, read) = await ComposeAsync(
             owner, repo, number, note, requested, head, head.Sha, extras, checks, signer, writes.SignerFor(GitHubWriteKind.Verdict, owner, repo).ByBot, ct).ConfigureAwait(false);
-        return new PreparedVerdict(given, note, requested, head, signer, body, kept, dropped);
+        return new PreparedVerdict(given, note, requested, head, signer, body, kept, dropped, read);
     }
+
+    /// <summary>The refusal of a request for changes sent with no finding: there is nothing to change.</summary>
+    internal const string NothingToChange = "Scout requests changes only with the findings that need them; with none chosen, post a comment instead.";
+
+    /// <summary>The start of the refusal of an approval the review does not offer; the offer's reason follows it.</summary>
+    internal const string NotOffered = "Scout approves only when the review offers approval.";
+
+    /// <summary>The tests as the decision takes them when no run is kept for the commit: no test ran here.</summary>
+    private static readonly TestRunFacts NoRunKept = new(false, "No test run is kept for this commit.", null, null, [], false);
+
+    /// <summary>
+    /// What the review offers (<see cref="ReviewOffers.Decide"/>) for <paramref name="findings"/>, the files read and changed
+    /// the card sent, the test run kept for the commit and its checks; a finding whose title starts with
+    /// <see cref="Contestation.UnconfirmedPrefix"/> is unconfirmed. Files not counted are taken as all read, and the
+    /// author, conflicts and mergeability are refused beside it with their own sentences. With no test run kept for the
+    /// commit the decision is told that no test ran here, so its reason never says the tests passed.
+    /// </summary>
+    internal static Offer OfferFor(IReadOnlyList<Finding> findings, NoteExtras? extras, ReviewTests? tests, IReadOnlyList<PullRequestCheck>? checks) =>
+        ReviewOffers.Decide(new OfferInput(
+            [.. findings.Select(f => new OfferFinding(f.Severity, f.Title.StartsWith(Contestation.UnconfirmedPrefix, StringComparison.Ordinal)))],
+            extras?.FilesRead ?? 0,
+            extras?.FilesChanged ?? extras?.FilesRead ?? 0,
+            TestsOf(tests),
+            PullRequestChecks.Offer(checks)));
+
+    /// <summary>A kept test run as the decision reads it; with none kept, a run that did not happen.</summary>
+    internal static TestRunFacts TestsOf(ReviewTests? tests) =>
+        tests is null ? NoRunKept : new TestRunFacts(tests.Ran, tests.Reason, tests.Command, tests.ExitCode, tests.Unrunnable is null ? [] : [new TestProjectFacts(string.Empty, 0, 1, 0, true)], false);
 
     /// <summary>
     /// The note and comments a verdict, or for <c>comment</c> a review that only comments, would post now: the same checks,
     /// reads and composing as the send, refused as the send would be, and nothing sent.
     /// </summary>
-    internal async Task<(string Body, IReadOnlyList<(string Id, ReviewComment Comment)> Comments, IReadOnlyList<string> Dropped)> PreviewAsync(
+    internal async Task<(string Body, IReadOnlyList<(string Id, ReviewComment Comment)> Comments, IReadOnlyList<string> Dropped, Offer Offer)> PreviewAsync(
         string owner, string repo, int number, string? verdict, string? findings, string? commit, NoteExtras? extras, CancellationToken ct)
     {
         string body;
         IReadOnlyList<ReviewComment> kept;
         IReadOnlyList<string> dropped;
-        IReadOnlyList<ReviewFinding> requested;
+        IReadOnlyList<Finding> requested;
+        IReadOnlyList<PullRequestCheck>? checks;
         if (string.Equals(verdict?.Trim(), ReviewNote.Commenting, StringComparison.OrdinalIgnoreCase))
         {
-            (body, kept, dropped, requested) = await PrepareReviewAsync(owner, repo, number, findings, commit, extras, ct).ConfigureAwait(false);
+            (body, kept, dropped, requested, checks) = await PrepareReviewAsync(owner, repo, number, findings, commit, extras, ct).ConfigureAwait(false);
         }
         else
         {
             var prepared = await PrepareVerdictAsync(owner, repo, number, verdict, findings, commit, extras, ct).ConfigureAwait(false);
-            (body, kept, dropped, requested) = (prepared.Body, prepared.Kept, prepared.Dropped, prepared.Findings);
+            (body, kept, dropped, requested, checks) = (prepared.Body, prepared.Kept, prepared.Dropped, prepared.Findings, prepared.Checks);
         }
 
         var comments = requested
             .Select(f => (f.Id, Comment: new ReviewComment(f.Path, f.Line, ReviewNote.Comment(f))))
             .Where(c => kept.Contains(c.Comment))
             .ToList();
-        return (body, comments, dropped);
+        var offer = OfferFor(requested, extras, testRuns?.Find(owner, repo, (commit ?? string.Empty).Trim()), checks);
+        return (body, comments, dropped, offer);
     }
 
     /// <summary>
@@ -546,7 +590,7 @@ internal sealed partial class GitHubActionsPlugin(
     }
 
     /// <summary>The findings of a review or a verdict, as the card's parser reads them; refused with its sentence when one is wrong.</summary>
-    private static IReadOnlyList<ReviewFinding> CheckFindings(string? findings)
+    private static IReadOnlyList<Finding> CheckFindings(string? findings)
     {
         var (parsed, problem) = ReviewFindings.ParseFindings(findings, ReviewFindings.InvalidReviewFindings);
         return parsed ?? throw Refused(problem!);
@@ -557,8 +601,8 @@ internal sealed partial class GitHubActionsPlugin(
     /// unless <paramref name="checksRead"/> holds them (a failed or partial read leaves them out), the kept test run, and
     /// the note composed by <see cref="ReviewNote"/>; refused before anything is sent when a comment or the note is too long.
     /// </summary>
-    private async Task<(string Body, IReadOnlyList<ReviewComment> Kept, IReadOnlyList<string> Dropped)> ComposeAsync(
-        string owner, string repo, int number, string verdict, IReadOnlyList<ReviewFinding> findings, PullRequestHead head, string commit,
+    private async Task<(string Body, IReadOnlyList<ReviewComment> Kept, IReadOnlyList<string> Dropped, IReadOnlyList<PullRequestCheck>? Checks)> ComposeAsync(
+        string owner, string repo, int number, string verdict, IReadOnlyList<Finding> findings, PullRequestHead head, string commit,
         NoteExtras? extras, IReadOnlyList<PullRequestCheck>? checksRead, string? signer, bool signedByBot, CancellationToken ct)
     {
         var requested = findings.Select(f => new ReviewComment(f.Path, f.Line, ReviewNote.Comment(f))).ToList();
@@ -573,19 +617,12 @@ internal sealed partial class GitHubActionsPlugin(
         var body = ReviewNote.Body(new ReviewNoteInput(
             owner, repo, number, verdict, current ? head.Sha : commit, findings, checks, testRuns?.Find(owner, repo, head.Sha),
             extras?.FilesRead, extras?.FilesChanged, extras?.Notes, signer, signedByBot, dropped.Count == 0));
-        return (body ?? throw Refused(NoteTooLong), kept, dropped);
+        return (body ?? throw Refused(NoteTooLong), kept, dropped, checks);
     }
 
     /// <summary>The check runs and statuses of <paramref name="sha"/>, read together; null when GitHub has more than Scout read. A failed read throws.</summary>
-    private async Task<IReadOnlyList<PullRequestCheck>?> ReadChecksAsync(string owner, string repo, string sha, CancellationToken ct)
-    {
-        var runsTask = reads.ListCheckRunsAsync(owner, repo, sha, ct);
-        var statusesTask = reads.ListStatusesAsync(owner, repo, sha, ct);
-        await Task.WhenAll(runsTask, statusesTask).ConfigureAwait(false);
-        var runs = await runsTask.ConfigureAwait(false);
-        var statuses = await statusesTask.ConfigureAwait(false);
-        return runs.Total > runs.Checks.Count || statuses.Count >= GitHubClient.FilesPage ? null : [.. runs.Checks, .. statuses];
-    }
+    private Task<IReadOnlyList<PullRequestCheck>?> ReadChecksAsync(string owner, string repo, string sha, CancellationToken ct) =>
+        PullRequestChecks.ReadAsync(reads, owner, repo, sha, ct);
 
     /// <summary>The check runs and statuses of <paramref name="sha"/>, or null when a read fails or GitHub has more than Scout read.</summary>
     private async Task<IReadOnlyList<PullRequestCheck>?> ChecksOrNoneAsync(string owner, string repo, string sha, CancellationToken ct)
@@ -872,7 +909,7 @@ internal sealed partial class GitHubActionsPlugin(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             (logger ?? NullLogger<GitHubActionsPlugin>.Instance).LogWarning(
-                "The stack of {Repository} at {Commit} was not recorded; the snapshot is unchanged: {Reason}", $"{snapshot.Owner}/{snapshot.Repo}", snapshot.ShortSha, ex.Message);
+                "The stack of {Repository} at {Commit} was not recorded; the snapshot is unchanged ({ExceptionType}).", $"{snapshot.Owner}/{snapshot.Repo}", snapshot.ShortSha, ex.GetType().Name);
         }
     }
 

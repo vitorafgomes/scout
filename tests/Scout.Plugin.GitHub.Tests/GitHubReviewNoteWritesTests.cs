@@ -5,6 +5,7 @@ using Microsoft.Extensions.Time.Testing;
 using NSubstitute.ExceptionExtensions;
 using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
+using Scout.Review;
 
 namespace Scout.Plugin.GitHub.Tests;
 
@@ -40,8 +41,10 @@ public sealed partial class GitHubReviewNoteWritesTests : IDisposable
         _reads, _writes, new GitHubProfileStore(Path.Combine(_dir, "profiles")), new RepositorySnapshotStore(Path.Combine(_dir, "snapshots"), 0, _time),
         Substitute.For<IRepositoryProjects>(), _time);
 
-    private static string Finding(string id, string severity, int line, string title = "A title", string why = "Why.", string fix = "Fix.", string path = "src/Checkout.cs") =>
-        JsonSerializer.Serialize(new { id, severity, title, path, line, why, fix });
+    private static string Finding(string id, string severity, int line, string title = "A title", string why = "Why.", string fix = "Fix.", string path = "src/Checkout.cs", string? context = null) =>
+        context is null
+            ? JsonSerializer.Serialize(new { id, severity, title, path, line, why, fix })
+            : JsonSerializer.Serialize(new { id, severity, title, path, line, context, why, fix });
 
     private static string Findings(params string[] findings) => "[" + string.Join(',', findings) + "]";
 
@@ -64,17 +67,15 @@ public sealed partial class GitHubReviewNoteWritesTests : IDisposable
         !_writes.ReceivedCalls().Any(c => c.GetMethodInfo().Name is nameof(IGitHubWriteClient.SubmitVerdictAsync) or nameof(IGitHubWriteClient.SubmitReviewAsync));
 
     [Fact]
-    public async Task An_Approval_Is_Sent_As_An_Approving_Review_With_The_Composed_Note()
+    public async Task An_Approval_Is_Refused_Because_Scout_Does_Not_Approve_On_Its_Own()
     {
-        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None);
+        var refused = await Should.ThrowAsync<WriteFailedException>(() =>
+            Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None));
 
-        var call = _writes.ReceivedCalls().Single(c => c.GetMethodInfo().Name == nameof(IGitHubWriteClient.SubmitVerdictAsync)).GetArguments();
-        ((ReviewVerdict)call[3]!).ShouldBe(ReviewVerdict.Approve);
-        var lines = SentVerdict().Body.Split('\n');
-        (lines[0], lines[2], lines[4], lines[^3]).ShouldBe(
-            ("### :robot: Scout review: approved", "> :white_check_mark: **Approved** · checks: 1 of 1 passed · findings: 0 blocking, 0 to fix, 0 optional", "Commit `abc1234`", "Posted after the owner's approval in Scout Desktop · signed as @octocat"),
-            "an approval is sent as an approving review whose body is the note Scout composed");
-        MarkerLine().IsMatch(lines[^1]).ShouldBeTrue("the verdict's note ends with its marker");
+        refused.Message.ShouldBe(
+            $"{GitHubActionsPlugin.NotOffered} Comment, not approve: every changed file was read, nothing needs fixing, and every check passed, which covers the tests, since no test ran here. {ReviewOffers.NotOnItsOwn}",
+            "a clean review is never approved through Scout: a person approves it on GitHub");
+        NothingSent().ShouldBeTrue("nothing is written on GitHub");
     }
 
     [Fact]
@@ -181,12 +182,12 @@ public sealed partial class GitHubReviewNoteWritesTests : IDisposable
     }
 
     [Fact]
-    public async Task An_Approval_Reads_The_Checks_Once_And_Its_Note_Carries_Them()
+    public async Task A_Verdict_Reads_The_Checks_Once_And_Its_Note_Carries_Them()
     {
-        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None);
+        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings(Finding("a", "fix", 3)), "abc1234", CancellationToken.None);
 
         await _reads.Received(1).ListCheckRunsAsync("octocat", "hello", Sha, Arg.Any<CancellationToken>());
-        SentVerdict().Body.ShouldContain(":white_check_mark: 1 passed, :x: 0 failed, :fast_forward: 0 skipped, of 1 on `abc1234`.", customMessage: "the checks the approval read are the note's");
+        SentVerdict().Body.ShouldContain(":white_check_mark: 1 passed, :x: 0 failed, :fast_forward: 0 skipped, of 1 on `abc1234`.", customMessage: "the checks the verdict read are the note's");
     }
 
     [Fact]
@@ -217,7 +218,7 @@ public sealed partial class GitHubReviewNoteWritesTests : IDisposable
     public async Task A_Comment_Over_10000_Characters_Is_Refused_Before_Anything_Is_Sent()
     {
         var failed = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync(
-            "octocat", "hello", 42, "request_changes", Findings(Finding("a", "block", 3, why: new string('w', 10_000))), "abc1234", CancellationToken.None));
+            "octocat", "hello", 42, "request_changes", Findings(Finding("a", "block", 3, why: new string('w', 4_000), fix: new string('f', 4_000), context: new string('c', 4_000))), "abc1234", CancellationToken.None));
 
         (failed.Message, failed.Outcome).ShouldBe((GitHubActionsPlugin.NoteCommentTooLong, "refused"), "a comment over 10,000 characters is refused");
         NothingSent().ShouldBeTrue("nothing is sent");
@@ -283,7 +284,7 @@ public sealed partial class GitHubReviewNoteWritesTests : IDisposable
     [Fact]
     public async Task A_Preview_Reads_And_Sends_Nothing()
     {
-        await new GitHubVerdictRunner(Plugin(), _reads, _writes).PreviewAsync(Payload("approve", "[]"), CancellationToken.None);
+        await new GitHubVerdictRunner(Plugin(), _reads, _writes).PreviewAsync(Payload("request_changes", "[]"), CancellationToken.None);
 
         _writes.ReceivedCalls().Select(c => c.GetMethodInfo().Name).Where(n => n != nameof(IGitHubWriteClient.SignerFor))
             .ShouldBeEmpty("a preview sends nothing; it only asks who would sign");
@@ -317,7 +318,7 @@ public sealed partial class GitHubReviewNoteWritesTests : IDisposable
     [Fact]
     public async Task A_Payload_Carries_The_Review_Jobs_Measured_Count_And_Notes_Into_The_Note()
     {
-        const string payload = """{"owner":"octocat","repo":"hello","number":42,"verdict":"request_changes","findings":[],"commit":"abc1234","filesRead":5,"filesChanged":7,"notes":["2 files not read: the review was stopped."]}""";
+        const string payload = """{"owner":"octocat","repo":"hello","number":42,"verdict":"request_changes","findings":[{"id":"a","severity":"fix","title":"t","path":"src/Other.cs","line":1,"why":"Why.","fix":"Fix."}],"commit":"abc1234","filesRead":5,"filesChanged":7,"notes":["2 files not read: the review was stopped."]}""";
 
         await new GitHubVerdictRunner(Plugin(), _reads, _writes).GiveAsync(payload, CancellationToken.None);
 
@@ -368,5 +369,24 @@ public sealed partial class GitHubReviewNoteWritesTests : IDisposable
         await Plugin().SubmitPullRequestReviewAsync("octocat", "hello", 42, Findings(Finding("a", "nit", 3)), CancellationToken.None);
 
         SentReview().Body.ShouldContain("Commit `abc1234`", Case.Sensitive, "a review with no commit given is composed at the head");
+    }
+
+    [Theory]
+    [InlineData("request_changes", "block", "request_changes", true)]
+    [InlineData("comment", "nit", "comment", false)]
+    public async Task V8_The_preview_answers_the_offer_for_the_findings_selected(string verdict, string severity, string offered, bool commentInstead)
+    {
+        var payload = Payload(verdict, Findings(Finding("a", severity, 3, "Move has no lock")));
+
+        var offer = JsonDocument.Parse(await new GitHubVerdictRunner(Plugin(), _reads, _writes).PreviewAsync(payload, CancellationToken.None)).RootElement.GetProperty("offer");
+
+        (offer.GetProperty("verdict").GetString(), offer.GetProperty("commentInstead").GetBoolean()).ShouldBe(
+            (offered, commentInstead), "the preview answers what the one decision offers for the selection");
+        offer.GetProperty("reason").GetString().ShouldBe(
+            severity == "block"
+                ? "Request changes: 1 finding needs fixing."
+                : "Comment, not approve: 1 optional suggestion was kept and 2 of 7 changed files were not read.",
+            "with its reason, the selection's files read included");
+        NothingSent().ShouldBeTrue("a preview still sends nothing");
     }
 }

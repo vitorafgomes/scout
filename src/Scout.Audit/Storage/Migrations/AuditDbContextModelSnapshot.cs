@@ -50,6 +50,10 @@ namespace Scout.Audit.Storage.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("finished");
 
+                    b.Property<string>("LeftOut")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("left_out");
+
                     b.PrimitiveCollection<string>("Partial")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -82,6 +86,10 @@ namespace Scout.Audit.Storage.Migrations
                     b.Property<string>("Context")
                         .HasColumnType("TEXT")
                         .HasColumnName("context");
+
+                    b.Property<string>("Evidence")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("evidence");
 
                     b.Property<string>("DismissedReason")
                         .HasColumnType("TEXT")
@@ -169,6 +177,10 @@ namespace Scout.Audit.Storage.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("ChatModel")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("chat_model");
+
                     b.Property<string>("Inputs")
                         .HasColumnType("TEXT")
                         .HasColumnName("inputs");
@@ -212,6 +224,10 @@ namespace Scout.Audit.Storage.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("resumed");
 
+                    b.Property<string>("ScoutVersion")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scout_version");
+
                     b.Property<DateTime>("Started")
                         .HasColumnType("TEXT")
                         .HasColumnName("started");
@@ -230,6 +246,91 @@ namespace Scout.Audit.Storage.Migrations
                     b.ToTable("audit_job", (string)null);
                 });
 
+            modelBuilder.Entity("Scout.Audit.Storage.AuditTurnRow", b =>
+                {
+                    b.Property<long>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("number");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt");
+
+                    b.Property<int?>("Batch")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("batch");
+
+                    b.Property<string>("Calls")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("calls");
+
+                    b.Property<int?>("ContestGroup")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("contest_group");
+
+                    b.Property<long>("ElapsedMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("elapsed_ms");
+
+                    b.Property<bool>("Extra")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("extra_request");
+
+                    b.Property<string>("Failure")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure");
+
+                    b.Property<int?>("Held")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("held");
+
+                    b.Property<string>("JobId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("job_id");
+
+                    b.Property<int>("LeftOut")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("left_out");
+
+                    b.Property<int>("Placed")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("placed");
+
+                    b.Property<int>("Presented")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("presented");
+
+                    b.Property<string>("Reading")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reading");
+
+                    b.Property<int?>("Refuted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("refuted");
+
+                    b.Property<int>("RequestLength")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("request_length");
+
+                    b.Property<DateTime>("Started")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("started");
+
+                    b.Property<int?>("Uncertain")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("uncertain");
+
+                    b.HasKey("Number");
+
+                    b.HasIndex("JobId");
+
+                    b.ToTable("audit_turn", (string)null);
+                });
+
             modelBuilder.Entity("Scout.Audit.Storage.AuditBatchRow", b =>
                 {
                     b.HasOne("Scout.Audit.Storage.AuditJobRow", null)
@@ -241,6 +342,15 @@ namespace Scout.Audit.Storage.Migrations
                 });
 
             modelBuilder.Entity("Scout.Audit.Storage.AuditFindingRow", b =>
+                {
+                    b.HasOne("Scout.Audit.Storage.AuditJobRow", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .HasPrincipalKey("Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+            modelBuilder.Entity("Scout.Audit.Storage.AuditTurnRow", b =>
                 {
                     b.HasOne("Scout.Audit.Storage.AuditJobRow", null)
                         .WithMany()

@@ -1,3 +1,5 @@
+using Scout.Review;
+
 namespace Scout.Audit;
 
 /// <summary>The status words a job or a batch is kept under.</summary>
@@ -20,21 +22,20 @@ internal static class AuditKind
 
 /// <summary>
 /// One job of one repository at one commit, the chat it was started from, whether it is running, paused, stopped or done,
-/// why it paused, its kind, the pull request a review is of, and when it was started, in UTC by the store's clock.
+/// why it paused, its kind, the pull request a review is of, and when it was started and finished, in UTC by the store's clock.
 /// </summary>
 internal sealed record AuditJob(
     string Id, string Owner, string Repo, string Commit, string? Origin, string Status, string? PausedReason = null, string Kind = AuditKind.Audit, int? PullRequest = null,
-    DateTime? Started = null);
+    DateTime? Started = null, DateTime? Finished = null);
 
 /// <summary>
 /// One batch of a job: its order, its area and files, whether it is pending, done or not covered, the files the model read,
-/// why it was not covered, and the files longer than a read returns.
+/// why it was not covered, the files longer than a read returns, and the sentence on the findings it left out, null when
+/// it left none out.
 /// </summary>
 internal sealed record AuditBatch(
-    int Order, string Area, IReadOnlyList<string> Files, string Status, IReadOnlyList<string> FilesRead, string? Failure, IReadOnlyList<string>? Partial = null);
-
-/// <summary>One finding of a job, in the fields the desktop's cards carry.</summary>
-internal sealed record AuditFinding(string Id, string Severity, string Title, string Path, int Line, string? Context, string Why, string Fix, string? Rule);
+    int Order, string Area, IReadOnlyList<string> Files, string Status, IReadOnlyList<string> FilesRead, string? Failure, IReadOnlyList<string>? Partial = null,
+    string? LeftOut = null);
 
 /// <summary>The audit database could not be opened, read or written; the message names the operation and the SQLite error code only.</summary>
 public sealed class AuditStoreException(string message, Exception innerException) : Exception(message, innerException);
@@ -78,17 +79,27 @@ internal interface IAuditJobStore
     Task<IReadOnlyList<AuditBatch>> PendingBatchesAsync(string jobId, int count, CancellationToken ct);
 
     /// <summary>The job's findings in the order they were added.</summary>
-    Task<IReadOnlyList<AuditFinding>> FindingsAsync(string jobId, CancellationToken ct);
+    Task<IReadOnlyList<Finding>> FindingsAsync(string jobId, CancellationToken ct);
+
+    /// <summary>The state and recorded reason of each of the job's findings whose state is no longer <c>open</c>, by id.</summary>
+    Task<IReadOnlyDictionary<string, (string State, string? Reason)>> FindingStatesAsync(string jobId, CancellationToken ct);
+
+    /// <summary>
+    /// Records what Scout's second reading answered for each finding still <c>open</c>: its state and, when refuted or
+    /// uncertain, the reason; a finding whose state is no longer <c>open</c> keeps it.
+    /// </summary>
+    Task RecordOutcomesAsync(string jobId, IReadOnlyDictionary<string, ContestOutcome> outcomes, CancellationToken ct);
 
     /// <summary>Record when the batch started.</summary>
     Task BeginBatchAsync(string jobId, int order, CancellationToken ct);
 
     /// <summary>
     /// Mark the batch done with the files read, and add the findings the job does not hold yet by path and title, whatever
-    /// their case, in one transaction; returns the findings added, each with the id it is kept under.
+    /// their case, in one transaction, with <paramref name="leftOut"/>, the sentence on the findings the batch left out;
+    /// returns the findings added, each with the id it is kept under.
     /// </summary>
-    Task<IReadOnlyList<AuditFinding>> CompleteBatchAsync(
-        string jobId, int order, IReadOnlyList<string> filesRead, IReadOnlyList<AuditFinding> findings, CancellationToken ct);
+    Task<IReadOnlyList<Finding>> CompleteBatchAsync(
+        string jobId, int order, IReadOnlyList<string> filesRead, IReadOnlyList<Finding> findings, string? leftOut, CancellationToken ct);
 
     /// <summary>Mark the batch not covered, with the files read before it failed and the reason.</summary>
     Task NotCoveredAsync(string jobId, int order, IReadOnlyList<string> filesRead, string reason, CancellationToken ct);
@@ -124,4 +135,29 @@ internal interface IAuditJobStore
     /// count again.
     /// </summary>
     Task<TimeSpan> RunningTimeAsync(string jobId, CancellationToken ct);
+
+    /// <summary>Keeps the numbers of one model turn of the job, stamped with its start; names and numbers only.</summary>
+    Task AddTurnAsync(string jobId, AuditTurn turn, CancellationToken ct);
+
+    /// <summary>The job's turns totalled per reading, in the order each reading first ran.</summary>
+    Task<IReadOnlyList<ReadingTotals>> TurnTotalsAsync(string jobId, CancellationToken ct);
+
+    /// <summary>Writes the Scout version and the provider and chat model names that run the job now, when a worker starts or resumes it.</summary>
+    Task StampRunAsync(string jobId, string? version, string? chatModel, CancellationToken ct);
 }
+
+/// <summary>
+/// The numbers of one model turn of a job: where it ran (the batch's order, null for the second reading; the reading; the
+/// second reading's group), its attempt and whether it was the extra request for findings Scout could not place, how long
+/// it took and how long its request was, how many times it called each function, what it presented, placed and left out,
+/// its failure, and for the second reading how many findings held, were refuted and stayed uncertain.
+/// </summary>
+internal sealed record AuditTurn(
+    int? Batch, string Reading, int? Group, int Attempt, bool Extra, long ElapsedMs, int RequestLength, IReadOnlyDictionary<string, int> Calls,
+    int Presented, int Placed, int LeftOut, string? Failure, int? Held = null, int? Refuted = null, int? Uncertain = null);
+
+/// <summary>
+/// One reading's turns of a job, totalled: how many, how long in all, how many function calls, the findings presented,
+/// placed and left out, the turns that failed, and the batches (or groups) where no turn of the reading completed.
+/// </summary>
+internal sealed record ReadingTotals(string Reading, int Turns, long ElapsedMs, int Calls, int Presented, int Placed, int LeftOut, int Failures, int NotCompleted);

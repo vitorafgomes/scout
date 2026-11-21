@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.SemanticKernel;
 using Scout.Llm.Abstractions;
+using Scout.Review;
 
 namespace Scout.Audit.Tests;
 
@@ -155,9 +156,9 @@ public sealed class AuditWorkerTests : IDisposable
         var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
         await store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"],
         [
-            new AuditFinding("swallow", "block", "Gateway errors read as no orders", "src/Orders/Checkout.cs", 12, null, "Why.", "Fix.", null),
-            new AuditFinding("paid", "block", "Invoice errors read as paid", "SRC/Billing/Invoice.cs", 12, null, "Why.", "Fix.", null),
-        ], CancellationToken.None);
+            new Finding("swallow", "block", "Gateway errors read as no orders", "src/Orders/Checkout.cs", 12, null, "Why.", "Fix.", null),
+            new Finding("paid", "block", "Invoice errors read as paid", "SRC/Billing/Invoice.cs", 12, null, "Why.", "Fix.", null),
+        ], null, CancellationToken.None);
         var chat = new ScriptedChat(ReadingEveryFile());
 
         await Worker(store, chat, new RecordingNotifier()).RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
@@ -174,7 +175,7 @@ public sealed class AuditWorkerTests : IDisposable
         var store = Store();
         var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
         await store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"],
-            [new AuditFinding("swallow", "block", "Gateway errors read as no orders", "src/Billing/Invoice.cs", 12, null, "Why.", "Fix.", null)],
+            [new Finding("swallow", "block", "Gateway errors read as no orders", "src/Billing/Invoice.cs", 12, null, "Why.", "Fix.", null)], null,
             CancellationToken.None);
         var chat = new ScriptedChat(ReadingEveryFile(request => request.Contains("area src/Billing", StringComparison.Ordinal)
             ? Kernels.Block("needs rework", ("gateway", "GATEWAY ERRORS READ AS NO ORDERS", "SRC/billing/invoice.cs"), ("paid", "Invoice errors read as paid", "src/Billing/Invoice.cs"))
@@ -553,7 +554,7 @@ public sealed class AuditWorkerTests : IDisposable
     public async Task The_audit_survives_a_restart_and_the_worker_resumes_it_from_the_first_batch_not_done()
     {
         var job = await Store().CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
-        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [], CancellationToken.None);
+        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [], null, CancellationToken.None);
         SqliteConnection.ClearAllPools();
         var store = Store();
         var chat = new ScriptedChat(ReadingEveryFile());
@@ -645,7 +646,7 @@ public sealed class AuditWorkerTests : IDisposable
     private static async Task<string> PausedAfterOneAreaAsync(SqliteAuditStore store, string origin)
     {
         var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", origin, ThreeAreas, null, CancellationToken.None);
-        await store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [new("swallow", "block", "Gateway errors read as no orders", "src/Orders/Checkout.cs", 12, null, "Why.", "Fix.", null)], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [new("swallow", "block", "Gateway errors read as no orders", "src/Orders/Checkout.cs", 12, null, "Why.", "Fix.", null)], null, CancellationToken.None);
         await store.NotCoveredAsync(job, 2, [], "the AI model did not answer", CancellationToken.None);
         await store.PauseAsync(job, RepositoryAudits.PausedByOwner, CancellationToken.None);
         return job;
@@ -964,7 +965,7 @@ public sealed class AuditWorkerTests : IDisposable
     public async Task A_restart_does_not_resume_a_paused_audit_whoever_paused_it(string reason)
     {
         var paused = await Store().CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
-        await Store().CompleteBatchAsync(paused, 1, ["src/Orders/Checkout.cs"], [], CancellationToken.None);
+        await Store().CompleteBatchAsync(paused, 1, ["src/Orders/Checkout.cs"], [], null, CancellationToken.None);
         await Store().PauseAsync(paused, reason, CancellationToken.None);
         await Store().CreateJobAsync("acme", "other", null, "abc1234def", "local:session", [new("src/Orders", ["src/Orders/Checkout.cs"], 10)], null, CancellationToken.None);
         SqliteConnection.ClearAllPools();
@@ -1061,5 +1062,18 @@ public sealed class AuditWorkerTests : IDisposable
         (await store.JobAsync(audit, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
         notifier.Posts.Select(p => p.Text).ShouldNotContain(p => p.StartsWith("The audit of acme/shop ended", StringComparison.Ordinal) || p.StartsWith("The audit of acme/shop paused", StringComparison.Ordinal),
             "the audit's hand-over to the review posts no notice");
+    }
+
+    [Fact]
+    public void An_audit_batch_s_post_carries_the_sentence_on_the_findings_it_left_out()
+    {
+        var job = new AuditJob("j", "acme", "shop", "abc1234def", "local:session", AuditStatus.Running);
+        var batch = new AuditBatch(1, "src/Orders", ["src/Orders/Checkout.cs"], AuditStatus.Done, ["src/Orders/Checkout.cs"], null);
+        var kept = new Finding("a", "fix", "T", "src/Orders/Checkout.cs", 3, null, "W.", "F.", null);
+        var outcome = new BatchOutcome(["src/Orders/Checkout.cs"], [], "sound", [kept], null, LeftOut: "1 finding left out: it needs a fix.");
+
+        var posts = AuditWorker.FindingsPosts(job, batch, 1, outcome, [kept], 1);
+
+        posts.ShouldHaveSingleItem().ShouldContain("\n\n1 finding left out: it needs a fix.\n\n```scout-findings", Case.Sensitive, "the batch's post says what it left out before its findings");
     }
 }

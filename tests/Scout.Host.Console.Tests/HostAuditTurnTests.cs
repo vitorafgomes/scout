@@ -15,6 +15,7 @@ using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
 using Scout.Llm.Providers.Ollama;
+using Scout.Review;
 using Shouldly;
 using Xunit;
 
@@ -134,7 +135,7 @@ public sealed class HostAuditTurnTests : IDisposable
         outcome.Failure.ShouldBeNull();
         outcome.FilesRead.ShouldBe(["src/Orders/Checkout.cs"]);
         outcome.Verdict.ShouldBe("needs rework");
-        outcome.Findings.ShouldHaveSingleItem().ShouldBe(new AuditFinding(
+        outcome.Findings.ShouldHaveSingleItem().ShouldBe(new Finding(
             "swallow", "block", "Gateway errors read as no orders", "src/Orders/Checkout.cs", 1, null, "The catch returns an empty list.", "Let it fail.", "Defect"));
         model.OfferedTools[0].Order().ShouldBe(
         [
@@ -407,6 +408,25 @@ public sealed class HostAuditTurnTests : IDisposable
         failure.StatusCode.ShouldBe(HttpStatusCode.BadGateway, "the failure is GitHub's server error");
     }
 
+    private const string ChecksFail = "5005005005005005005005005005005005005005";
+
+    private const string ChecksReset = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+    [Theory]
+    [InlineData(ChecksFail)]
+    [InlineData(ChecksReset)]
+    public async Task A_check_runs_read_GitHub_fails_or_resets_throws_through_the_host_adapter_for_the_worker_to_catch(string sha)
+    {
+        using var host = AuditHost(new ToolCallingModel(), new AllowingGate());
+
+        var failure = await Should.ThrowAsync<Exception>(
+            () => host.Services.GetRequiredService<IReviewPullRequests>().ChecksAsync("acme", "shop", sha, CancellationToken.None),
+            "the host adapter answers no checks for a read that failed: it throws, and the worker reads that as checks it could not read");
+
+        (failure is Scout.Plugin.GitHub.GitHubApiException { StatusCode: HttpStatusCode.BadGateway } or HttpRequestException)
+            .ShouldBeTrue("a server error is GitHub's error and a reset is a failed request; both reach the worker as a failed read");
+    }
+
     [Fact]
     public async Task A_review_re_read_GitHub_answers_with_a_server_error_throws_for_the_worker_to_pause_on()
     {
@@ -424,11 +444,11 @@ public sealed class HostAuditTurnTests : IDisposable
         using var host = AuditHost(new ToolCallingModel(), new AllowingGate());
         var job = new AuditJob("job", "acme", "shop", "0123456789abcdef0123456789abcdef01234567", "local:session", AuditStatus.Running, Kind: AuditKind.Review, PullRequest: 12);
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
-        var findings = new List<AuditFinding>();
+        var findings = new List<Finding>();
         foreach (var i in Enumerable.Range(1, AuditWorker.MaxCardFindings))
         {
-            var next = new AuditFinding($"f{i}", "fix", $"Finding {i} with a title of some length", "src/A.cs", i, null, new string('w', 700), "Apply the fix.", null);
-            if (JsonSerializer.Serialize<List<AuditFinding>>([.. findings, next], options).Length > AuditWorker.MaxCardFindingsCharacters)
+            var next = new Finding($"f{i}", "fix", $"Finding {i} with a title of some length", "src/A.cs", i, null, new string('w', 700), "Apply the fix.", null);
+            if (JsonSerializer.Serialize<List<Finding>>([.. findings, next], options).Length > AuditWorker.MaxCardFindingsCharacters)
             {
                 break;
             }
@@ -453,7 +473,7 @@ public sealed class HostAuditTurnTests : IDisposable
         var store = host.Services.GetRequiredService<IAuditJobStore>();
         var id = await store.CreateJobAsync("acme", "shop", 12, Sha, "local:session", [new AuditBatchPlan("src", ["src/A.cs"], 10)], null, CancellationToken.None);
         await store.CompleteBatchAsync(id, 1, ["src/A.cs"],
-            [.. Enumerable.Range(1, AuditWorker.MaxCardFindings).Select(i => new AuditFinding($"f{i}", "fix", $"Finding {i} with a title of some length", "src/A.cs", i, null, new string('w', 700), "Apply the fix.", null))],
+            [.. Enumerable.Range(1, AuditWorker.MaxCardFindings).Select(i => new Finding($"f{i}", "fix", $"Finding {i} with a title of some length", "src/A.cs", i, null, new string('w', 700), "Apply the fix.", null))], null,
             CancellationToken.None);
         var posts = new List<string>();
         var notifier = NSubstitute.Substitute.For<IOriginNotifier>();
@@ -463,7 +483,8 @@ public sealed class HostAuditTurnTests : IDisposable
 
         await worker.RunReviewAsync((await store.JobAsync(id, CancellationToken.None))!, CancellationToken.None);
 
-        posts.ShouldHaveSingleItem().ShouldContain(FindingsBlock.Fence, Case.Sensitive, "a card at the budget with a kept test run and its checks reaches the owner as a card, never the plain sentence");
+        posts.Count(p => p.Contains(FindingsBlock.Fence, StringComparison.Ordinal)).ShouldBe(1, "one card, after the second reading's progress line");
+        posts[^1].ShouldContain(FindingsBlock.Fence, Case.Sensitive, "a card at the budget with a kept test run and its checks reaches the owner as a card, never the plain sentence");
     }
 
     [Fact]
@@ -494,6 +515,16 @@ public sealed class HostAuditTurnTests : IDisposable
         {
             var path = request.RequestUri!.AbsolutePath;
             paths.Enqueue(path);
+            if (path == $"/repos/acme/shop/commits/{ChecksFail}/check-runs")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadGateway));
+            }
+
+            if (path == $"/repos/acme/shop/commits/{ChecksReset}/check-runs")
+            {
+                throw new HttpRequestException("reset");
+            }
+
             var body = path switch
             {
                 "/repos/acme/shop" => """{"full_name":"acme/shop","default_branch":"main"}""",

@@ -1,4 +1,4 @@
-namespace Scout.Plugin.GitHub.Tests;
+namespace Scout.Review.Tests;
 
 public sealed class DiffLinesTests
 {

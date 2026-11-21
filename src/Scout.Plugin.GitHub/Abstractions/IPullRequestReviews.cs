@@ -17,10 +17,11 @@ public interface IPullRequestReviews
     /// <param name="checks">The head commit's checks as counts; null when they could not be read.</param>
     /// <param name="ct">Cancels the start.</param>
     /// <param name="purpose">What the pull request says it does; null when it was not given.</param>
+    /// <param name="again">True when the owner asked for the review again: a review done at the same head commit is then run once more.</param>
     /// <returns>A sentence for the model.</returns>
     Task<string> StartAsync(
         string owner, string repo, int number, string headSha, IReadOnlyList<ChangedFile> files, int diffsLeftOut, int notListed, PullRequestCheckCounts? checks, CancellationToken ct,
-        PullRequestPurpose? purpose = null);
+        PullRequestPurpose? purpose = null, bool again = false);
 
     /// <summary>How the latest review job of the pull request is going.</summary>
     /// <param name="owner">Repository owner or organization login.</param>

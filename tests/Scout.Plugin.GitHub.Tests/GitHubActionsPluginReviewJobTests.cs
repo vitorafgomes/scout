@@ -58,6 +58,22 @@ public sealed class GitHubActionsPluginReviewJobTests : IDisposable
     }
 
     [Fact]
+    public async Task Start_passes_whether_the_review_was_asked_again_and_says_when_the_model_sets_it()
+    {
+        _reviews.StartAsync(default!, default!, default, default!, default!, default, default, default, default, default, default).ReturnsForAnyArgs("review started.");
+
+        await Plugin().StartPullRequestReviewAsync("octocat", "hello", 42, CancellationToken.None, again: true);
+        await Plugin().StartPullRequestReviewAsync("octocat", "hello", 42, CancellationToken.None);
+
+        _reviews.ReceivedCalls().Select(c => (bool)c.GetArguments()[10]!).ShouldBe([true, false], "the job is told whether the owner asked again, false unless said");
+        var parameter = typeof(GitHubActionsPlugin).GetMethod(nameof(GitHubActionsPlugin.StartPullRequestReviewAsync))!.GetParameters().Single(p => p.Name == "again");
+        (parameter.HasDefaultValue, parameter.DefaultValue).ShouldBe((true, (object?)false), "the review is not run again unless asked");
+        parameter.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false).Cast<System.ComponentModel.DescriptionAttribute>().Single().Description.ShouldBe(
+            "True only when the user's words ask to review the pull request again, re-review it or run the review once more; a review already done at the same head commit is then run again as a new review. False otherwise.",
+            "the model sets it only when the user asks to review again");
+    }
+
+    [Fact]
     public async Task A_pull_request_GitHub_lists_in_part_starts_a_review_that_counts_the_rest_as_not_read()
     {
         _reads.GetPullRequestAsync("octocat", "hello", 42, Arg.Any<CancellationToken>()).Returns(new PullRequestDetails(

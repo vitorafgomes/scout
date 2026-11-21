@@ -154,6 +154,25 @@ public sealed class GitHubActionsPluginRunTestsTests : IDisposable
             .ShouldContain($"\"unrunnable\":\"{NoDaemon}\"", Case.Sensitive, "the scout-findings block's tests object carries unrunnable");
     }
 
+    [Fact]
+    public async Task The_Answer_Carries_Each_Test_Project_s_Counts_When_The_Run_Printed_Them_And_None_Otherwise()
+    {
+        _sandbox.RunTestsAsync(default!, default).ReturnsForAnyArgs(
+            new SandboxRunResult(true, null, "img", "dotnet test", 1, 60, "out", null, NoDaemon, [new Scout.Review.TestProjectFacts("Shop.IntegrationTests", 0, 133, 0, true)], false));
+
+        var answer = JsonDocument.Parse(await Run()).RootElement;
+
+        answer.GetProperty("projects").GetRawText().ShouldBe(
+            "[{\"name\":\"Shop.IntegrationTests\",\"passed\":0,\"failed\":133,\"skipped\":0,\"couldNotRun\":true}]",
+            "the answer carries each test project's counts as data");
+        answer.GetProperty("projectsPartial").GetBoolean().ShouldBeFalse("the answer says the list of test projects is whole");
+
+        _sandbox.RunTestsAsync(default!, default).ReturnsForAnyArgs(new SandboxRunResult(true, null, "img", "npm test", 0, 3, "ok"));
+        var other = JsonDocument.Parse(await Run()).RootElement;
+
+        (other.TryGetProperty("projects", out _), other.TryGetProperty("projectsPartial", out _)).ShouldBe((false, false), "a run that printed no project summary carries neither field");
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

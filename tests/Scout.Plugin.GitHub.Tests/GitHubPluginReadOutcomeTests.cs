@@ -40,7 +40,7 @@ public sealed class GitHubPluginReadOutcomeTests
     {
         using var call = ReadOutcome.Begin();
 
-        var result = await Answering(kind).GetFileContentsAsync("octocat", "hello", "a.cs", "main", CancellationToken.None);
+        var result = await Answering(kind).GetFileContentsAsync("octocat", "hello", "a.cs", "main", ct: CancellationToken.None);
 
         result.ShouldBe(answer);
         call.NoContent.ShouldBeTrue();
@@ -54,7 +54,7 @@ public sealed class GitHubPluginReadOutcomeTests
     {
         using var call = ReadOutcome.Begin();
 
-        var result = await Answering("20").GetFileContentsAsync(owner, "hello", path, reference, CancellationToken.None);
+        var result = await Answering("20").GetFileContentsAsync(owner, "hello", path, reference, ct: CancellationToken.None);
 
         result.ShouldBe(answer);
         call.NoContent.ShouldBeTrue();
@@ -68,14 +68,15 @@ public sealed class GitHubPluginReadOutcomeTests
         using var call = ReadOutcome.Begin();
 
         var result = await Answering(length.ToString(System.Globalization.CultureInfo.InvariantCulture))
-            .GetFileContentsAsync("octocat", "hello", "a.cs", "main", CancellationToken.None);
+            .GetFileContentsAsync("octocat", "hello", "a.cs", "main", ct: CancellationToken.None);
 
-        result.ShouldStartWith("a.cs (20 bytes) at main:\n" + new string('x', Math.Min(length, GitHubPlugin.PatchCap)));
+        result.ShouldStartWith("a.cs (20 bytes) at main, line");
+        result.ShouldEndWith("; the file ends there:\n" + new string('x', Math.Min(length, GitHubPlugin.PatchCap)));
         call.NoContent.ShouldBeFalse();
     }
 
     [Theory]
-    [InlineData("src/Checkout.cs", "src/Checkout.cs (41 bytes) at main (local snapshot at abc1234):\nclass Checkout { decimal Total() => 0; }\n", false)]
+    [InlineData("src/Checkout.cs", "src/Checkout.cs (41 bytes) at main (local snapshot at abc1234), lines 1 to 1 of 1; the file ends there:\nclass Checkout { decimal Total() => 0; }\n", false)]
     [InlineData("src", "src is a directory (local snapshot at abc1234):\n  - Checkout.cs", true)]
     [InlineData("src/Refund.cs", "src/Refund.cs not found in octocat/hello at main (abc1234).", true)]
     [InlineData("logo.bin", "logo.bin (4 bytes) is binary or over 1 MB; no text to show.", true)]
@@ -91,7 +92,7 @@ public sealed class GitHubPluginReadOutcomeTests
             var plugin = new GitHubPlugin(Substitute.For<IGitHubClient>(), store);
             using var call = ReadOutcome.Begin();
 
-            var result = await plugin.GetFileContentsAsync("octocat", "hello", path, "abc1234def5678", CancellationToken.None);
+            var result = await plugin.GetFileContentsAsync("octocat", "hello", path, "abc1234def5678", ct: CancellationToken.None);
 
             result.ShouldBe(answer);
             call.NoContent.ShouldBe(noContent);
@@ -105,13 +106,13 @@ public sealed class GitHubPluginReadOutcomeTests
     [Fact]
     public async Task A_Read_Outside_Any_Scope_Answers_As_Before_And_Leaves_The_Next_Call_Unmarked()
     {
-        var failed = await Answering("reset").GetFileContentsAsync("octocat", "hello", "a.cs", "main", CancellationToken.None);
+        var failed = await Answering("reset").GetFileContentsAsync("octocat", "hello", "a.cs", "main", ct: CancellationToken.None);
         using var call = ReadOutcome.Begin();
 
-        var read = await Answering("20").GetFileContentsAsync("octocat", "hello", "a.cs", "main", CancellationToken.None);
+        var read = await Answering("20").GetFileContentsAsync("octocat", "hello", "a.cs", "main", ct: CancellationToken.None);
 
         failed.ShouldBe("Could not reach GitHub. Try again later.");
-        read.ShouldBe("a.cs (20 bytes) at main:\n" + new string('x', 20));
+        read.ShouldBe("a.cs (20 bytes) at main, lines 1 to 1 of 1; the file ends there:\n" + new string('x', 20));
         call.NoContent.ShouldBeFalse();
     }
 }

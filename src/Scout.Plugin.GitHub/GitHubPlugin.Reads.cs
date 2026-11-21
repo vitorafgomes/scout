@@ -221,18 +221,22 @@ internal sealed partial class GitHubPlugin
     /// <param name="repo">Repository name.</param>
     /// <param name="path">Repository-relative path of the file or directory.</param>
     /// <param name="reference">Branch, tag or commit; empty for the default branch.</param>
+    /// <param name="firstLine">The first line of the file to return, 1 or more.</param>
+    /// <param name="lineCount">How many lines to return at most, 0 for as many as fit in one answer.</param>
     /// <param name="ct">Cancels the underlying GitHub request.</param>
     /// <returns>
-    /// The file text cut at the cap, the directory entries, or a clean message when not found or on failure; every answer
+    /// The file's lines from <paramref name="firstLine"/> as one answer holds them (<see cref="Lines"/>), the directory entries, or a clean message when not found or on failure; every answer
     /// that is not the file's text is marked on <see cref="ReadOutcome"/> for a caller that counts the files read.
     /// </returns>
     [KernelFunction("get_file_contents")]
-    [Description("Read one file of a repository as text (long files are cut, and the answer says so), or list one directory, at a branch, tag or commit or at the default branch. Use it to read the code around a diff, a configuration file, or the structure of a folder when judging a project.")]
+    [Description("Read one file of a repository as text, or list one directory, at a branch, tag or commit or at the default branch. A long file is returned in parts: each answer says which lines it holds, how many the file has and the firstLine to call again with to read on; to read the lines around a known line, pass firstLine a few lines before it and lineCount. Use it to read the code around a diff, a configuration file, or the structure of a folder when judging a project.")]
     public async Task<string> GetFileContentsAsync(
         [Description("Repository owner or organization login.")] string owner,
         [Description("Repository name.")] string repo,
         [Description("Repository-relative path, e.g. src/Program.cs or src for a directory.")] string path,
         [Description("Branch, tag or commit to read at; empty for the default branch.")] string reference = "",
+        [Description("The first line of the file to return, 1 for its start.")] int firstLine = 1,
+        [Description("How many lines to return at most; 0 for as many as fit in one answer.")] int lineCount = 0,
         CancellationToken ct = default)
     {
         if (!GitHubNames.IsValidRepository(owner, repo))
@@ -250,9 +254,19 @@ internal sealed partial class GitHubPlugin
             return NoContent(GitHubNames.InvalidReference);
         }
 
+        if (firstLine < 1)
+        {
+            return NoContent(FirstLineBelowOne);
+        }
+
+        if (lineCount < 0)
+        {
+            return NoContent(LineCountBelowZero);
+        }
+
         if (_snapshots?.Find(owner, repo, reference) is { } snapshot)
         {
-            return ReadFromSnapshot(snapshot, path);
+            return ReadFromSnapshot(snapshot, path, firstLine, lineCount);
         }
 
         try
@@ -277,7 +291,7 @@ internal sealed partial class GitHubPlugin
 
             return file.Text is null
                 ? NoContent($"{path} ({file.Size} bytes) has no text GitHub returns inline; it is binary or over 1 MB.")
-                : $"{path} ({file.Size} bytes){At(reference)}:\n{Cut(file.Text, PatchCap)}";
+                : Lines($"{path} ({file.Size} bytes){At(reference)}", path, file.Text, firstLine, lineCount, PatchCap);
         }
         catch (Exception ex) when (IsHandledFailure(ex))
         {
@@ -348,27 +362,37 @@ internal sealed partial class GitHubPlugin
         }
     }
 
-    /// <summary>Search a repository's code on its default branch.</summary>
+    /// <summary>
+    /// Search a repository's code: in the local snapshot at <paramref name="reference"/> when one is named, which is never
+    /// asked of GitHub; else in the newest local snapshot, or on GitHub's default branch when there is none.
+    /// </summary>
     /// <param name="owner">Repository owner or organization login.</param>
     /// <param name="repo">Repository name.</param>
     /// <param name="query">What to look for: words, an identifier, a string.</param>
     /// <param name="path">Only files under this folder; empty for all.</param>
     /// <param name="extension">Only files with this extension, e.g. cs; empty for all.</param>
+    /// <param name="reference">Branch, tag or commit whose local snapshot to search; empty for the newest snapshot or the default branch.</param>
     /// <param name="ct">Cancels the underlying GitHub request.</param>
     /// <returns>The matching files with the highlighted fragments, or a clean message when none or on failure.</returns>
     [KernelFunction("search_code")]
-    [Description("Search a repository's code on its default branch for words, an identifier or a string, optionally under one folder or one extension: the matching files with the fragments GitHub highlights, first 30. Use it to find where something is done or called across the project. GitHub allows about ten searches a minute.")]
+    [Description("Search a repository's code for words, an identifier or a string, optionally under one folder or one extension: the matching files with their matching lines, first 30. With a reference, it searches Scout's local snapshot at that branch, tag or commit; without one, the newest local snapshot, or GitHub's default branch when there is none. Use it to find where something is done or called across the project. GitHub allows about ten searches a minute.")]
     public async Task<string> SearchCodeAsync(
         [Description("Repository owner or organization login.")] string owner,
         [Description("Repository name.")] string repo,
         [Description("What to look for, 1 to 200 characters, without repo:, org: or user: qualifiers.")] string query,
         [Description("Only files under this folder, e.g. src/Orders; empty for all.")] string path = "",
         [Description("Only files with this extension, e.g. cs or ts; empty for all.")] string extension = "",
+        [Description("Branch, tag or commit whose local snapshot to search; empty for the newest snapshot or the default branch.")] string reference = "",
         CancellationToken ct = default)
     {
         if (!GitHubNames.IsValidRepository(owner, repo))
         {
             return GitHubNames.InvalidRepository;
+        }
+
+        if (!GitHubNames.IsValidReference(reference))
+        {
+            return GitHubNames.InvalidReference;
         }
 
         if (!GitHubNames.IsValidSearchQuery(query))
@@ -386,10 +410,22 @@ internal sealed partial class GitHubPlugin
             return GitHubNames.InvalidExtension;
         }
 
-        if (_snapshots?.FindNewest(owner, repo) is { } snapshot)
+        if ((reference.Length > 0 ? _snapshots?.Find(owner, repo, reference) : _snapshots?.FindNewest(owner, repo)) is { } snapshot)
         {
-            return FormatSearch(owner, repo, query, RepositorySnapshotStore.Search(snapshot, query.Trim(), path, extension))
-                + $"\n(from the local snapshot of {snapshot.Reference} at {snapshot.ShortSha}, every file searched)";
+            var where = $"the local snapshot of {snapshot.Reference} at {snapshot.ShortSha}, every file searched";
+            try
+            {
+                return FormatSearch(owner, repo, query, RepositorySnapshotStore.Search(snapshot, query.Trim(), path, extension), where);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return $"The local snapshot of {owner}/{repo} at {snapshot.ShortSha} could not be read, so nothing was searched; read the files with get_file_contents.";
+            }
+        }
+
+        if (reference.Length > 0)
+        {
+            return $"Scout has no local snapshot of {owner}/{repo} at {reference}, and GitHub searches only the default branch, so nothing was searched; read the files at {reference} with get_file_contents.";
         }
 
         try
@@ -403,7 +439,7 @@ internal sealed partial class GitHubPlugin
         }
     }
 
-    private static string ReadFromSnapshot(RepositorySnapshot snapshot, string path)
+    private static string ReadFromSnapshot(RepositorySnapshot snapshot, string path, int firstLine, int lineCount)
     {
         var entries = RepositorySnapshotStore.ListDirectory(snapshot, path);
         if (entries is not null)
@@ -421,7 +457,7 @@ internal sealed partial class GitHubPlugin
                 : $"{path} ({size} bytes) is binary or over 1 MB; no text to show.");
         }
 
-        return $"{path} ({size} bytes) at {snapshot.Reference} (local snapshot at {snapshot.ShortSha}):\n{Cut(text, PatchCap)}";
+        return Lines($"{path} ({size} bytes) at {snapshot.Reference} (local snapshot at {snapshot.ShortSha})", path, text, firstLine, lineCount, PatchCap);
     }
 
     internal static string FormatTree(string owner, string repo, RepositoryTree tree, string prefix, string extensions)
@@ -471,15 +507,15 @@ internal sealed partial class GitHubPlugin
         return text.ToString();
     }
 
-    internal static string FormatSearch(string owner, string repo, string query, CodeSearchResult result)
+    internal static string FormatSearch(string owner, string repo, string query, CodeSearchResult result, string where = "default branch")
     {
         if (result.TotalCount == 0 || result.Hits.Count == 0)
         {
-            return $"No file in {owner}/{repo} matches \"{query.Trim()}\" (default branch).";
+            return $"No file in {owner}/{repo} matches \"{query.Trim()}\" ({where}).";
         }
 
         var text = new StringBuilder();
-        text.Append(CultureInfo.InvariantCulture, $"{result.TotalCount} file(s) in {owner}/{repo} match \"{query.Trim()}\" (default branch; first {result.Hits.Count} shown)");
+        text.Append(CultureInfo.InvariantCulture, $"{result.TotalCount} file(s) in {owner}/{repo} match \"{query.Trim()}\" ({where}; first {result.Hits.Count} shown)");
         foreach (var hit in result.Hits)
         {
             text.Append("\n--- ").Append(hit.Path);
@@ -618,6 +654,61 @@ internal sealed partial class GitHubPlugin
     private static string At(string reference) => string.IsNullOrEmpty(reference) ? string.Empty : $" at {reference}";
 
     private static string Short(string sha) => sha.Length > 7 ? sha[..7] : sha;
+
+    /// <summary>The answer of a file read whose first line is below 1.</summary>
+    internal const string FirstLineBelowOne = "firstLine must be 1 or more; the first line of a file is 1.";
+
+    /// <summary>The answer of a file read whose line count is below 0.</summary>
+    internal const string LineCountBelowZero = "lineCount must be 0, for as many lines as fit in one answer, or more.";
+
+    /// <summary>
+    /// The answer of a file read: <paramref name="header"/>, which lines of <paramref name="text"/> follow, how many the file
+    /// has and, when it goes on, the firstLine to call again with; then whole lines from <paramref name="firstLine"/>, as many
+    /// as fit in <paramref name="cap"/> characters and at most <paramref name="lineCount"/> (0: as many as fit), exactly as the
+    /// file holds them, so the parts read in turn join into the file. A single line longer than the cap is cut at the cap and
+    /// the answer says so; a first line past the end is answered with the file's line count and marked as no content.
+    /// </summary>
+    internal static string Lines(string header, string path, string text, int firstLine, int lineCount, int cap)
+    {
+        var starts = new List<int> { 0 };
+        for (var i = 0; i < text.Length - 1; i++)
+        {
+            if (text[i] == '\n')
+            {
+                starts.Add(i + 1);
+            }
+        }
+
+        var total = text.Length == 0 ? 0 : starts.Count;
+        if (firstLine > total)
+        {
+            return total == 0 && firstLine == 1
+                ? header + ": the file is empty."
+                : NoContent(string.Create(CultureInfo.InvariantCulture, $"{path} has {total:N0} lines; firstLine {firstLine} is past its end."));
+        }
+
+        var from = starts[firstLine - 1];
+        var (last, end) = (firstLine - 1, from);
+        while (last < total && (lineCount == 0 || last - firstLine + 1 < lineCount))
+        {
+            var lineEnd = last + 1 < total ? starts[last + 1] : text.Length;
+            if (lineEnd - from > cap)
+            {
+                break;
+            }
+
+            (last, end) = (last + 1, lineEnd);
+        }
+
+        var whole = end > from;
+        var shown = whole ? last : firstLine;
+        var next = shown < total
+            ? string.Create(CultureInfo.InvariantCulture, $"; to read on, call again with firstLine {shown + 1}")
+            : "; the file ends there";
+        return whole
+            ? string.Create(CultureInfo.InvariantCulture, $"{header}, lines {firstLine:N0} to {last:N0} of {total:N0}{next}:\n{text[from..end]}")
+            : string.Create(CultureInfo.InvariantCulture, $"{header}, line {firstLine:N0} of {total:N0}, cut at {cap:N0} characters because the line is longer{next}:\n{text.AsSpan(from, cap)}");
+    }
 
     private static string Cut(string text, int cap) =>
         text.Length <= cap ? text : string.Create(CultureInfo.InvariantCulture, $"{text[..cap]}\n... (cut at {cap} characters)");

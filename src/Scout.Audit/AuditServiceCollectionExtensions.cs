@@ -41,7 +41,7 @@ public static class AuditServiceCollectionExtensions
             {
                 if (string.IsNullOrWhiteSpace(options.DbPath))
                 {
-                    options.DbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Scout", "audit.db");
+                    options.DbPath = Path.Combine(DataFolder(), "audit.db");
                 }
 
                 if (local && !parallelSet)
@@ -62,7 +62,10 @@ public static class AuditServiceCollectionExtensions
             sp.GetRequiredService<IChatCompletionService>(),
             sp.GetService<ISkillCatalog>(),
             sp.GetRequiredService<IOptions<AuditOptions>>().Value.TurnTimeout,
-            sp.GetRequiredService<ILogger<AuditBatchRunner>>()));
+            sp.GetRequiredService<ILogger<AuditBatchRunner>>(),
+            RecordFolder(sp.GetRequiredService<IOptions<AuditOptions>>().Value),
+            sp.GetRequiredService<IAuditJobStore>(),
+            provider));
         services.AddSingleton(sp => new RepositoryAudits(
             sp.GetRequiredService<IAuditJobStore>(),
             sp.GetRequiredService<AuditSignal>(),
@@ -78,4 +81,16 @@ public static class AuditServiceCollectionExtensions
         services.AddHostedService<AuditWorker>();
         return services;
     }
+
+    /// <summary>Scout's own data folder, <c>Scout</c> under the user's local application data, where the database is by default.</summary>
+    internal static string DataFolder() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Scout");
+
+    /// <summary>
+    /// The folder review turns are recorded in when <see cref="AuditOptions.RecordTurns"/> is on: <c>audit</c> under
+    /// Scout's own data folder (<paramref name="dataFolder"/>, else <see cref="DataFolder"/>) whatever
+    /// <see cref="AuditOptions.DbPath"/> says; null when it is off.
+    /// </summary>
+    internal static string? RecordFolder(AuditOptions options, string? dataFolder = null) =>
+        options.RecordTurns ? Path.Combine(dataFolder ?? DataFolder(), "audit") : null;
 }

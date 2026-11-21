@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
+using Scout.Review;
 
 namespace Scout.Audit;
 
@@ -52,8 +53,15 @@ internal sealed partial class AuditWorker(
     AuditSignal signal,
     IReviewPullRequests pullRequests,
     ILogger<AuditWorker> logger,
-    IOptions<AuditOptions>? options = null) : BackgroundService
+    IOptions<AuditOptions>? options = null,
+    IAuditSnapshots? snapshots = null) : BackgroundService
 {
+    /// <summary>The characters of one batch, from which a part batch's room is found again.</summary>
+    private readonly long _batchCharacters = options?.Value.MaxBatchCharacters ?? new AuditOptions().MaxBatchCharacters;
+
+    /// <summary>The characters of one second-reading request at most: the batch's own bound.</summary>
+    private readonly int _contestCharacters = (int)Math.Min(int.MaxValue, options?.Value.MaxBatchCharacters ?? new AuditOptions().MaxBatchCharacters);
+
     /// <summary>The batches of a review that run at once: the configured count, or one when the worker was given no options.</summary>
     private readonly int _parallel = Math.Max(1, options?.Value.ReviewParallelBatches ?? 1);
 
@@ -126,6 +134,7 @@ internal sealed partial class AuditWorker(
 
     internal async Task RunAsync(AuditJob job, CancellationToken ct)
     {
+        await StampAsync(job, ct).ConfigureAwait(false);
         var instructions = await runner.InstructionsAsync(job, ct).ConfigureAwait(false);
         AuditJob? current;
         while ((current = await store.JobAsync(job.Id, ct).ConfigureAwait(false)) is { Status: AuditStatus.Running })
@@ -172,7 +181,7 @@ internal sealed partial class AuditWorker(
                 continue;
             }
 
-            var added = await store.CompleteBatchAsync(job.Id, next.Order, outcome.FilesRead, outcome.Findings, ct).ConfigureAwait(false);
+            var added = await store.CompleteBatchAsync(job.Id, next.Order, outcome.FilesRead, outcome.Findings, outcome.LeftOut, ct).ConfigureAwait(false);
             var total = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false)).Count;
             if (added.Count > 0)
             {
@@ -180,7 +189,7 @@ internal sealed partial class AuditWorker(
             }
             else
             {
-                await PostAllAsync(job.Id, [NoNewFindings(job, next, count, total)], ct, localOnly: true).ConfigureAwait(false);
+                await PostAllAsync(job.Id, [NoNewFindings(job, next, count, total) + (outcome.LeftOut is { } leftOut ? "\n" + leftOut : string.Empty)], ct, localOnly: true).ConfigureAwait(false);
             }
         }
 
@@ -230,13 +239,14 @@ internal sealed partial class AuditWorker(
     /// heading included, because the chat cuts a longer message and an unclosed fence shows as raw text; the heading names
     /// the job's <paramref name="findings"/> so far.
     /// </summary>
-    internal static IReadOnlyList<string> FindingsPosts(AuditJob job, AuditBatch batch, int batchCount, BatchOutcome outcome, IReadOnlyList<AuditFinding> added, int findings)
+    internal static IReadOnlyList<string> FindingsPosts(AuditJob job, AuditBatch batch, int batchCount, BatchOutcome outcome, IReadOnlyList<Finding> added, int findings)
     {
         var read = string.Create(CultureInfo.InvariantCulture, $"{batch.Area}: {outcome.FilesRead.Count} of {batch.Files.Count} files read");
         var verdict = outcome.Unread.Count > 0 ? Incomplete : outcome.Verdict ?? Verdict(added);
         var heading = Heading(job, batch, batchCount, findings);
-        var budget = MaxPostLength - heading.Length - PartLabelRoom;
-        var shares = new List<List<AuditFinding>>();
+        var leftOut = outcome.LeftOut is { } sentence ? sentence + "\n\n" : string.Empty;
+        var budget = MaxPostLength - heading.Length - PartLabelRoom - leftOut.Length;
+        var shares = new List<List<Finding>>();
         foreach (var finding in added)
         {
             if (shares.Count > 0 && FindingsBlock.Write(job.Owner, job.Repo, job.Commit, verdict, read, [.. shares[^1], finding]).Length <= budget)
@@ -252,7 +262,7 @@ internal sealed partial class AuditWorker(
         return [.. shares.Select((share, i) =>
             heading
             + (shares.Count == 1 ? ":" : string.Create(CultureInfo.InvariantCulture, $", part {i + 1} of {shares.Count}:"))
-            + "\n\n" + FindingsBlock.Write(job.Owner, job.Repo, job.Commit, verdict, read, share))];
+            + "\n\n" + (i == 0 ? leftOut : string.Empty) + FindingsBlock.Write(job.Owner, job.Repo, job.Commit, verdict, read, share))];
     }
 
     private static string Heading(AuditJob job, AuditBatch batch, int batchCount, int findings) =>
@@ -306,7 +316,7 @@ internal sealed partial class AuditWorker(
     /// because they are longer than a read returns, the areas the model answered without reading every file, with those
     /// files, which are not counted as covered, and the areas not covered with why.
     /// </summary>
-    internal static string Scope(AuditJob job, IReadOnlyList<AuditBatch> batches, IReadOnlyList<AuditFinding> findings)
+    internal static string Scope(AuditJob job, IReadOnlyList<AuditBatch> batches, IReadOnlyList<Finding> findings)
     {
         var unread = batches.Where(b => b.Status == AuditStatus.Done)
             .Select(b => (b.Area, Files: AuditBatchRunner.Unread(b.Files, b.FilesRead)))
@@ -320,7 +330,7 @@ internal sealed partial class AuditWorker(
         var count = (string severity) => findings.Count(f => f.Severity == severity);
         var text = string.Create(
             CultureInfo.InvariantCulture,
-            $"Audit of {job.Owner}/{job.Repo} at {job.Commit[..Math.Min(7, job.Commit.Length)]} is done. Verdict: {(unread.Count > 0 || missed.Count > 0 ? Incomplete : Verdict(findings))} ({count("block")} High, {count("fix")} Medium, {count("nit")} Low).\n"
+            $"Audit of {job.Owner}/{job.Repo} at {job.Commit[..Math.Min(7, job.Commit.Length)]} is done. Verdict: {(unread.Count > 0 || missed.Count > 0 ? Incomplete : Verdict(findings))} ({count(Severities.Block)} High, {count(Severities.Fix)} Medium, {count(Severities.Nit)} Low).\n"
             + $"Scope: {covered} of {batches.Count} areas covered; {read} of {files} files read.");
         if (partial.Count > 0)
         {
@@ -340,8 +350,8 @@ internal sealed partial class AuditWorker(
         };
     }
 
-    private static string Verdict(IReadOnlyList<AuditFinding> findings) =>
-        findings.Any(f => f.Severity == "block") ? "sound after the High findings" : "sound";
+    private static string Verdict(IReadOnlyList<Finding> findings) =>
+        findings.Any(f => Severities.IsBlocking(f.Severity)) ? "sound after the High findings" : "sound";
 
     private async Task PostAsync(AuditJob job, string text, CancellationToken ct)
     {

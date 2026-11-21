@@ -18,6 +18,7 @@
     <ProjectReference Include="..\Scout.Llm\Scout.Llm.csproj" />
     <ProjectReference Include="..\Scout.Conversation\Scout.Conversation.csproj" />
     <ProjectReference Include="..\Scout.Knowledge\Scout.Knowledge.csproj" />
+    <ProjectReference Include="..\Scout.Review\Scout.Review.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Audit.Tests" />

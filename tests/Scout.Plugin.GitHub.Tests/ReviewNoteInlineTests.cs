@@ -1,8 +1,10 @@
+using Scout.Review;
+
 namespace Scout.Plugin.GitHub.Tests;
 
 public sealed class ReviewNoteInlineTests
 {
-    private static readonly ReviewFinding Finding = new(
+    private static readonly Finding Finding = new(
         "a", "block", "The log keeps the card number", "src/Orders/OrderLog.cs", 34, "A payment logs the whole request.",
         "The card number is written to the log.", "Log the order id only.", "Never log a payment card.");
 

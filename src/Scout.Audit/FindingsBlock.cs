@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Scout.Review;
 
 namespace Scout.Audit;
 
@@ -25,15 +27,19 @@ internal static class FindingsBlock
     /// when <paramref name="pullRequest"/> is given, of the review blocks, which carry no kind; a block of the other kind or
     /// an unreadable one is skipped, and the findings of a block for another repository, commit or pull request are counted
     /// as dropped. A block that names no commit is taken as the job's. <c>Accepted</c> says whether any block was taken,
-    /// one with no findings included.
+    /// one with no findings included. A finding <see cref="FindingValidation"/> refuses, or one <paramref name="place"/>
+    /// answers a problem for, is left out, and <c>LeftOut</c> counts them in the answer's order; null when none was.
     /// </summary>
-    public static (string? Verdict, IReadOnlyList<AuditFinding> Findings, int Dropped, bool Accepted) Read(
-        IReadOnlyList<string> blocks, string owner, string repo, string commit, int? pullRequest = null)
+    public static (string? Verdict, IReadOnlyList<Finding> Findings, int Dropped, bool Accepted, LeftOutFindings? LeftOut) Read(
+        IReadOnlyList<string> blocks, string owner, string repo, string commit, int? pullRequest = null, Func<Finding, (Finding Placed, string? Problem)>? place = null)
     {
         string? verdict = null;
-        var findings = new List<AuditFinding>();
+        var findings = new List<Finding>();
         var dropped = 0;
         var accepted = false;
+        var leftOut = 0;
+        string? first = null;
+        var offDiff = new List<(Finding Finding, string Problem)>();
         foreach (var block in blocks)
         {
             var start = block.IndexOf('\n', StringComparison.Ordinal);
@@ -58,7 +64,7 @@ internal static class FindingsBlock
                 continue;
             }
 
-            var presented = (payload.Findings ?? []).Where(f => f.Title is not null && f.Path is not null).ToList();
+            var presented = (payload.Findings ?? []).Where(f => f is not null).ToList();
             if (!string.Equals(payload.Repository?.Trim(), $"{owner}/{repo}", StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrWhiteSpace(payload.Commit) && (payload.Commit.Trim() is not { Length: >= 7 } named || !commit.StartsWith(named, StringComparison.OrdinalIgnoreCase)))
                 || payload.Number != pullRequest)
@@ -68,15 +74,44 @@ internal static class FindingsBlock
             }
 
             verdict = payload.Verdict ?? verdict;
-            findings.AddRange(presented);
+            foreach (var finding in presented)
+            {
+                if (FindingValidation.ProblemOf(finding) is { } problem)
+                {
+                    leftOut++;
+                    first ??= problem;
+                }
+                else if ((place?.Invoke(finding) ?? (finding, null)) is var (placed, off) && off is not null)
+                {
+                    leftOut++;
+                    first ??= off;
+                    offDiff.Add((finding, off));
+                }
+                else
+                {
+                    findings.Add(placed);
+                }
+            }
+
             accepted = true;
         }
 
-        return (verdict, findings, dropped, accepted);
+        return (verdict, findings, dropped, accepted, first is null ? null : new LeftOutFindings(leftOut, first, offDiff));
     }
 
+    /// <summary>
+    /// The sentence a batch keeps for the <paramref name="count"/> findings it left out: how many, and the first one's
+    /// problem as <see cref="FindingValidation"/> words it; null when it left none out.
+    /// </summary>
+    internal static string? LeftOutSentence(int count, string? first) => count switch
+    {
+        0 => null,
+        1 => $"1 finding left out: it {first}",
+        _ => $"{count.ToString(CultureInfo.InvariantCulture)} findings left out: the first {first}",
+    };
+
     /// <summary>The fenced block of <paramref name="findings"/> for the repository at the commit.</summary>
-    public static string Write(string owner, string repo, string commit, string verdict, string read, IReadOnlyList<AuditFinding> findings) =>
+    public static string Write(string owner, string repo, string commit, string verdict, string read, IReadOnlyList<Finding> findings) =>
         Fence + "\n" + JsonSerializer.Serialize(new Payload(AuditKind.Audit, $"{owner}/{repo}", null, commit, verdict, read, findings), Json) + "\n```";
 
     /// <summary>
@@ -85,7 +120,7 @@ internal static class FindingsBlock
     /// <paramref name="testsReason"/> when the block carries no test run. Null when <paramref name="block"/> is not one
     /// fenced JSON object.
     /// </summary>
-    public static string? Complete(string block, int read, int of, IReadOnlyList<string> notes, string testsReason)
+    public static string? Complete(string block, int read, int of, IReadOnlyList<string> notes, string testsReason, Offer? offer = null, IReadOnlySet<string>? unconfirmed = null)
     {
         var start = block.IndexOf('\n', StringComparison.Ordinal);
         var end = block.LastIndexOf("```", StringComparison.Ordinal);
@@ -110,6 +145,22 @@ internal static class FindingsBlock
         }
 
         payload["coverage"] = new JsonObject { ["read"] = read, ["of"] = of };
+        if (unconfirmed is { Count: > 0 } && payload["findings"] is JsonArray presented)
+        {
+            foreach (var finding in presented.OfType<JsonObject>())
+            {
+                if (finding["id"]?.GetValue<string>() is { } id && unconfirmed.Contains(id) && finding["title"]?.GetValue<string>() is { } title)
+                {
+                    finding["title"] = Contestation.UnconfirmedTitle(title);
+                }
+            }
+        }
+
+        if (offer is not null)
+        {
+            payload["offer"] = new JsonObject { ["verdict"] = offer.Verdict, ["reason"] = offer.Reason, ["commentInstead"] = offer.CommentInstead };
+        }
+
         if (notes.Count > 0)
         {
             payload["notes"] = new JsonArray([.. notes.Select(n => (JsonNode?)JsonValue.Create(n))]);
@@ -123,5 +174,15 @@ internal static class FindingsBlock
         return Fence + "\n" + payload.ToJsonString() + "\n```";
     }
 
-    private sealed record Payload(string? Kind, string? Repository, int? Number, string? Commit, string? Verdict, string? Read, IReadOnlyList<AuditFinding>? Findings);
+    private sealed record Payload(string? Kind, string? Repository, int? Number, string? Commit, string? Verdict, string? Read, IReadOnlyList<Finding>? Findings);
+}
+
+/// <summary>
+/// The findings a batch's answer left out: how many, the first one's problem in the answer's order, and those of them left
+/// out only because Scout could not place them on the pull request's diff, each with its problem.
+/// </summary>
+internal sealed record LeftOutFindings(int Count, string First, IReadOnlyList<(Finding Finding, string Problem)> OffDiff)
+{
+    /// <summary>The one sentence the batch keeps for them.</summary>
+    public string Sentence => FindingsBlock.LeftOutSentence(Count, First)!;
 }

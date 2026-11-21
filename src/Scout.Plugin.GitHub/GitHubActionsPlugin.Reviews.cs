@@ -24,6 +24,7 @@ internal sealed partial class GitHubActionsPlugin
     /// <param name="repo">Repository name.</param>
     /// <param name="number">Pull request number.</param>
     /// <param name="ct">Cancels the reads and the start.</param>
+    /// <param name="again">True when the user asked to review the pull request again.</param>
     /// <returns>The review's plan, or why it did not start.</returns>
     [KernelFunction(StartReview)]
     [Description("Start the review of a pull request whose diffs did not all fit get_pull_request's answer, as a job that runs in the background: Scout takes a snapshot at the head commit, reads every changed file's diff in batches and posts one card with the findings in this chat when the batches end. Only when get_pull_request said some diffs were left out. Nothing is posted on GitHub. Answers at once with the plan.")]
@@ -31,7 +32,8 @@ internal sealed partial class GitHubActionsPlugin
         [Description("Repository owner or organization login.")] string owner,
         [Description("Repository name.")] string repo,
         [Description("Pull request number, e.g. 42.")] int number,
-        CancellationToken ct)
+        CancellationToken ct,
+        [Description("True only when the user's words ask to review the pull request again, re-review it or run the review once more; a review already done at the same head commit is then run again as a new review. False otherwise.")] bool again = false)
     {
         if (Refusal(owner, repo, number) is { } refusal)
         {
@@ -56,7 +58,7 @@ internal sealed partial class GitHubActionsPlugin
         var checks = await CheckCountsAsync(owner, repo, pr.HeadSha, ct).ConfigureAwait(false);
         var purpose = await PurposeAsync(owner, repo, pr, ct).ConfigureAwait(false);
         return await reviews!.StartAsync(
-            owner, repo, number, pr.HeadSha, pr.Files, GitHubPlugin.FitPatchBudget(pr.Files).LeftOut, pr.ChangedFileCount - pr.Files.Count, checks, ct, purpose).ConfigureAwait(false);
+            owner, repo, number, pr.HeadSha, pr.Files, GitHubPlugin.FitPatchBudget(pr.Files).LeftOut, pr.ChangedFileCount - pr.Files.Count, checks, ct, purpose, again).ConfigureAwait(false);
     }
 
     [GeneratedRegex(@"(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d{1,9})\b")]

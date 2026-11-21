@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Scout.Audit.Storage;
+using Scout.Review;
 
 namespace Scout.Audit.Tests;
 
@@ -24,7 +25,25 @@ public sealed class SqliteAuditStoreTests : IDisposable
 
     private SqliteAuditStore Store() => new(Path.Combine(_folder.Path, "data", "audit.db"), TimeProvider.System);
 
-    private static AuditFinding Finding(string id, string title, string path) => new(id, "block", title, path, 12, null, "Why.", "Fix.", "Defect");
+    private static Finding Finding(string id, string title, string path) => new(id, "block", title, path, 12, null, "Why.", "Fix.", "Defect");
+
+    [Fact]
+    public async Task Two_findings_on_one_path_whose_titles_differ_only_in_case_spacing_or_punctuation_are_one_and_a_plural_stays_apart()
+    {
+        var store = Store();
+        var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
+
+        var saved = await store.CompleteBatchAsync(
+            job, 1, [],
+            [
+                Finding("count", "Purge states a count it never read.", "src/Orders/Gateway.cs"),
+                Finding("count-2", "purge states a count  it never read", "src/Orders/Gateway.cs"),
+                Finding("counts", "Purge states counts it never read", "src/Orders/Gateway.cs"),
+            ],
+            null, CancellationToken.None);
+
+        saved.Select(f => f.Id).ShouldBe(["count", "counts"], "the same letters and digits on the same path are one finding; a different word is not");
+    }
 
     [Fact]
     public async Task A_repeated_finding_is_not_reported_twice()
@@ -32,8 +51,8 @@ public sealed class SqliteAuditStoreTests : IDisposable
         var store = Store();
         var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
 
-        var first = await store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [Finding("swallow", "Gateway errors read as no orders", "src/Orders/Gateway.cs")], CancellationToken.None);
-        var second = await store.CompleteBatchAsync(job, 2, [], [Finding("gateway", "  GATEWAY ERRORS READ AS NO ORDERS ", "SRC/orders/gateway.cs")], CancellationToken.None);
+        var first = await store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [Finding("swallow", "Gateway errors read as no orders", "src/Orders/Gateway.cs")], null, CancellationToken.None);
+        var second = await store.CompleteBatchAsync(job, 2, [], [Finding("gateway", "  GATEWAY ERRORS READ AS NO ORDERS ", "SRC/orders/gateway.cs")], null, CancellationToken.None);
 
         first.Count.ShouldBe(1);
         second.ShouldBeEmpty();
@@ -46,8 +65,8 @@ public sealed class SqliteAuditStoreTests : IDisposable
         var store = Store();
         var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", null, ThreeBatches, null, CancellationToken.None);
 
-        await store.CompleteBatchAsync(job, 1, [], [Finding("swallow", "Gateway errors read as no orders", "src/Orders/Gateway.cs")], CancellationToken.None);
-        var added = await store.CompleteBatchAsync(job, 2, [], [Finding("swallow", "Invoice errors read as paid", "src/Billing/Invoice.cs")], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, [], [Finding("swallow", "Gateway errors read as no orders", "src/Orders/Gateway.cs")], null, CancellationToken.None);
+        var added = await store.CompleteBatchAsync(job, 2, [], [Finding("swallow", "Invoice errors read as paid", "src/Billing/Invoice.cs")], null, CancellationToken.None);
 
         added.ShouldHaveSingleItem().Id.ShouldBe("swallow-2");
         (await store.FindingsAsync(job, CancellationToken.None)).Select(f => f.Id).ShouldBe(["swallow", "swallow-2"]);
@@ -57,7 +76,7 @@ public sealed class SqliteAuditStoreTests : IDisposable
     public async Task The_audit_survives_a_restart_and_resumes_from_the_first_batch_not_done()
     {
         var job = await Store().CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
-        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [], CancellationToken.None);
+        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [], null, CancellationToken.None);
         SqliteConnection.ClearAllPools();
 
         var reopened = Store();
@@ -239,7 +258,7 @@ public sealed class SqliteAuditStoreTests : IDisposable
             SELECT group_concat(name, ',') FROM (SELECT name FROM sqlite_master
             WHERE type = 'table' AND name NOT LIKE '\_\_EF%' ESCAPE '\' AND name NOT LIKE 'sqlite\_%' ESCAPE '\' ORDER BY name);
             """;
-        (await tables.ExecuteScalarAsync())!.ToString().ShouldBe("audit_batch,audit_finding,audit_job");
+        (await tables.ExecuteScalarAsync())!.ToString().ShouldBe("audit_batch,audit_finding,audit_job,audit_turn");
         await using var history = connection.CreateCommand();
         history.CommandText = "SELECT count(*) FROM __EFMigrationsHistory;";
         Convert.ToInt64(await history.ExecuteScalarAsync(), CultureInfo.InvariantCulture).ShouldBeGreaterThan(0, "the schema comes from the migrations, so a later build can migrate it");
@@ -267,7 +286,7 @@ public sealed class SqliteAuditStoreTests : IDisposable
         var store = Store();
 
         var failure = await Should.ThrowAsync<AuditStoreException>(
-            () => store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [Finding("swallow", "Gateway errors read as no orders", "src/Orders/Gateway.cs")], CancellationToken.None));
+            () => store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [Finding("swallow", "Gateway errors read as no orders", "src/Orders/Gateway.cs")], null, CancellationToken.None));
 
         failure.Message.ShouldBe("Scout could not save the audit database (SQLite error 8).");
         (await store.FindingsAsync(job, CancellationToken.None)).ShouldBeEmpty("the batch and its findings are one transaction, so a refused write keeps neither");
@@ -435,6 +454,21 @@ public sealed class SqliteAuditStoreTests : IDisposable
         new ReviewRemoved([new("tests/Shop.Tests/CartTests.cs", RemovedEntry.TestFileDeleted, ["src/Shop/Cart.cs"], 0, 0)], More: 2, TestFilesWithoutDiff: 1, RepositoryNotSearched: false));
 
     [Fact]
+    public async Task A_review_kept_when_the_description_was_cut_at_4000_reads_back_with_its_text_and_its_cut_flag()
+    {
+        var inputs = SampleInputs() with
+        {
+            Purpose = new ReviewPurpose("Checkout keeps the cart", new string('d', 4_000), 42, "Cart is lost", "Steps", DescriptionCut: true),
+        };
+        var review = await Store().CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None, inputs);
+
+        var kept = (await Store().InputsAsync(review, CancellationToken.None)).ShouldNotBeNull("a review stored before the bound was raised still has its inputs");
+
+        (kept.Purpose!.Description!.Length, kept.Purpose.DescriptionCut).ShouldBe(
+            (4_000, true), "the description kept at the old bound comes back as it was, still saying it was cut");
+    }
+
+    [Fact]
     public async Task The_inputs_kept_with_a_review_are_read_back_as_they_were_and_an_audit_keeps_none()
     {
         var store = Store();
@@ -508,7 +542,7 @@ public sealed class SqliteAuditStoreTests : IDisposable
         var job = await store.CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
         await store.BeginBatchAsync(job, 1, CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(10));
-        await store.CompleteBatchAsync(job, 1, [], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, [], [], null, CancellationToken.None);
         await store.BeginBatchAsync(job, 2, CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(5));
         await store.PauseAsync(job, "the AI provider's usage limit was reached", CancellationToken.None);
@@ -516,7 +550,7 @@ public sealed class SqliteAuditStoreTests : IDisposable
         await store.ResumeAsync(job, null, CancellationToken.None);
         await store.BeginBatchAsync(job, 2, CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(7));
-        await store.CompleteBatchAsync(job, 2, [], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 2, [], [], null, CancellationToken.None);
 
         (await store.RunningTimeAsync(job, CancellationToken.None)).ShouldBe(TimeSpan.FromMinutes(7), "a job's running time is its batches' turns since it resumed, never the time it was paused");
     }
@@ -529,13 +563,13 @@ public sealed class SqliteAuditStoreTests : IDisposable
         var job = await store.CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
         await store.BeginBatchAsync(job, 1, CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(60));
-        await store.CompleteBatchAsync(job, 1, [], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, [], [], null, CancellationToken.None);
         await store.PauseAsync(job, "it ran for 60 minutes", CancellationToken.None);
         clock.Advance(TimeSpan.FromHours(1));
         await store.ResumeAsync(job, null, CancellationToken.None);
         await store.BeginBatchAsync(job, 2, CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(7));
-        await store.CompleteBatchAsync(job, 2, [], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 2, [], [], null, CancellationToken.None);
 
         (await store.RunningTimeAsync(job, CancellationToken.None)).ShouldBe(TimeSpan.FromMinutes(7), "a resume starts the running time again: only the batches begun since count");
     }
@@ -560,12 +594,91 @@ public sealed class SqliteAuditStoreTests : IDisposable
         await store.BeginBatchAsync(job, 1, CancellationToken.None);
         await store.BeginBatchAsync(job, 2, CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(10));
-        await store.CompleteBatchAsync(job, 1, [], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, [], [], null, CancellationToken.None);
         await store.BeginBatchAsync(job, 3, CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(5));
-        await store.CompleteBatchAsync(job, 2, [], [], CancellationToken.None);
-        await store.CompleteBatchAsync(job, 3, [], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 2, [], [], null, CancellationToken.None);
+        await store.CompleteBatchAsync(job, 3, [], [], null, CancellationToken.None);
 
         (await store.RunningTimeAsync(job, CancellationToken.None)).ShouldBe(TimeSpan.FromMinutes(15), "batches that ran at once count once: the clock time during which any of them ran");
+    }
+
+    [Fact]
+    public async Task The_sentence_on_the_findings_a_batch_left_out_is_kept_and_read_by_a_new_store_on_the_same_file()
+    {
+        var job = await Store().CreateJobAsync("acme", "shop", null, "abc1234def", null, ThreeBatches, null, CancellationToken.None);
+
+        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [], "1 finding left out: it needs a fix.", CancellationToken.None);
+        var batches = await Store().BatchesAsync(job, CancellationToken.None);
+
+        batches.Select(b => b.LeftOut).ShouldBe(
+            ["1 finding left out: it needs a fix.", null, null],
+            "the batch keeps its sentence across store instances, and a batch that left nothing out keeps none");
+    }
+
+    [Fact]
+    public async Task A_database_from_before_the_left_out_column_reads_its_batches_with_no_sentence()
+    {
+        var path = Path.Combine(_folder.Path, "data", "audit.db");
+        var job = await Store().CreateJobAsync("acme", "shop", null, "abc1234def", null, ThreeBatches, null, CancellationToken.None);
+        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [], null, CancellationToken.None);
+        await using (var db = new AuditDbContext(new DbContextOptionsBuilder<AuditDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options))
+        {
+            await Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>(db).MigrateAsync("20261119120000_ReviewInputs");
+        }
+
+        var batches = await Store().BatchesAsync(job, CancellationToken.None);
+
+        batches.Select(b => (b.Status, b.LeftOut)).ShouldBe(
+            [(AuditStatus.Done, (string?)null), (AuditStatus.Pending, null), (AuditStatus.Pending, null)],
+            "a file at the migration before the column is brought up to date and its batches read with no sentence");
+    }
+
+    [Fact]
+    public async Task A_finding_s_evidence_is_kept_and_read_by_a_new_store_on_the_same_file()
+    {
+        var job = await Store().CreateJobAsync("acme", "shop", 12, "abc1234def", null, ThreeBatches, null, CancellationToken.None);
+        var finding = new Finding("a", "fix", "Total skips the discount", "src/Orders/Checkout.cs", 3, null, "W.", "F.", null, "    var total = 0m;\n    total += line.Price;");
+
+        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [finding, finding with { Id = "b", Title = "No evidence", Evidence = null }], null, CancellationToken.None);
+
+        (await Store().FindingsAsync(job, CancellationToken.None)).Select(f => f.Evidence).ShouldBe(
+            ["    var total = 0m;\n    total += line.Price;", null], "a finding's evidence is kept as given, and a finding without one keeps none");
+    }
+
+    [Fact]
+    public async Task N4_a_database_from_before_the_turn_table_opens_keeps_turns_and_totals_them_per_reading()
+    {
+        var path = Path.Combine(_folder.Path, "data", "audit.db");
+        var job = await Store().CreateJobAsync("acme", "shop", 12, "abc1234def", null, ThreeBatches, null, CancellationToken.None);
+        await using (var db = new AuditDbContext(new DbContextOptionsBuilder<AuditDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options))
+        {
+            await Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>(db).MigrateAsync("20261121120000_FindingEvidence");
+        }
+
+        var store = Store();
+        await store.StampRunAsync(job, "1.2.3", "Provider/model", CancellationToken.None);
+        await store.AddTurnAsync(job, new AuditTurn(1, "general", null, 1, false, 1_000, 500, new Dictionary<string, int> { ["GitHub.get_file_contents"] = 3 }, 2, 1, 1, null), CancellationToken.None);
+        await store.AddTurnAsync(job, new AuditTurn(1, "removed", null, 1, false, 400, 500, new Dictionary<string, int>(), 0, 0, 0, "The turn timed out."), CancellationToken.None);
+
+        (await store.TurnTotalsAsync(job, CancellationToken.None)).ShouldBe(
+            [new ReadingTotals("general", 1, 1_000, 3, 2, 1, 1, 0, 0), new ReadingTotals("removed", 1, 400, 0, 0, 0, 0, 1, 1)],
+            "a file at the migration before the table is brought up to date, and its turns are kept and totalled per reading");
+    }
+
+    [Fact]
+    public async Task A_database_from_before_the_evidence_column_reads_its_findings_with_no_evidence()
+    {
+        var path = Path.Combine(_folder.Path, "data", "audit.db");
+        var job = await Store().CreateJobAsync("acme", "shop", 12, "abc1234def", null, ThreeBatches, null, CancellationToken.None);
+        await Store().CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [new Finding("a", "fix", "T", "src/Orders/Checkout.cs", 3, null, "W.", "F.", null)], null, CancellationToken.None);
+        await using (var db = new AuditDbContext(new DbContextOptionsBuilder<AuditDbContext>().UseSqlite($"Data Source={path};Pooling=False").Options))
+        {
+            await Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>(db).MigrateAsync("20261120120000_BatchLeftOut");
+        }
+
+        var findings = await Store().FindingsAsync(job, CancellationToken.None);
+
+        findings.Select(f => (f.Title, f.Evidence)).ShouldBe([("T", (string?)null)], "a file at the migration before the column is brought up to date and its findings read with no evidence");
     }
 }

@@ -129,7 +129,7 @@ public sealed class GitHubActionsPluginStackRecordTests : IDisposable
         run.GetProperty("exitCode").GetInt32().ShouldBe(0);
         _logger.Entries.Count.ShouldBe(2);
         _logger.Entries.ShouldAllBe(e => e.Level == LogLevel.Warning
-            && e.Message.StartsWith("The stack of octocat/hello at abc1234 was not recorded; the snapshot is unchanged: ", StringComparison.Ordinal));
+            && e.Message.StartsWith("The stack of octocat/hello at abc1234 was not recorded; the snapshot is unchanged (", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -141,6 +141,6 @@ public sealed class GitHubActionsPluginStackRecordTests : IDisposable
 
         taken.ShouldStartWith("Took a snapshot of octocat/hello at main (abc1234)");
         File.Exists(RecordPath).ShouldBeFalse();
-        _logger.Entries.ShouldHaveSingleItem().ShouldBe((LogLevel.Warning, "The stack of octocat/hello at abc1234 was not recorded; the snapshot is unchanged: disk gone"));
+        _logger.Entries.ShouldHaveSingleItem().ShouldBe((LogLevel.Warning, "The stack of octocat/hello at abc1234 was not recorded; the snapshot is unchanged (IOException)."), "the log names the kind of failure, never its message, which can hold a path or a repository's file name");
     }
 }

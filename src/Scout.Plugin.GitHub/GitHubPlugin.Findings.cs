@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.SemanticKernel;
 using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
+using Scout.Review;
 
 namespace Scout.Plugin.GitHub;
 
@@ -34,7 +35,7 @@ internal sealed partial class GitHubPlugin
         [Description("The repository as owner/repo, e.g. octocat/hello-world.")] string repository,
         [Description("Pull request number, e.g. 42.")] int number,
         [Description("The one-line verdict: ready to merge, ready after the blocking findings, or needs rework.")] string verdict,
-        [Description("""JSON array of at most 50 findings, [] when the review found nothing, e.g. [{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum."}]; severity is block, fix or nit; id is a short slug unique in the list; path and line are the file and the line after the change as the diff shows it; context is empty or where the finding comes from; rule is optional, the project rule, ADR or convention the finding departs from, 1 to 300 characters.""")] string findings_json,
+        [Description("""JSON array of at most 50 findings, [] when the review found nothing, e.g. [{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum."}]; severity is block, fix or nit; id is a short slug unique in the list; path and line are the file and the line after the change as the diff shows it; context is empty or where the finding comes from; rule is optional, the project rule, ADR or convention the finding departs from, 1 to 300 characters; why, fix and context are at most 4,000 characters each; evidence is the exact quote of the new side of the file's patch the finding is about, or of its removed lines without the leading '-' for a finding about a removal, contiguous lines with their spacing; Scout derives the line from it, at most 1,000 characters, none for a deleted file.""")] string findings_json,
         [Description("The head commit reviewed, the SHA get_pull_request answered, e.g. ec7f951; the verdict on the card is pinned to it.")] string? commit = null,
         [Description("What was read, e.g. 6 of 6 files read.")] string? read = null,
         CancellationToken ct = default)
@@ -46,7 +47,30 @@ internal sealed partial class GitHubPlugin
         }
 
         var parts = findings.Repository.Split('/');
-        return Present((await WithEvidenceAsync(findings, parts[0], parts[1], number, ct).ConfigureAwait(false), null));
+        findings = findings with { Findings = [.. findings.Findings.Select(Contestation.FirstReading)] };
+        return Present((WithOffer(await WithEvidenceAsync(findings, parts[0], parts[1], number, ct).ConfigureAwait(false)), null));
+    }
+
+    /// <summary>
+    /// The findings with what the review offers, decided by code (<see cref="ReviewOffers.Decide"/>) from the findings, the
+    /// read count the read line gives (not known, never an approval), the kept test run and the checks read with the head;
+    /// the model's verdict is only text. A head that moved past the commit offers nothing.
+    /// </summary>
+    private static ReviewFindings WithOffer(ReviewFindings findings)
+    {
+        var count = ReviewOffers.ReadCount(findings.Read);
+        return findings with
+        {
+            Offer = ReviewOffers.Decide(new OfferInput(
+                [.. findings.Findings.Select(f => new OfferFinding(f.Severity, false))],
+                count?.Read ?? 0,
+                count?.Of ?? 0,
+                GitHubActionsPlugin.TestsOf(findings.Tests),
+                findings.CheckCounts,
+                findings.SelfAuthored == true,
+                HeadMoved: findings.HeadMoved,
+                ReadCountKnown: count is not null)),
+        };
     }
 
     /// <summary>
@@ -70,15 +94,19 @@ internal sealed partial class GitHubPlugin
                 return findings with { Tests = tests };
             }
 
+            var moved = findings.Commit is not { } reviewed || !head.Sha.StartsWith(reviewed, StringComparison.OrdinalIgnoreCase);
+
             var selfAuthored = login is not null && string.Equals(head.AuthorLogin, login, StringComparison.OrdinalIgnoreCase);
             IReadOnlyList<ReviewCheck>? checks = null;
-            if (findings.Commit is { } commit && head.Sha.StartsWith(commit, StringComparison.OrdinalIgnoreCase))
+            OfferChecks? counts = null;
+            if (!moved)
             {
-                var (read, _) = await ChecksAtAsync(owner, repo, head.Sha, ct).ConfigureAwait(false);
+                var (read, total) = await ChecksAtAsync(owner, repo, head.Sha, ct).ConfigureAwait(false);
                 checks = read.Count == 0 ? null : read.Select(c => new ReviewCheck(c.Name, c.Status, c.Conclusion, c.Url)).ToList();
+                counts = PullRequestChecks.Offer(read)! with { Complete = read.Count >= total };
             }
 
-            return findings with { Checks = checks, Tests = tests, SelfAuthored = selfAuthored ? true : null };
+            return findings with { Checks = checks, Tests = tests, SelfAuthored = selfAuthored ? true : null, CheckCounts = counts, HeadMoved = moved };
         }
         catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
         {
@@ -101,7 +129,7 @@ internal sealed partial class GitHubPlugin
     public static string PresentAuditFindings(
         [Description("The repository as owner/repo, e.g. octocat/hello-world.")] string repository,
         [Description("The one-line verdict: sound, sound after the High findings, or needs rework.")] string verdict,
-        [Description("""JSON array of 1 to 50 findings, e.g. [{"id":"swallow","severity":"block","title":"Gateway errors read as no orders","path":"src/orders/Gateway.cs","line":12,"context":"","why":"The catch returns an empty list, so an outage reads as no orders.","fix":"Let it fail, or return a result that says the call failed.","rule":"Defect"}]; severity is block for High, fix for Medium, nit for Low; id is a short slug unique in the list; path and line are the file and the line; context is empty or where the finding comes from; rule is the project rule, ADR, convention or requirement the finding departs from, or the word Defect, 1 to 300 characters.""")] string findings_json,
+        [Description("""JSON array of 1 to 50 findings, e.g. [{"id":"swallow","severity":"block","title":"Gateway errors read as no orders","path":"src/orders/Gateway.cs","line":12,"context":"","why":"The catch returns an empty list, so an outage reads as no orders.","fix":"Let it fail, or return a result that says the call failed.","rule":"Defect"}]; severity is block for High, fix for Medium, nit for Low; id is a short slug unique in the list; path and line are the file and the line; context is empty or where the finding comes from; rule is the project rule, ADR, convention or requirement the finding departs from, or the word Defect, 1 to 300 characters; why, fix and context are at most 4,000 characters each.""")] string findings_json,
         [Description("The commit audited, e.g. ec7f951; empty when unknown.")] string? commit = null,
         [Description("What was read, e.g. the whole repository, or src/orders and its tests.")] string? read = null,
         [Description("""JSON array of at most 20 limitations the project already documents, each 1 to 300 characters, e.g. ["No paging on the orders list, noted in the README."]; shown as a note under the cards, never as findings; empty when none.""")] string? known_json = null) =>

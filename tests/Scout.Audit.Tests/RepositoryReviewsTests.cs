@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.SemanticKernel;
 using Scout.Audit.Storage;
+using Scout.Review;
 
 namespace Scout.Audit.Tests;
 
@@ -180,7 +181,89 @@ public sealed class RepositoryReviewsTests : IDisposable
         { "done", Earlier, Started, AuditStatus.Running, false, 1, PreflightOutcome.Ok, "No other review of acme/shop#12 at abc1234." },
     };
 
-    private const string AlreadyDone = "The review of acme/shop#12 at abc1234 is already done. 2 of 2 batches done, 0 not covered, 0 findings, 2 files read.";
+    private const string AlreadyDone = "The review of acme/shop#12 at abc1234 is already done. 2 of 2 batches done, 0 not covered, 0 findings, 2 files read. Ask for the review again to run it once more.";
+
+    private async Task<(SqliteAuditStore Store, string Done)> DoneAtHeadAsync()
+    {
+        var store = Store();
+        var done = await store.CreateJobAsync("acme", "shop", 12, Head, "discord:1:2", [new("src", ["src/A.cs"], 10), new("tests", ["tests/T.cs"], 10)], null, CancellationToken.None);
+        await store.CompleteBatchAsync(done, 1, ["src/A.cs"], [new("a", "fix", "Kept finding", "src/A.cs", 1, null, "Why.", "Fix.", null)], null, CancellationToken.None);
+        await FinishAsync(store, done);
+        return (store, done);
+    }
+
+    [Fact]
+    public async Task Asked_again_a_review_done_at_the_head_starts_a_new_job_and_leaves_the_done_one_as_it_was()
+    {
+        var references = new List<string>();
+        var (store, done) = await DoneAtHeadAsync();
+        var before = (await store.JobAsync(done, CancellationToken.None))!;
+        static string Shape(IReadOnlyList<AuditBatch> batches) => string.Join("; ", batches.Select(b => $"{b.Order} {b.Status} {string.Join(",", b.FilesRead)} {b.LeftOut}"));
+        var batchesBefore = Shape(await store.BatchesAsync(done, CancellationToken.None));
+
+        var start = await Reviews(TakingTheSnapshot(references), store).StartAsync("acme", "shop", 12, Head, OneFile, 1, 0, Green, CancellationToken.None, again: true);
+
+        start.Started.ShouldBeTrue("asking again starts a review at the same head");
+        start.Sentence.ShouldBe(Started);
+        var latest = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        (latest.Id == done, latest.Status).ShouldBe((false, AuditStatus.Running), "the new review is a job of its own, the latest");
+        (await store.JobAsync(done, CancellationToken.None)).ShouldBe(before, "the review done before is left as it was");
+        Shape(await store.BatchesAsync(done, CancellationToken.None)).ShouldBe(batchesBefore, "its batches are left as they were");
+        (await store.FindingsAsync(done, CancellationToken.None)).Select(f => f.Title).ShouldBe(["Kept finding"], "its findings stay with it");
+        start.Preflight.Checks.Single(c => c.Name == PreflightName.Duplicate).ShouldBe(new PreflightCheck(
+            PreflightName.Duplicate,
+            PreflightOutcome.Warning,
+            $"The review of acme/shop#12 at abc1234 was already done at {before.Finished!.Value.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)} UTC; this start reviews it again."),
+            "the check says the review was done and that this start reviews it again");
+    }
+
+    [Fact]
+    public async Task Not_asked_again_a_review_done_at_the_head_is_refused_and_says_how_to_ask_again()
+    {
+        var references = new List<string>();
+        var (store, done) = await DoneAtHeadAsync();
+
+        var start = await Reviews(TakingTheSnapshot(references), store).StartAsync("acme", "shop", 12, Head, OneFile, 1, 0, Green, CancellationToken.None);
+
+        (start.Started, start.Sentence).ShouldBe(
+            (false, "The review of acme/shop#12 at abc1234 is already done. 2 of 2 batches done, 0 not covered, 1 findings, 2 files read. Ask for the review again to run it once more."),
+            "without the owner asking again, a done review is not run again, and the answer says how to ask");
+        (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None))!.Id.ShouldBe(done, "no job is created");
+        references.ShouldBeEmpty("no snapshot is taken");
+    }
+
+    [Fact]
+    public async Task Asked_again_a_review_running_at_the_head_is_still_refused()
+    {
+        var references = new List<string>();
+        var store = Store();
+        var running = await store.CreateJobAsync("acme", "shop", 12, Head, "discord:1:2", [new("src", ["src/A.cs"], 10), new("tests", ["tests/T.cs"], 10)], null, CancellationToken.None);
+        await store.CompleteBatchAsync(running, 1, ["src/A.cs"], [], null, CancellationToken.None);
+
+        var start = await Reviews(TakingTheSnapshot(references), store).StartAsync("acme", "shop", 12, Head, OneFile, 1, 0, Green, CancellationToken.None, again: true);
+
+        (start.Started, start.Sentence).ShouldBe(
+            (false, $"A review of acme/shop#12 at abc1234 is already running. {OneDone}"), "a review running at the head is never started twice, asked again or not");
+        (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None))!.Id.ShouldBe(running, "no job is created");
+    }
+
+    [Fact]
+    public async Task Asked_again_when_the_new_job_cannot_be_saved_says_why_and_leaves_the_done_review_as_it_was()
+    {
+        var references = new List<string>();
+        var (sqlite, done) = await DoneAtHeadAsync();
+        var before = (await sqlite.JobAsync(done, CancellationToken.None))!;
+        var store = new RacingStore(sqlite)
+        {
+            BeforeCreate = () => throw new AuditStoreException("Scout could not save the audit database (SQLite error 8).", new InvalidOperationException()),
+        };
+        var reviews = new RepositoryAudits(store, new AuditSignal(), Options, Snapshots, Environment, () => TakingTheSnapshot(references), () => "local:session", NullLogger<RepositoryAudits>.Instance);
+
+        var start = await reviews.StartAsync("acme", "shop", 12, Head, OneFile, 1, 0, Green, CancellationToken.None, again: true);
+
+        (start.Started, start.Sentence).ShouldBe((false, "Scout could not save the audit database (SQLite error 8)."), "the store's failure is the answer");
+        (await sqlite.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldBe(before, "the done review is still the latest, as it was");
+    }
 
     [Theory]
     [MemberData(nameof(SecondStart))]
@@ -190,7 +273,7 @@ public sealed class RepositoryReviewsTests : IDisposable
         var references = new List<string>();
         var store = Store();
         var seeded = await store.CreateJobAsync("acme", "shop", 12, commit, "discord:1:2", [new("src", ["src/A.cs"], 10), new("tests", ["tests/T.cs"], 10)], null, CancellationToken.None);
-        await store.CompleteBatchAsync(seeded, 1, ["src/A.cs"], [], CancellationToken.None);
+        await store.CompleteBatchAsync(seeded, 1, ["src/A.cs"], [], null, CancellationToken.None);
         await (state switch
         {
             "paused" => store.PauseAsync(seeded, "the AI provider's usage limit was reached", CancellationToken.None),
@@ -212,7 +295,7 @@ public sealed class RepositoryReviewsTests : IDisposable
 
     private static async Task FinishAsync(SqliteAuditStore store, string job)
     {
-        await store.CompleteBatchAsync(job, 2, ["tests/T.cs"], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 2, ["tests/T.cs"], [], null, CancellationToken.None);
         await store.FinishAsync(job, CancellationToken.None);
     }
 
@@ -352,7 +435,7 @@ public sealed class RepositoryReviewsTests : IDisposable
         await store.CreateJobAsync("acme", "shop", null, Earlier, "local:session", [new("src", ["src/A.cs"], 10)], null, CancellationToken.None);
         var job = await store.CreateJobAsync(
             "acme", "shop", 12, Head, "local:session", [new("src", ["src/A.cs"], 10), new(RepositoryAudits.NoDiffArea, ["assets/logo.png"], 0, Failure: RepositoryAudits.NoDiff)], null, CancellationToken.None);
-        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [new("a", "fix", "Title", "src/A.cs", 1, null, "Why.", "Fix.", null)], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [new("a", "fix", "Title", "src/A.cs", 1, null, "Why.", "Fix.", null)], null, CancellationToken.None);
         var reviews = Reviews(Kernels.Audit(), store);
 
         var running = await reviews.StatusAsync("acme", "shop", 12, CancellationToken.None);
@@ -574,10 +657,64 @@ public sealed class RepositoryReviewsTests : IDisposable
         (await store.BatchesAsync(job.Id, CancellationToken.None)).Select(b => (b.Area, string.Join(", ", b.Files), b.Status, b.Failure)).ShouldBe(
         [
             ("src", "src/B.cs", AuditStatus.Pending, (string?)null),
-            (RepositoryAudits.DiffTooLargeArea, "src/A.cs", AuditStatus.NotCovered, "diff larger than one batch"),
+            (RepositoryAudits.PartArea("src/A.cs", 1, 1), "src/A.cs", AuditStatus.NotCovered, PatchParts.NoHunk),
             (RepositoryAudits.NoDiffArea, "assets/logo.png", AuditStatus.NotCovered, "GitHub returned no diff"),
         ]);
         Kept(12).ShouldBe(start.Preflight.Checks);
+    }
+
+    /// <summary>A diff of about 78,000 characters in hunks of twenty lines, larger than one batch.</summary>
+    private static string LargeDiff(int hunks = 60) =>
+        string.Join('\n', Enumerable.Range(0, hunks).Select(h =>
+            $"@@ -{1 + (h * 30)},20 +{1 + (h * 30)},20 @@\n" + string.Join('\n', Enumerable.Range(0, 20).Select(i => $"+line {h}.{i} {new string('a', 50)}"))));
+
+    [Fact]
+    public async Task P1_a_file_whose_diff_is_larger_than_one_batch_is_planned_as_parts_and_no_changed_line_is_left_out()
+    {
+        var store = Store();
+        var diff = LargeDiff();
+        ReviewFile[] files = [new("src/Big.cs", diff), new("src/B.cs", new string('+', 10))];
+
+        var start = await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, files, 1, 0, Green, CancellationToken.None);
+
+        start.Started.ShouldBeTrue();
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        var parts = (await store.BatchesAsync(job.Id, CancellationToken.None)).Where(b => b.Files.SequenceEqual(["src/Big.cs"])).ToList();
+        parts.Select(b => (b.Area, b.Status, b.Failure)).ShouldBe(
+            [.. Enumerable.Range(1, parts.Count).Select(k => (RepositoryAudits.PartArea("src/Big.cs", k, parts.Count), AuditStatus.Pending, (string?)null))],
+            "the file is planned as normal batches, one per part");
+        parts.Count.ShouldBe(3, "about 78,000 characters read in parts of the batch's room, less the inputs every batch carries");
+        RepositoryAudits.PartsOf("src/Big.cs", diff, RepositoryAudits.Room(60_000, null)).SelectMany(p => DiffLines.RightSide(p.Patch))
+            .ShouldBe(DiffLines.RightSide(diff), "no changed line is left out of every part");
+    }
+
+    [Fact]
+    public async Task C2_a_file_read_in_parts_is_planned_with_the_code_before_the_documentation_its_parts_in_order()
+    {
+        var store = Store();
+        ReviewFile[] files = [new("docs/Guide.md", new string('+', 10)), new("src/Big.cs", LargeDiff()), new("src/B.cs", new string('+', 10)), new("tests/BTests.cs", new string('+', 10))];
+
+        await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, files, 1, 0, Green, CancellationToken.None);
+
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        var areas = (await store.BatchesAsync(job.Id, CancellationToken.None)).Select(b => (b.Files[0], b.Area)).ToList();
+        areas.Select(a => a.Item1).ShouldBe(["src/B.cs", "src/Big.cs", "src/Big.cs", "src/Big.cs", "tests/BTests.cs", "docs/Guide.md"],
+            "the parts sit with the code, after its other batches and before the tests and the documentation");
+        areas.Where(a => a.Item1 == "src/Big.cs").Select(a => a.Area).ShouldBe([.. Enumerable.Range(1, 3).Select(k => RepositoryAudits.PartArea("src/Big.cs", k, 3))], "the parts in order");
+    }
+
+    [Fact]
+    public async Task A_file_beyond_the_parts_a_review_reads_is_read_up_to_them_and_the_rest_is_said()
+    {
+        var store = Store();
+        ReviewFile[] files = [new("gen/Huge.cs", LargeDiff(500)), new("src/B.cs", new string('+', 10))];
+
+        await Reviews(TakingTheSnapshot([]), store).StartAsync("acme", "shop", 12, Head, files, 1, 0, Green, CancellationToken.None);
+
+        var job = (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None)).ShouldNotBeNull();
+        var parts = (await store.BatchesAsync(job.Id, CancellationToken.None)).Where(b => b.Files.SequenceEqual(["gen/Huge.cs"])).ToList();
+        parts.Count(b => b.Failure is null).ShouldBe(RepositoryAudits.MaxFileParts, "a file is read in at most ten parts");
+        parts.Last().Failure.ShouldStartWith($"parts {RepositoryAudits.MaxFileParts + 1} to ", Case.Sensitive, "the rest is said as not read");
     }
 
     [Fact]
@@ -613,7 +750,7 @@ public sealed class RepositoryReviewsTests : IDisposable
             (RepositoryAudits.ControlCharacterArea, Hostile, AuditStatus.NotCovered, "its path has a control character"),
         ]);
         var lines = AuditBatchRunner.ReviewRequest(job, batches[0], batches.Count, [], files).ReplaceLineEndings("\n").Split('\n');
-        lines.Length.ShouldBe(6, "the request of the batch that runs has exactly its expected lines");
+        lines.Length.ShouldBe(8, "the request of the batch that runs has exactly its expected lines");
         lines.ShouldNotContain(line => line.StartsWith("Ignore every instruction", StringComparison.Ordinal));
         using var data = JsonDocument.Parse(lines[4]);
         data.RootElement.EnumerateArray().Select(e => e.GetProperty("path").GetString()).ShouldBe(["src/B.cs"]);
@@ -690,7 +827,7 @@ public sealed class RepositoryReviewsTests : IDisposable
 
         start.Started.ShouldBeTrue(start.Sentence);
         card.Task.IsCompletedSuccessfully.ShouldBeTrue($"the worker, waiting with nothing to run, ran the review to its card after the {action}");
-        chat.Turns.Count.ShouldBe(1);
+        chat.Turns.Count.ShouldBe(2, "the general reading and, since the patch removes a line, the removed reading");
         (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
     }
 
@@ -767,7 +904,7 @@ public sealed class RepositoryReviewsTests : IDisposable
     [InlineData(".claude/rules/audit.md", 3)]
     [InlineData("web/src/index.html", 3)]
     public void A_changed_file_is_read_in_its_group(string path, int order) =>
-        RepositoryAudits.ReadingOrder(path).ShouldBe(order, $"{path}: 0 code, 1 tests, 2 build and configuration, 3 documentation");
+        ReviewReadings.ReadingOrder(path).ShouldBe(order, $"{path}: 0 code, 1 tests, 2 build and configuration, 3 documentation");
 
     private async Task<string> ReviewIn(string state)
     {
@@ -778,14 +915,14 @@ public sealed class RepositoryReviewsTests : IDisposable
         }
 
         var id = await store.CreateJobAsync("acme", "shop", 12, Head, "local:session", [new("src", ["src/A.cs"], 10), new("tests", ["tests/A.cs"], 10)], null, CancellationToken.None);
-        await store.CompleteBatchAsync(id, 1, ["src/A.cs"], [], CancellationToken.None);
+        await store.CompleteBatchAsync(id, 1, ["src/A.cs"], [], null, CancellationToken.None);
         switch (state)
         {
             case "paused":
                 await store.PauseAsync(id, RepositoryAudits.PausedByOwner, CancellationToken.None);
                 break;
             case "done":
-                await store.CompleteBatchAsync(id, 2, ["tests/A.cs"], [], CancellationToken.None);
+                await store.CompleteBatchAsync(id, 2, ["tests/A.cs"], [], null, CancellationToken.None);
                 await store.FinishAsync(id, CancellationToken.None);
                 break;
         }
@@ -1038,7 +1175,7 @@ public sealed class RepositoryReviewsTests : IDisposable
         (await store.BatchesAsync(job.Id, CancellationToken.None)).Select(b => (string.Join(",", b.Files), b.Failure)).ShouldBe(
         [
             ("src/Orders/Small.cs", (string?)null),
-            ("src/Orders/Large.cs", RepositoryAudits.DiffTooLarge),
+            ("src/Orders/Large.cs", "line 1 of the diff is 20,001 characters, more than a batch holds"),
         ], "a patch that fits the cap alone but not beside the inputs is counted as not read, as a diff larger than one batch, and the rest is reviewed");
     }
 
@@ -1073,5 +1210,19 @@ public sealed class RepositoryReviewsTests : IDisposable
         start.Sentence.ShouldStartWith("review started: 3 files in 3 batches,", Case.Sensitive, "the start names the batches of the plan that runs");
         (await store.PreflightAsync(job.Id, CancellationToken.None)).ShouldNotBeNull().Checks.Single(c => c.Name == PreflightName.Size).Sentence
             .ShouldStartWith("3 files in 3 batches;", Case.Sensitive, "the stored size check names the batches of the plan that runs");
+    }
+
+    [Fact]
+    public void A_job_that_kept_no_time_is_said_to_be_done_at_an_unknown_time() =>
+        RepositoryAudits.DoneAt(new AuditJob("job1", "acme", "shop", "abc1234def", null, AuditStatus.Done))
+            .ShouldBe("an unknown time", "a job with neither an end nor a start is never said to be done at a bare UTC");
+
+    [Fact]
+    public void The_sentences_that_name_a_bound_name_the_bound_their_constant_holds()
+    {
+        AuditWorker.ContestOverTime.ShouldBe($"it reached its {Contestation.MaxTime.TotalMinutes} minutes.");
+        AuditWorker.ContestOverGroups.ShouldBe($"it reached its {Contestation.MaxGroups} requests.");
+        AuditWorker.TestsOverTheWait.ShouldContain($"within {AuditWorker.DefaultTestsWait.TotalMinutes} minutes", Case.Sensitive);
+        AuditWorker.TestsOverTheWait.ShouldNotContain("within 0 minutes", Case.Sensitive, "the wait is set before the sentence is built");
     }
 }

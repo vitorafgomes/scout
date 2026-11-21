@@ -16,6 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Scout.Conversation\Scout.Conversation.csproj" />
+    <ProjectReference Include="..\Scout.Review\Scout.Review.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Plugin.GitHub.Tests" />

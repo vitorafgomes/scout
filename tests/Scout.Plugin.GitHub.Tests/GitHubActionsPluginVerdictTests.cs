@@ -5,6 +5,7 @@ using NSubstitute.ExceptionExtensions;
 using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
 using Scout.Plugin.GitHub.Tests.Fakes;
+using Scout.Review;
 
 namespace Scout.Plugin.GitHub.Tests;
 
@@ -63,34 +64,67 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     }
 
     [Fact]
-    public async Task Approve_Posts_An_Approving_Review_With_The_Composed_Note_And_The_Comments_On_The_Diff()
+    public async Task V2_An_Approval_Sent_With_Only_Optional_Suggestions_Is_Refused_Before_Any_Write()
     {
-        _handler.EnqueueJson(HttpStatusCode.OK, """{"id":88,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-88"}""");
+        var message = await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", Suggestions, "abc1234", CancellationToken.None));
 
-        var result = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", Findings, "abc1234", CancellationToken.None);
-
-        result.ShouldBe("Approved octocat/hello#42 with 1 comment(s): https://github.com/octocat/hello/pull/42#pullrequestreview-88 Dropped, not on a line of the diff: src/Other.cs:1.");
-        _handler.LastRequest!.RequestUri!.ToString().ShouldBe("https://api.github.com/repos/octocat/hello/pulls/42/reviews");
-        var sent = await Sent();
-        sent.GetProperty("event").GetString().ShouldBe("APPROVE");
-        sent.GetProperty("body").GetString()!.ShouldStartWith("### :robot: Scout review: approved\n", customMessage: "the body is the note Scout composed");
-        var comment = sent.GetProperty("comments").EnumerateArray().ShouldHaveSingleItem();
-        (comment.GetProperty("path").GetString(), comment.GetProperty("line").GetInt32(), comment.GetProperty("body").GetString())
-            .ShouldBe(("src/Checkout.cs", 3, ":no_entry: **Blocking** · c is new\n\n**What is wrong:** Why.\n\n**Proposed fix:** Fix."));
+        message.ShouldBe($"{GitHubActionsPlugin.NotOffered} Comment, not approve: 2 optional suggestions were kept and no test ran here and no check of the pull request runs them.", "suggestions offer a comment, never an approval");
+        _handler.LastRequest.ShouldBeNull("nothing is sent");
     }
 
     [Fact]
-    public async Task Approve_Is_Sent_When_Every_Check_Passed_A_Skipped_And_A_Neutral_One_Counting_As_Passed()
+    public async Task A_Request_For_Changes_With_No_Finding_Is_Refused_Before_Any_Write()
+    {
+        var message = await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None));
+
+        message.ShouldBe(GitHubActionsPlugin.NothingToChange, "a request for changes needs a finding that needs changing");
+        _handler.LastRequest.ShouldBeNull("nothing is sent");
+    }
+
+    private const string OneFindingJson = """[{"id":"a","severity":"fix","title":"c is new","path":"src/Checkout.cs","line":3,"why":"Why.","fix":"Fix."}]""";
+
+    private static readonly Scout.Review.Finding[] OneFinding = [new("a", "fix", "c is new", "src/Checkout.cs", 3, null, "Why.", "Fix.", null)];
+
+    private const string Suggestions = """[{"id":"a","severity":"nit","title":"c is new","path":"src/Checkout.cs","line":3,"why":"Why.","fix":"Fix."},{"id":"b","severity":"nit","title":"not in the PR","path":"src/Other.cs","line":1,"why":"Why.","fix":"Fix."}]""";
+
+    [Theory]
+    [InlineData("block", "Request changes: 1 finding needs fixing.")]
+    [InlineData("fix", "Request changes: 1 finding needs fixing.")]
+    public async Task V6_An_Approval_Sent_With_A_Confirmed_Finding_That_Needs_Fixing_Is_Refused_Before_Any_Write(string severity, string reason)
+    {
+        var findings = $$"""[{"id":"a","severity":"{{severity}}","title":"c is new","path":"src/Checkout.cs","line":3,"why":"Why.","fix":"Fix."}]""";
+
+        var message = await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", findings, "abc1234", CancellationToken.None));
+
+        message.ShouldBe($"{GitHubActionsPlugin.NotOffered} {reason}", "the gate refuses an approval the one decision does not offer, and says why");
+        _handler.LastRequest.ShouldBeNull("nothing is sent");
+    }
+
+    [Fact]
+    public async Task V6_An_Approval_With_An_Unconfirmed_Finding_Is_Refused_And_Request_Changes_With_Findings_Is_Still_Allowed()
+    {
+        const string Unconfirmed = """[{"id":"a","severity":"fix","title":"Unconfirmed: c is new","path":"src/Checkout.cs","line":3,"why":"Why.","fix":"Fix."}]""";
+
+        (await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", Unconfirmed, "abc1234", CancellationToken.None)))
+            .ShouldBe($"{GitHubActionsPlugin.NotOffered} Comment, not approve: 1 finding could not be confirmed and no test ran here and no check of the pull request runs them.", "an unconfirmed finding offers a comment, never approval");
+
+        _handler.EnqueueJson(HttpStatusCode.OK, """{"id":89,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-89"}""");
+        (await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None))
+            .ShouldStartWith("Requested changes on octocat/hello#42", Case.Sensitive, "a request for changes the owner chooses is still sent");
+    }
+
+    [Fact]
+    public async Task Approve_Is_Refused_On_Its_Own_And_Says_Every_Check_Passed_A_Skipped_And_A_Neutral_One_Counting_As_Passed()
     {
         Checks(
             [Check("build", "completed", "success"), Check("CodeRabbit", "completed", "skipped"), Check("lint", "completed", "neutral")],
             [Check("ci/status", "completed", "success")]);
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":88,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-88"}""");
 
-        var result = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None);
+        var result = await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None));
 
-        result.ShouldStartWith("Approved octocat/hello#42");
-        (await Sent()).GetProperty("event").GetString().ShouldBe("APPROVE");
+        result.ShouldBe($"{GitHubActionsPlugin.NotOffered} {"Comment, not approve: every changed file was read, nothing needs fixing, and every check passed, which covers the tests, since no test ran here. " + ReviewOffers.NotOnItsOwn}", "a skipped and a neutral check count as passed, and Scout still approves nothing on its own");
+        _handler.LastRequest.ShouldBeNull("nothing is sent");
     }
 
     [Fact]
@@ -144,12 +178,12 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
         Checks([Check("build", "in_progress", null), Check("lint", "completed", "failure")]);
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":89,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-89"}""");
 
-        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None);
+        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None);
 
         var sent = await Sent();
         sent.GetProperty("event").GetString().ShouldBe("REQUEST_CHANGES");
         sent.GetProperty("body").GetString()!.Split('\n')[2].ShouldBe(
-            "> :x: **Changes requested** · checks: 0 of 2 passed · findings: 0 blocking, 0 to fix, 0 optional",
+            "> :x: **Changes requested** · checks: 0 of 2 passed · findings: 1 blocking, 1 to fix, 0 optional",
             "running and failing checks never refuse a request for changes, and its note counts them");
     }
 
@@ -209,14 +243,14 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     }
 
     [Fact]
-    public async Task Approve_On_A_Pull_Request_GitHub_Says_Can_Be_Merged_Is_Sent()
+    public async Task Approve_On_A_Pull_Request_GitHub_Says_Can_Be_Merged_Passes_The_Merge_Checks_And_Is_Refused_On_Its_Own()
     {
         Head(mergeable: true, "clean");
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":90,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-90"}""");
 
-        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None);
+        var message = await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None));
 
-        (await Sent()).GetProperty("event").GetString().ShouldBe("APPROVE", "a pull request that can be merged is approved");
+        message.ShouldStartWith(GitHubActionsPlugin.NotOffered, Case.Sensitive, "a pull request that can be merged passes the merge checks, and Scout still approves nothing on its own");
     }
 
     [Theory]
@@ -227,7 +261,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
         Head(mergeable, mergeableState);
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":89,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-89"}""");
 
-        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None);
+        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None);
 
         (await Sent()).GetProperty("event").GetString().ShouldBe("REQUEST_CHANGES", "requesting changes is not held back by a conflict");
     }
@@ -237,9 +271,9 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     {
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":89,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-89"}""");
 
-        var result = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None);
+        var result = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None);
 
-        result.ShouldBe("Requested changes on octocat/hello#42 with 0 comment(s): https://github.com/octocat/hello/pull/42#pullrequestreview-89");
+        result.ShouldStartWith("Requested changes on octocat/hello#42 with 1 comment(s): https://github.com/octocat/hello/pull/42#pullrequestreview-89", Case.Sensitive);
         (await Sent()).GetProperty("event").GetString().ShouldBe("REQUEST_CHANGES");
     }
 
@@ -261,7 +295,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
         _reads.GetSignedInLoginAsync(Arg.Any<CancellationToken>()).Returns("alice");
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":90,"html_url":"u"}""");
 
-        var result = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None);
+        var result = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None);
 
         result.ShouldStartWith("Requested changes on octocat/hello#42");
     }
@@ -308,7 +342,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     {
         _handler.EnqueueJson(status, reply);
 
-        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None));
+        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None));
 
         ex.Message.ShouldBe(sentence);
         ex.Outcome.ShouldBe(outcome);
@@ -319,7 +353,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     {
         _handler.EnqueueThrow(new TaskCanceledException("timed out"));
 
-        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None));
+        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None));
 
         ex.Message.ShouldBe("GitHub request timed out. Try again later." + GitHubActionsPlugin.MayAlreadyBePosted);
     }
@@ -329,7 +363,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     {
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":91,"html_url":"u"}""");
 
-        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "[]", "abc1234", CancellationToken.None);
+        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None);
 
         (await Sent()).GetProperty("commit_id").GetString().ShouldBe("abc1234");
     }
@@ -359,19 +393,19 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
         _reads.ListReviewsAsync("octocat", "hello", 42, Arg.Any<CancellationToken>()).Returns(new List<PullRequestReview>
         {
             new(4, "octocat", "APPROVED", "0000000", "https://github.com/octocat/hello/pull/42#pullrequestreview-4"),
-            new(5, "octocat", "APPROVED", "abc1234", "https://github.com/octocat/hello/pull/42#pullrequestreview-5", "note\n\n" + ReviewNote.Marker(ReviewNote.Digest(ReviewNote.Approve, [], null, null, null))),
+            new(5, "octocat", "CHANGES_REQUESTED", "abc1234", "https://github.com/octocat/hello/pull/42#pullrequestreview-5", "note\n\n" + ReviewNote.Marker(ReviewNote.Digest(ReviewNote.RequestChanges, OneFinding, null, null, null))),
         });
 
-        var answer = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None);
+        var answer = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", OneFindingJson, "abc1234", CancellationToken.None);
 
-        answer.ShouldBe("Approved octocat/hello#42 already, at this commit: https://github.com/octocat/hello/pull/42#pullrequestreview-5");
+        answer.ShouldBe("Requested changes on octocat/hello#42 already, at this commit: https://github.com/octocat/hello/pull/42#pullrequestreview-5");
         _handler.LastRequest.ShouldBeNull();
     }
 
     [Theory]
     [InlineData("alice", "APPROVED", "abc1234")]
-    [InlineData("octocat", "CHANGES_REQUESTED", "abc1234")]
-    [InlineData("octocat", "APPROVED", "0000000")]
+    [InlineData("octocat", "APPROVED", "abc1234")]
+    [InlineData("octocat", "CHANGES_REQUESTED", "0000000")]
     [InlineData("octocat", "DISMISSED", "abc1234")]
     public async Task Another_Reviewer_Another_Event_Or_Another_Commit_Does_Not_Stop_The_Verdict(string login, string state, string commit)
     {
@@ -379,9 +413,9 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
             .Returns(new List<PullRequestReview> { new(5, login, state, commit, "u") });
         _handler.EnqueueJson(HttpStatusCode.OK, """{"id":92,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-92"}""");
 
-        var answer = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None);
+        var answer = await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None);
 
-        answer.ShouldStartWith("Approved octocat/hello#42 with 0 comment(s): https://github.com/octocat/hello/pull/42#pullrequestreview-92");
+        answer.ShouldStartWith("Requested changes on octocat/hello#42 with 1 comment(s): https://github.com/octocat/hello/pull/42#pullrequestreview-92", Case.Sensitive);
     }
 
     [Theory]
@@ -391,7 +425,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     {
         _reads.ListReviewsAsync("octocat", "hello", 42, Arg.Any<CancellationToken>()).ThrowsAsync(new GitHubApiException(sentence, status));
 
-        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None));
+        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None));
 
         (ex.Message, ex.Outcome).ShouldBe((sentence, outcome));
         _handler.LastRequest.ShouldBeNull();
@@ -402,7 +436,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
     {
         _reads.ListReviewsAsync("octocat", "hello", 42, Arg.Any<CancellationToken>()).ThrowsAsync(new TaskCanceledException("timed out"));
 
-        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "[]", "abc1234", CancellationToken.None));
+        var ex = await Should.ThrowAsync<WriteFailedException>(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", Findings, "abc1234", CancellationToken.None));
 
         ex.Message.ShouldBe("GitHub request timed out. Try again later.");
         _handler.LastRequest.ShouldBeNull();
@@ -440,5 +474,16 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
         description.ShouldContain("queued for the owner's approval, an Approve card waiting in the chat and in Approvals of Scout Desktop, and sent only after the owner approves it");
         description.ShouldContain("Never call it again for the same");
         description.ShouldNotContain("URL");
+    }
+
+    [Fact]
+    public void With_no_test_run_kept_the_reason_never_says_the_tests_passed()
+    {
+        PullRequestCheck[] passed = [new("build", "completed", "success", "https://github.com/octocat/hello/runs/1")];
+
+        var offer = GitHubActionsPlugin.OfferFor([], new NoteExtras(2, 2, null), null, passed);
+
+        offer.Reason.ShouldNotContain("the tests passed", Case.Sensitive, "with no test run kept, the reason never says the tests passed");
+        offer.Reason.ShouldContain("no test ran here", Case.Sensitive, "it says no test ran here, in the decision's words");
     }
 }

@@ -1,3 +1,5 @@
+using Scout.Review;
+
 namespace Scout.Audit.Tests;
 
 public sealed class ReviewInputsTests : IDisposable
@@ -18,22 +20,36 @@ public sealed class ReviewInputsTests : IDisposable
     private static ReviewRules NoRules => new([], [], false);
 
     [Fact]
-    public void A_description_and_an_issue_body_are_cut_at_4000_characters_and_say_so()
+    public void A_description_is_cut_at_16000_characters_and_an_issue_body_at_4000_and_each_says_so()
     {
         var longer = new ReviewPurpose(
-            new string('t', 301), new string('d', 4_001), 42, new string('i', 301), new string('b', 5_000));
-        var atTheBound = new ReviewPurpose(new string('t', 300), new string('d', 4_000), 42, "Checkout fails", new string('b', 4_000));
-        var splitPair = new ReviewPurpose("Checkout", new string('d', 3_999) + "\uD83D\uDE00" + "d");
+            new string('t', 301), new string('d', 16_001), 42, new string('i', 301), new string('b', 5_000));
+        var atTheBound = new ReviewPurpose(new string('t', 300), new string('d', 16_000), 42, "Checkout fails", new string('b', 4_000));
+        var splitPair = new ReviewPurpose("Checkout", new string('d', 15_999) + "\uD83D\uDE00" + "d");
 
         var cut = ReviewInputs.Bound(longer);
         var kept = ReviewInputs.Bound(atTheBound);
 
         (cut.Title.Length, cut.Description!.Length, cut.IssueTitle!.Length, cut.IssueBody!.Length).ShouldBe(
-            (300, 4_000, 300, 4_000), "a title and an issue title are cut at 300 characters, a description and an issue body at 4000");
+            (300, 16_000, 300, 4_000), "a title and an issue title are cut at 300 characters, a description at 16000, the length it is read at, and an issue body at 4000");
         (cut.DescriptionCut, cut.IssueBodyCut).ShouldBe((true, true), "a description or an issue body Scout cut says so");
         (cut.Issue, cut.IssueUnread).ShouldBe(((int?)42, false), "bounding keeps the issue's number and its read state");
         kept.ShouldBe(atTheBound, "a purpose within its bounds is kept as it was given, and says nothing was cut");
-        ReviewInputs.Bound(splitPair).Description.ShouldBe(new string('d', 3_999), "a cut never splits a surrogate pair");
+        ReviewInputs.Bound(splitPair).Description.ShouldBe(new string('d', 15_999), "a cut never splits a surrogate pair");
+        (PullRequestDescription.MaxLength, ReviewInputs.MaxIssueBody).ShouldBe((16_000, 4_000), "the job keeps the description at the length Scout reads it");
+    }
+
+    [Fact]
+    public void The_sentence_before_the_purpose_says_the_bounds_the_job_keeps()
+    {
+        AuditBatchRunner.PurposeIsData.ShouldContain(
+            $"cut the description, at {PullRequestDescription.MaxLength.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} characters",
+            Case.Sensitive,
+            "the model is told the description's bound as it is");
+        AuditBatchRunner.PurposeIsData.ShouldContain(
+            $"cut the issue's body, at {ReviewInputs.MaxIssueBody.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} characters",
+            Case.Sensitive,
+            "the model is told the issue body's bound as it is");
     }
 
     [Fact]
@@ -262,6 +278,29 @@ public sealed class ReviewInputsTests : IDisposable
         removed.For(["src/Legacy/Export.cs", "tests/Shop.Tests/CartTests.cs"]).Select(e => e.Path).ShouldBe(
             ["tests/Shop.Tests/CartTests.cs", "src/Legacy/Export.cs"], "a batch is handed the removals of its own files");
         removed.For(["src/Shop/Export.cs"]).ShouldBeEmpty("a deleted file that is not a test is handed only to its own batch");
+    }
+
+    [Fact]
+    public void The_owner_is_told_when_the_description_or_the_issue_body_was_cut_and_how_much_was_read()
+    {
+        string N(int value) => value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        var stored = ReviewInputs.Bound(new ReviewPurpose("Checkout", new string('d', 20_000)));
+        var sentOnly = ReviewInputs.Bound(new ReviewPurpose("Checkout", new string('d', 12_000)));
+        var issue = ReviewInputs.Bound(new ReviewPurpose("Checkout", "Short.", 7, "Cart", new string('b', 5_000)));
+        var both = ReviewInputs.Bound(new ReviewPurpose("Checkout", new string('d', 20_000), 7, "Cart", new string('b', 5_000)));
+        var keptBefore = new ReviewPurpose("Checkout", new string('d', 4_000), DescriptionCut: true);
+        string? Note(ReviewPurpose purpose) => new ReviewInputs(purpose, NoRules, NoRemovals).Notes().SingleOrDefault();
+        int Read(ReviewPurpose purpose) => AuditBatchRunner.SentPurpose(purpose).Description!.Length;
+
+        Note(stored).ShouldBe($"Scout read the pull request's description up to {N(Read(stored))} of its 20,000 characters.", "a description cut for storing and for sending says how much of it was read");
+        Read(stored).ShouldBeLessThan(10_000, "what is read is what was sent");
+        Note(sentOnly).ShouldBe($"Scout read the pull request's description up to {N(Read(sentOnly))} of its 12,000 characters.", "a description cut only for sending says so too");
+        Note(issue).ShouldBe("Scout read the linked issue's body up to 4,000 of its 5,000 characters.", "an issue body cut for storing says so");
+        Note(both).ShouldBe(
+            $"Scout read the pull request's description up to {N(Read(both))} of its 20,000 characters and the linked issue's body up to {N(AuditBatchRunner.SentPurpose(both).IssueBody!.Length)} of its 5,000 characters.",
+            "both cuts are one note");
+        Note(keptBefore).ShouldBe("Scout read the pull request's description up to 4,000 characters; the rest was not kept.", "a review kept before the length was kept says what it can");
+        Note(ReviewInputs.Bound(new ReviewPurpose("Checkout", new string('d', 5_000)))).ShouldBeNull("a description read whole needs no note");
     }
 
     [Fact]

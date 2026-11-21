@@ -64,7 +64,7 @@ public sealed class GitHubActionExecutorSecretsTests : IDisposable
         var gate = new Gate();
         var logger = new Recorder();
         var executor = new GitHubActionExecutor(gate, gate, _provider.GetRequiredService<GitHubVerdictRunner>(), _provider.GetRequiredService<GitHubWriteRunner>(), TimeProvider.System, logger);
-        const string payload = $$"""{"owner":"octocat","repo":"hello","number":42,"verdict":"approve","findings":[],"commit":"{{Sha}}","testsLine":"Tests: 3 passed."}""";
+        const string payload = $$"""{"owner":"octocat","repo":"hello","number":42,"verdict":"request_changes","findings":[{"id":"a","severity":"fix","title":"t","path":"src/A.cs","line":1,"why":"Why.","fix":"Fix."}],"commit":"{{Sha}}","testsLine":"Tests: 3 passed."}""";
         gate.Claims.Enqueue(new ApprovedAction("act-1", "github", "Pull request verdicts", "octocat/hello#42", "s") { Payload = payload });
         gate.Claims.Enqueue(new ApprovedAction("act-2", "github", "Pull request verdicts", "octocat/hello#42", "s") { Payload = payload.Replace(Sha, "fedcba9", StringComparison.Ordinal) });
         gate.Claims.Enqueue(new ApprovedAction("act-3", "github", "Pull request verdicts", "octocat/hello#42", "s") { Payload = payload });

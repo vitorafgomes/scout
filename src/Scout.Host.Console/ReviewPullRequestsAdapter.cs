@@ -17,4 +17,7 @@ internal sealed class ReviewPullRequestsAdapter(IGitHubClient client) : IReviewP
 
     public async Task<string?> HeadAsync(string owner, string repo, int number, CancellationToken ct) =>
         await client.GetPullRequestHeadAsync(owner, repo, number, ct).ConfigureAwait(false) is { Sha.Length: > 0 } head ? head.Sha : null;
+
+    public async Task<Scout.Review.OfferChecks?> ChecksAsync(string owner, string repo, string sha, CancellationToken ct) =>
+        Scout.Plugin.GitHub.PullRequestChecks.Offer(await Scout.Plugin.GitHub.PullRequestChecks.ReadAsync(client, owner, repo, sha, ct).ConfigureAwait(false));
 }

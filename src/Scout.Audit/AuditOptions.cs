@@ -9,6 +9,14 @@ public sealed class AuditOptions
     /// <summary>Configuration section bound to these options.</summary>
     public const string Section = "Scout:Audit";
 
+    /// <summary>
+    /// True to record each review turn for diagnosis: one JSON-lines file per batch and reading, and one per group of the
+    /// second reading, under <c>audit/&lt;job&gt;</c> in Scout's own data folder, wherever <see cref="DbPath"/> puts the
+    /// database; off by default. The environment variable
+    /// <c>Scout__Audit__RecordTurns=true</c> sets it.
+    /// </summary>
+    public bool RecordTurns { get; set; }
+
     /// <summary>The SQLite file of the jobs; empty for <c>Scout/audit.db</c> under the user's local application data.</summary>
     public string DbPath { get; set; } = string.Empty;
 

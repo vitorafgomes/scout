@@ -140,7 +140,7 @@ public sealed class RepositoryAuditsTests : IDisposable
         });
         var store = Store();
         var job = await store.CreateJobAsync("acme", "shop", null, Sha, "discord:1:2", [new("src", ["src/A.cs"], 10), new("tests", ["tests/T.cs"], 10)], null, CancellationToken.None);
-        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [], null, CancellationToken.None);
         await store.PauseAsync(job, "the AI provider's usage limit was reached", CancellationToken.None);
         var signal = new AuditSignal();
 
@@ -199,7 +199,7 @@ public sealed class RepositoryAuditsTests : IDisposable
     {
         var store = Store();
         var job = await store.CreateJobAsync("acme", "shop", null, Sha, "local:session", [new("src", ["src/A.cs"], 10), new("tests", ["tests/T.cs"], 10)], null, CancellationToken.None);
-        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [new("a", "fix", "Title", "src/A.cs", 1, null, "Why.", "Fix.", null)], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [new("a", "fix", "Title", "src/A.cs", 1, null, "Why.", "Fix.", null)], null, CancellationToken.None);
 
         var answer = await Audits(Kernels.Audit(), store).StatusAsync("acme", "shop", CancellationToken.None);
 
@@ -386,7 +386,7 @@ public sealed class RepositoryAuditsTests : IDisposable
         }
 
         var job = await store.CreateJobAsync("acme", "shop", null, Sha, "discord:1:2", [new("src", ["src/A.cs"], 10), new("tests", ["tests/T.cs"], 10)], null, CancellationToken.None);
-        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [new("a", "fix", "Title", "src/A.cs", 1, null, "Why.", "Fix.", null)], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, ["src/A.cs"], [new("a", "fix", "Title", "src/A.cs", 1, null, "Why.", "Fix.", null)], null, CancellationToken.None);
         var settled = state switch
         {
             "running, a batch in progress" => store.BeginBatchAsync(job, 2, CancellationToken.None),
@@ -401,7 +401,7 @@ public sealed class RepositoryAuditsTests : IDisposable
 
     private static async Task FinishAsync(SqliteAuditStore store, string job)
     {
-        await store.CompleteBatchAsync(job, 2, ["tests/T.cs"], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 2, ["tests/T.cs"], [], null, CancellationToken.None);
         await store.FinishAsync(job, CancellationToken.None);
     }
 
