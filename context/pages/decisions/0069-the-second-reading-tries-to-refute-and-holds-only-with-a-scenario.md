@@ -1,9 +1,9 @@
 ---
 title: "ADR 0069 - The second reading tries to refute, and holds a finding only with a scenario"
-version: "1.1"
+version: "1.2"
 date: 2026-11-21
 updated: 2026-11-21
-changes: "v1.1 (2026-11-21): amended with the noted outcome and the check of a cited place. v1.0: the decision as first written"
+changes: "v1.2 (2026-11-21): a cited name resolved to one file before it is judged; the card names the findings not read again. v1.1 (2026-11-21): amended with the noted outcome and the check of a cited place. v1.0: the decision as first written"
 page_type: adr
 status: accepted
 description: "Before the card, each finding is read again by a model turn told to refute it, offered three read-only functions held to the job's repository at the head; holds needs a concrete scenario, the severity follows a written rule in which block needs a named reason, and a failure of this reading never weakens or removes a finding."
@@ -76,3 +76,14 @@ Seen on a repository Scout had never reviewed: the second reading refuted three 
 - **The cited place** (`Contestation.Checked`, `src/Scout.Review/Contestation.cs:356`; read in the worker by `Checked`, `src/Scout.Audit/AuditWorker.Reviews.cs:768`). A refutation or a note whose reason cites a file and line (`path:N`, `path#LN`, `path line N`) that the job's snapshot does not hold, a missing file or a file with fewer lines, is uncertain. Only that the place exists is checked, never what it says. Each cited file is read once per answer from the snapshot, by the same reader the code around a finding uses, within the snapshot and at most 1 MB; with no snapshot nothing is checked.
 - **Stored.** `noted` is a state of its own in the findings' text column, with its reason; no migration. The turn table's counts of holds, refuted and uncertain gain no noted column: it would need a migration, and was left.
 - **Held by** `tests/Scout.Review.Tests/ContestationTests.cs:228` to `:287`, `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:1705`, `:1724` and `:1735`, and `tests/Scout.Audit.Tests/FindingsBlockTests.cs:79`.
+
+### 2026-11-21: a cited name is resolved to one file before it is judged
+
+Seen on real pull requests: nine refutations and notes were made uncertain because they cited a file by its name alone, often the finding's own file at the finding's own line; the check looked for that name as a path from the root and called it unreal. The check above is replaced as follows.
+
+- **Resolving the name** (`Contestation.Resolve`, `src/Scout.Review/Contestation.cs:380`), in this order: the name as a path from the root, when the snapshot holds it; the finding's own path, when the name is that path or a trailing part of it at a folder boundary; the one changed file of the review whose path ends with the name at a folder boundary. The snapshot itself is not listed: no reader of it lists the tree cheaply, so resolution stops at the changed files.
+- **Judging** (`Contestation.Checked`, `:357`; the worker's `Checked`, `src/Scout.Audit/AuditWorker.Reviews.cs:770`, handed the finding's path and the files of the review's batches). Only a citation that resolves to one file is judged, and it is unreal only when that file has fewer lines than the line cited; the reason to the owner names the file as resolved. A name that resolves to no file or to more than one is no evidence, and the outcome stands as the model gave it. A path with folders that resolves to nothing stands too: without a listing of the snapshot it may still be a real file elsewhere in the tree, and the check must never destroy a good reading on a guess.
+- **The instructions** ask for the file by its path from the repository's root, in the reason and in the scenario, so most citations resolve at the first step. A long path takes room in the 300 characters of a reason; a reason past them is cut on a word and its entry stays valid, and a citation the cut breaks is not read as one, so the outcome stands.
+- **The findings not read again.** A finding the second reading gave no readable answer for stays as the first reading gave it, as before; the card's note on it now names the findings after the reason ("Kept as the first reading gave it: <title>"), within the note's bound.
+- **Held by** `tests/Scout.Review.Tests/ContestationTests.cs:290` and `:304`, and `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:1731` and `:1742`.
+

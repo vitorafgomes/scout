@@ -279,10 +279,10 @@ public static partial class Contestation
     /// The card's notes on the second reading: one line per group that refuted findings, naming the first one's title and
     /// reason, at most <see cref="MaxRefutedNotes"/> and then one line counting the others; one line on the findings that
     /// could not be confirmed; one line on the findings kept as notes; one line per reason the second reading did not run for
-    /// some findings.
+    /// some findings, naming their titles after the reason, within the note's bound.
     /// </summary>
     public static IReadOnlyList<string> Notes(
-        IReadOnlyList<(int Refuted, string Title, string Reason)> refutedGroups, int uncertain, IReadOnlyList<(int Findings, string Reason)> notContested, int severitiesChanged = 0, int noted = 0)
+        IReadOnlyList<(int Refuted, string Title, string Reason)> refutedGroups, int uncertain, IReadOnlyList<(int Findings, string Reason, IReadOnlyList<string> Titles)> notContested, int severitiesChanged = 0, int noted = 0)
     {
         var refuted = ReviewNotes.Capped(
             [.. refutedGroups.Where(g => g.Refuted > 0).Select(g => ReviewNotes.Cut(string.Create(
@@ -314,7 +314,7 @@ public static partial class Contestation
         }
 
         notes.AddRange(notContested.Where(n => n.Findings > 0).Select(n => ReviewNotes.Cut(string.Create(
-            CultureInfo.InvariantCulture, $"Scout's second reading did not run for {Findings(n.Findings)}: {n.Reason}"))));
+            CultureInfo.InvariantCulture, $"Scout's second reading did not run for {Findings(n.Findings)}: {n.Reason}{(n.Titles.Count == 0 ? string.Empty : $" Kept as the first reading gave {(n.Titles.Count == 1 ? "it" : "them")}: {string.Join("; ", n.Titles)}.")}"))));
         return notes;
     }
 
@@ -349,26 +349,50 @@ public static partial class Contestation
 
     /// <summary>
     /// <paramref name="outcome"/> with its citations checked: a refutation or a note whose reason cites a file and line
-    /// (<see cref="Cited"/>) that <paramref name="lines"/> says the head does not hold, a missing file or a file with fewer
-    /// lines, is <see cref="ContestStatus.Uncertain"/>; any other outcome as it is. Only that the place exists is checked,
-    /// never what it says.
+    /// (<see cref="Cited"/>) that resolves to one file (<see cref="Resolve"/>) with fewer lines than the line cited is
+    /// <see cref="ContestStatus.Uncertain"/>, its reason naming the file as resolved; a cited name that resolves to no file
+    /// or to more than one is no evidence, and the outcome stands; any other outcome as it is. Only that the line exists is
+    /// checked, never what it says.
     /// </summary>
-    public static ContestOutcome Checked(ContestOutcome outcome, Func<string, int?> lines)
+    public static ContestOutcome Checked(ContestOutcome outcome, string findingPath, IReadOnlyCollection<string> changed, Func<string, int?> lines)
     {
         if (outcome.Status is not (ContestStatus.Refuted or ContestStatus.Noted))
         {
             return outcome;
         }
 
-        foreach (var (path, line) in Cited(outcome.Reason))
+        foreach (var (cited, line) in Cited(outcome.Reason))
         {
-            if (lines(path) is not { } count || line > count)
+            if (Resolve(cited, findingPath, changed, lines) is { } file && line > lines(file))
             {
-                return new ContestOutcome(ContestStatus.Uncertain, CitesNothingReal(path, line));
+                return new ContestOutcome(ContestStatus.Uncertain, CitesNothingReal(file, line));
             }
         }
 
         return outcome;
+    }
+
+    /// <summary>
+    /// The one file a cited name stands for, tried in this order: the name as a path from the root, when the head holds it;
+    /// the finding's own path, when the name is that path or a trailing part of it at a folder boundary; the one changed
+    /// file whose path ends with the name at a folder boundary. Null when none of these holds, or when two changed files do.
+    /// </summary>
+    public static string? Resolve(string cited, string findingPath, IReadOnlyCollection<string> changed, Func<string, int?> lines)
+    {
+        if (lines(cited) is not null)
+        {
+            return cited;
+        }
+
+        if (EndsAt(findingPath, cited))
+        {
+            return lines(findingPath) is null ? null : findingPath;
+        }
+
+        return changed.Where(c => EndsAt(c, cited)).Distinct(StringComparer.Ordinal).ToList() is [var one] && lines(one) is not null ? one : null;
+
+        static bool EndsAt(string path, string name) =>
+            path == name || path.EndsWith("/" + name, StringComparison.Ordinal);
     }
 
     /// <summary>

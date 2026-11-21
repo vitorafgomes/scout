@@ -671,10 +671,10 @@ internal sealed partial class AuditWorker
             refutedGroups.Add((outcomes.Count(o => o.Value.Status == ContestStatus.Refuted), earlier.Title, outcomes[earlier.Id].Reason));
         }
 
-        var notContested = new List<(int Findings, string Reason)>();
+        var notContested = new List<(int Findings, string Reason, IReadOnlyList<string> Titles)>();
         if (open.Count > 0 && stopped)
         {
-            notContested.Add((open.Count, ContestStopped));
+            notContested.Add((open.Count, ContestStopped, [.. open.Select(f => f.Title)]));
         }
         else if (open.Count > 0)
         {
@@ -696,6 +696,7 @@ internal sealed partial class AuditWorker
                 },
                 StringComparer.Ordinal);
             var groups = Contestation.Groups(open, f => materials[f.Id].Length, room);
+            string[] changedFiles = [.. batches.SelectMany(b => b.Files).Distinct(StringComparer.Ordinal)];
             var started = System.Diagnostics.Stopwatch.GetTimestamp();
             for (var i = 0; i < groups.Count; i++)
             {
@@ -704,7 +705,7 @@ internal sealed partial class AuditWorker
                 var bound = left < (ContestGroupTime ?? runner.TurnTimeout) ? left : ContestGroupTime ?? runner.TurnTimeout;
                 if (i >= Contestation.MaxGroups || left <= TimeSpan.Zero)
                 {
-                    notContested.Add((groups.Skip(i).Sum(g => g.Count), i >= Contestation.MaxGroups ? ContestOverGroups : ContestOverTime));
+                    notContested.Add((groups.Skip(i).Sum(g => g.Count), i >= Contestation.MaxGroups ? ContestOverGroups : ContestOverTime, [.. groups.Skip(i).SelectMany(g => g).Select(f => f.Title)]));
                     break;
                 }
 
@@ -712,7 +713,7 @@ internal sealed partial class AuditWorker
                 var history = new Microsoft.SemanticKernel.ChatCompletion.ChatHistory();
                 var turnStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 var (answer, failure) = await ContestGroupAsync(job, contestRequest, history, bound, ct).ConfigureAwait(false);
-                var answered = failure is null ? Checked(Contestation.Read(answer, [.. group.Select(f => f.Id)]), root) : null;
+                var answered = failure is null ? Checked(Contestation.Read(answer, [.. group.Select(f => f.Id)]), root, stored, changedFiles) : null;
                 await runner.CountAsync(job, new AuditTurn(
                     null, Contest, i + 1, 1, false, (long)System.Diagnostics.Stopwatch.GetElapsedTime(turnStarted).TotalMilliseconds, contestRequest.Length,
                     AuditBatchRunner.CallCounts(history), group.Count, 0, 0, failure ?? (answered is null ? ContestUnreadable : null),
@@ -730,13 +731,13 @@ internal sealed partial class AuditWorker
                 });
                 if (failure is not null)
                 {
-                    notContested.Add((group.Count, failure));
+                    notContested.Add((group.Count, failure, [.. group.Select(f => f.Title)]));
                     continue;
                 }
 
                 if (answered is not { } read)
                 {
-                    notContested.Add((group.Count, ContestUnreadable));
+                    notContested.Add((group.Count, ContestUnreadable, [.. group.Select(f => f.Title)]));
                     continue;
                 }
 
@@ -757,15 +758,17 @@ internal sealed partial class AuditWorker
         var uncertain = stored.Where(f => outcomes.GetValueOrDefault(f.Id)?.Status == ContestStatus.Uncertain).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
         var noted = stored.Where(f => outcomes.GetValueOrDefault(f.Id)?.Status == ContestStatus.Noted).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
         var changed = stored.Count(f => outcomes.GetValueOrDefault(f.Id) is { Status: ContestStatus.Holds, Severity: { } severity } && severity != f.Severity);
-        return (kept, Contestation.Notes(refutedGroups, uncertain.Count, [.. notContested.GroupBy(n => n.Reason).Select(g => (g.Sum(n => n.Findings), g.Key))], changed, noted.Count), uncertain, noted);
+        return (kept, Contestation.Notes(refutedGroups, uncertain.Count, [.. notContested.GroupBy(n => n.Reason).Select(g => (g.Sum(n => n.Findings), g.Key, (IReadOnlyList<string>)[.. g.SelectMany(n => n.Titles)]))], changed, noted.Count), uncertain, noted);
     }
 
     /// <summary>
-    /// <paramref name="read"/> with each refutation and note whose cited file or line the snapshot at <paramref name="root"/>
-    /// does not hold made uncertain (<see cref="Contestation.Checked"/>); each cited file is read once, within the snapshot.
-    /// As it is when there is no snapshot to check against.
+    /// <paramref name="read"/> with each refutation and note whose cited line the snapshot at <paramref name="root"/> does not
+    /// hold made uncertain (<see cref="Contestation.Checked"/>), a cited name resolved against the finding's own path and the
+    /// review's <paramref name="changed"/> files; each file is read once, within the snapshot. As it is when there is no
+    /// snapshot to check against.
     /// </summary>
-    private static IReadOnlyDictionary<string, ContestOutcome>? Checked(IReadOnlyDictionary<string, ContestOutcome>? read, string? root)
+    private static IReadOnlyDictionary<string, ContestOutcome>? Checked(
+        IReadOnlyDictionary<string, ContestOutcome>? read, string? root, IReadOnlyList<Finding> stored, IReadOnlyCollection<string> changed)
     {
         if (read is null || root is null)
         {
@@ -775,7 +778,8 @@ internal sealed partial class AuditWorker
         var counts = new Dictionary<string, int?>(StringComparer.Ordinal);
         int? Lines(string path) => counts.TryGetValue(path, out var known) ? known
             : counts[path] = SnapshotFile(root, path) is { } text ? text.Split('\n').Length - (text.EndsWith('\n') ? 1 : 0) : null;
-        return read.ToDictionary(o => o.Key, o => Contestation.Checked(o.Value, Lines), StringComparer.Ordinal);
+        return read.ToDictionary(
+            o => o.Key, o => Contestation.Checked(o.Value, stored.FirstOrDefault(f => f.Id == o.Key)?.Path ?? string.Empty, changed, Lines), StringComparer.Ordinal);
     }
 
     private async Task<(string? Answer, string? Failure)> ContestGroupAsync(

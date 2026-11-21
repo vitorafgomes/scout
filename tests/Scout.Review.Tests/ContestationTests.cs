@@ -181,7 +181,7 @@ public sealed class ContestationTests
         var notes = Contestation.Notes(
             [(3, "Null lookup dereferenced", "Refuse is marked as never returning."), (0, "x", "y"), (1, "T2", "R2"), (1, "T3", "R3"), (2, "T4", "R4"), (1, "T5", "R5")],
             2,
-            [(5, "the review reached its 15 groups."), (4, "the answer could not be read.")]);
+            [(5, "the review reached its 15 groups.", []), (4, "the answer could not be read.", ["Lock held across an await", "Name the constant"])]);
 
         notes.ShouldBe(
             [
@@ -191,7 +191,7 @@ public sealed class ContestationTests
                 "2 more groups of findings had findings refuted by Scout's second reading.",
                 "2 findings could not be confirmed by Scout's second reading; they are kept as unconfirmed and do not block.",
                 "Scout's second reading did not run for 5 findings: the review reached its 15 groups.",
-                "Scout's second reading did not run for 4 findings: the answer could not be read.",
+                "Scout's second reading did not run for 4 findings: the answer could not be read. Kept as the first reading gave them: Lock held across an await; Name the constant.",
             ],
             "one line per refuting group up to three, a closing count, the unconfirmed count and each reason it did not run");
         Contestation.Notes([], 0, []).ShouldBeEmpty("a second reading that changed nothing adds no note");
@@ -260,27 +260,67 @@ public sealed class ContestationTests
         ContestRequest.Instructions.ShouldContain("\"holds\", \"refuted\", \"noted\" or \"uncertain\"", Case.Sensitive, "the answer may say noted");
     }
 
-    [Fact]
-    public void T2_a_refuted_finding_is_still_removed_and_its_cited_place_that_exists_keeps_it_refuted()
+    private const string Monitoring = "web/src/app/monitoring/monitoring.component.ts";
+
+    private static readonly string[] Changed = [Monitoring, "web/src/app/queues/queue-list.component.ts", "api/Queues.cs", "api/v2/Queues.cs"];
+
+    private static int? Lines(string path) => path switch
     {
-        var refuted = new ContestOutcome(ContestStatus.Refuted, "The guard at src/Queues.cs:8 returns first, and docs/design.md line 40 describes it.");
+        Monitoring => 300,
+        "web/src/app/queues/queue-list.component.ts" => 200,
+        "api/Queues.cs" => 50,
+        "api/v2/Queues.cs" => 60,
+        "docs/followups.md" => 40,
+        "src/Queues.cs" => 20,
+        _ => null,
+    };
 
-        var checkedOutcome = Contestation.Checked(refuted, path => path switch { "src/Queues.cs" => 20, "docs/design.md" => 40, _ => null });
+    private static ContestOutcome Check(string status, string reason, string findingPath = Monitoring) =>
+        Contestation.Checked(new ContestOutcome(status, reason), findingPath, Changed, Lines);
 
-        checkedOutcome.ShouldBe(refuted, "a refutation whose every cited file and line exists stands");
-        Contestation.Apply(F("F1"), checkedOutcome).ShouldBeNull("a refuted finding is removed from the card");
+    [Theory]
+    [InlineData("monitoring.component.ts:127 checks the value before it is read.", "the finding's own file by its name alone", Monitoring)]
+    [InlineData("monitoring/monitoring.component.ts line 127 checks it.", "the finding's own file by a trailing part of its path", Monitoring)]
+    [InlineData("The guard at monitoring.component.ts:131 returns first, and queue-list.component.ts lines 40-44 never pass null.", "the finding's own file and one changed file, by name", Monitoring)]
+    [InlineData("queue-list.component.ts#L180 records it as later work.", "one changed file by its name alone", "web/src/app/queues/queue-list.component.ts")]
+    [InlineData("Queues.cs:55 returns before the lookup.", "a name two changed files end with", null)]
+    [InlineData("Elsewhere.cs:9999 handles it.", "a name no file ends with", null)]
+    [InlineData("docs/missing.md:12 describes it.", "a path with folders the head does not hold", null)]
+    [InlineData("web/src/app/monitoring/monitoring.component.ts:299 is the design.", "the full path at a line it holds", Monitoring)]
+    public void C1_a_citation_by_a_name_that_can_only_be_one_file_is_checked_against_that_file_and_one_that_cannot_be_resolved_stands(string reason, string what, string? resolved)
+    {
+        Contestation.Resolve(Contestation.Cited(reason)[0].Path, Monitoring, Changed, Lines).ShouldBe(resolved, $"{what} resolves to {resolved ?? "no one file"}");
+        foreach (var status in new[] { ContestStatus.Refuted, ContestStatus.Noted })
+        {
+            Check(status, reason).ShouldBe(new ContestOutcome(status, reason), $"{status} citing {what} stands");
+        }
     }
 
     [Theory]
-    [InlineData(ContestStatus.Refuted, "docs/missing.md:12 says so.", "docs/missing.md", 12, "a missing file")]
-    [InlineData(ContestStatus.Noted, "Recorded at docs/followups.md#L41.", "docs/followups.md", 41, "a line past the file's end")]
-    [InlineData(ContestStatus.Noted, "src/Queues.cs:8 is fine; ./docs/later.md lines 90-95 records it.", "docs/later.md", 90, "the second citation of two")]
-    public void T3_a_refutation_or_a_note_whose_cited_file_or_line_does_not_exist_leaves_the_finding_unconfirmed(string status, string reason, string path, int line, string what)
+    [InlineData("monitoring.component.ts:301 checks it.", Monitoring, 301, "the finding's own file by name, past its end")]
+    [InlineData("queue-list.component.ts:250 says so.", "web/src/app/queues/queue-list.component.ts", 250, "one changed file by name, past its end")]
+    [InlineData("Recorded at docs/followups.md#L41.", "docs/followups.md", 41, "a full path past its end")]
+    [InlineData("src/Queues.cs:8 is fine; ./docs/followups.md lines 90-95 records it.", "docs/followups.md", 90, "the second citation of two, past its end")]
+    public void T3_a_refutation_or_a_note_whose_cited_line_is_past_the_end_of_the_one_file_it_names_leaves_the_finding_unconfirmed(string reason, string path, int line, string what)
     {
-        var checkedOutcome = Contestation.Checked(new ContestOutcome(status, reason), p => p switch { "src/Queues.cs" => 20, "docs/followups.md" => 40, _ => null });
+        foreach (var status in new[] { ContestStatus.Refuted, ContestStatus.Noted })
+        {
+            var checkedOutcome = Check(status, reason);
 
-        checkedOutcome.ShouldBe(new ContestOutcome(ContestStatus.Uncertain, Contestation.CitesNothingReal(path, line)), $"{status} citing {what} is not a reading");
-        Contestation.Apply(F("F1"), checkedOutcome).ShouldNotBeNull().Title.ShouldBe("Unconfirmed: Null lookup dereferenced", $"the finding stays, unconfirmed ({what})");
+            checkedOutcome.ShouldBe(new ContestOutcome(ContestStatus.Uncertain, Contestation.CitesNothingReal(path, line)), $"{status} citing {what} is not a reading, named by the path it resolved to");
+            Contestation.Apply(F("F1"), checkedOutcome).ShouldNotBeNull().Title.ShouldBe("Unconfirmed: Null lookup dereferenced", $"the finding stays, unconfirmed ({what})");
+        }
+    }
+
+    [Fact]
+    public void T2_a_refuted_finding_is_still_removed_when_its_cited_places_exist()
+    {
+        var refuted = new ContestOutcome(ContestStatus.Refuted, "The guard at src/Queues.cs:8 returns first, and docs/followups.md line 40 describes it.");
+
+        var checkedOutcome = Contestation.Checked(refuted, "src/Queues.cs", Changed, Lines);
+
+        checkedOutcome.ShouldBe(refuted, "a refutation whose every cited file and line exists stands");
+        Contestation.Apply(F("F1"), checkedOutcome).ShouldBeNull("a refuted finding is removed from the card");
     }
 
     [Fact]
@@ -289,8 +329,8 @@ public sealed class ContestationTests
         var holds = new ContestOutcome(ContestStatus.Holds, "src/Gone.cs:3 throws.", Scenario: "s");
         var plain = new ContestOutcome(ContestStatus.Noted, "The pull request's description lists it as a known weak point.");
 
-        Contestation.Checked(holds, _ => null).ShouldBe(holds, "a finding that holds is not checked here");
-        Contestation.Checked(plain, _ => null).ShouldBe(plain, "a reason with no file and line has nothing to check");
+        Contestation.Checked(holds, "src/Queues.cs", Changed, _ => null).ShouldBe(holds, "a finding that holds is not checked here");
+        Contestation.Checked(plain, "src/Queues.cs", Changed, _ => null).ShouldBe(plain, "a reason with no file and line has nothing to check");
         Contestation.Cited("See .github/ROADMAP.md:7, src/a.b/C.cs line 3 and v1.2 of the API.").ShouldBe([(".github/ROADMAP.md", 7), ("src/a.b/C.cs", 3)], "a path and line are read, a version number is not");
     }
 }

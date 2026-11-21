@@ -1,3 +1,6 @@
+## [2026-11-21] fix | A cited name is resolved to one file before the second reading's citation is judged
+[[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] amended again: a name alone is resolved to the finding's file or the one changed file it ends; a name that cannot be resolved stands; the card names the findings the second reading did not read again.
+
 ## [2026-11-21] chore | Package updates within the current majors
 Electron 45.4.1, Angular 22.3.0 and the desktop tools; Anthropic 13.12.0, ONNX Runtime 1.32.0, Microsoft.CodeAnalysis.CSharp 5.12.0 and the .NET patches; the minimatch advisory stays only on electron-builder's packaging path ([[pages/history/desktop-ui]], [[pages/history/llm]], [[pages/history/operator]]). Three follow-ups added to [[pages/roadmap/followups]].
 

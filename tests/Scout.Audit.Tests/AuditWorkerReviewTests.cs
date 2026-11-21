@@ -623,7 +623,7 @@ public sealed class AuditWorkerReviewTests : IDisposable
         var ids = card.GetProperty("findings").EnumerateArray().Select(f => f.GetProperty("id").GetString()).ToList();
         ids.Count.ShouldBe(AuditWorker.MaxCardFindings);
         ids.ShouldBe(["b1", .. Enumerable.Range(1, 30).Select(i => $"f{i}"), .. Enumerable.Range(1, 19).Select(i => $"n{i}")]);
-        Notes(card).ShouldBe(["Scout's second reading did not run for 1 finding: it reached its 15 requests.", "11 more findings are not on the card."], "61 findings make 16 requests of four, one past the bound");
+        Notes(card).ShouldBe(["Scout's second reading did not run for 1 finding: it reached its 15 requests. Kept as the first reading gave it: Nit 30.", "11 more findings are not on the card."], "61 findings make 16 requests of four, one past the bound, and the note names the one left");
     }
 
     [Fact]
@@ -1057,7 +1057,7 @@ public sealed class AuditWorkerReviewTests : IDisposable
         post.ShouldStartWith("Review of acme/shop#12 at abc1234, stopped at your request:\n\n```scout-findings\n", customMessage: "a stopped review posts the card of what was read under its own heading");
         var card = Card(post);
         Notes(card).ShouldBe(
-            ["Scout's second reading did not run for 1 finding: the review was stopped.", "3 files not read: the review was stopped."],
+            ["Scout's second reading did not run for 1 finding: the review was stopped. Kept as the first reading gave it: Tax rate doubled.", "3 files not read: the review was stopped."],
             "the card says the second reading did not run and how many files were not read because the review was stopped");
         card.GetProperty("verdict").GetString().ShouldBe(AuditWorker.ReadyAfterBlocking, "the verdict follows the existing rule");
         (card.GetProperty("coverage").GetProperty("read").GetInt32(), card.GetProperty("coverage").GetProperty("of").GetInt32()).ShouldBe((1, 4));
@@ -1727,8 +1727,8 @@ public sealed class AuditWorkerReviewTests : IDisposable
 
     [Theory]
     [InlineData("noted", "src/M1/F.cs:99 records it.", "src/M1/F.cs", 99, "a note citing a line past the file's end")]
-    [InlineData("refuted", "docs/design.md line 3 describes it as intended.", "docs/design.md", 3, "a refutation citing a file the head does not hold")]
-    public async Task T3_a_refutation_or_a_note_whose_cited_file_or_line_does_not_exist_leaves_the_finding_unconfirmed(string status, string reason, string path, int line, string what)
+    [InlineData("refuted", "F.cs line 31 describes it as intended.", "src/M1/F.cs", 31, "a refutation citing the finding's own file by name, past its end")]
+    public async Task T3_a_refutation_or_a_note_whose_cited_line_does_not_exist_leaves_the_finding_unconfirmed(string status, string reason, string path, int line, string what)
     {
         var (notifier, _, store, job) = await ContestedAsync(_ => Task.FromResult(Cited("r1", status, reason)), findings: 1);
 
@@ -1736,6 +1736,15 @@ public sealed class AuditWorkerReviewTests : IDisposable
         var kept = card.GetProperty("findings").EnumerateArray().ShouldHaveSingleItem(what);
         (kept.GetProperty("severity").GetString(), kept.GetProperty("title").GetString()).ShouldBe(("fix", "Unconfirmed: Null lookup 1 dereferenced"), $"{what} leaves the finding unconfirmed, never blocking");
         (await store.FindingStatesAsync(job.Id, CancellationToken.None))["r1"].ShouldBe((ContestStatus.Uncertain, Contestation.CitesNothingReal(path, line)), $"{what} is recorded as uncertain, with why");
+    }
+
+    [Fact]
+    public async Task C1_a_refutation_citing_the_finding_s_own_file_by_its_name_alone_is_checked_against_that_file_and_stands()
+    {
+        var (notifier, _, store, job) = await ContestedAsync(_ => Task.FromResult(Cited("r1", "refuted", "F.cs:2 refuses first, so the lookup is never null.")), findings: 1);
+
+        Ids(Card(notifier.Posts.Last().Text)).ShouldBeEmpty("a refutation that names the finding's own file by its name, at a line it holds, removes the finding");
+        (await store.FindingStatesAsync(job.Id, CancellationToken.None))["r1"].State.ShouldBe(ContestStatus.Refuted, "the refutation is recorded as the model gave it");
     }
 
     [Fact]
@@ -1777,7 +1786,7 @@ public sealed class AuditWorkerReviewTests : IDisposable
         Ids(card).ShouldBe(["r1", "r2", "r3"], "no finding is removed");
         card.GetProperty("verdict").GetString().ShouldBe(AuditWorker.ReadyAfterBlocking, "no finding is weakened, so the verdict stays");
         card.GetProperty("findings").EnumerateArray().ShouldAllBe(f => f.GetProperty("severity").GetString() == "block");
-        Notes(card).ShouldContain($"Scout's second reading did not run for 3 findings: {reason}", "the card says the second reading did not run, and why");
+        Notes(card).ShouldContain($"Scout's second reading did not run for 3 findings: {reason} Kept as the first reading gave them: Null lookup 1 dereferenced; Null lookup 2 dereferenced; Null lookup 3 dereferenced.", "the card says the second reading did not run, why, and for which findings");
         (await store.FindingStatesAsync(job.Id, CancellationToken.None)).ShouldBeEmpty("nothing is recorded for a reading that did not run");
     }
 
@@ -1854,7 +1863,7 @@ public sealed class AuditWorkerReviewTests : IDisposable
         var card = Card(notifier.Posts.Last().Text);
         Ids(card).ShouldBe(["r1", "r2", "r3", "r4"], "the group that ran out of time keeps its findings, and the next group's refutation is applied");
         card.GetProperty("findings").EnumerateArray().ShouldAllBe(f => f.GetProperty("severity").GetString() == "block", "the findings left as the first reading gave them");
-        Notes(card).ShouldContain($"Scout's second reading did not run for 4 findings: {AuditWorker.ContestOverTime}", "the card says which did not run");
+        Notes(card).ShouldContain($"Scout's second reading did not run for 4 findings: {AuditWorker.ContestOverTime} Kept as the first reading gave them: Null lookup 1 dereferenced; Null lookup 2 dereferenced; Null lookup 3 dereferenced; Null lookup 4 dereferenced.", "the card says which did not run");
     }
 
     private const string Marker = "MARKER-7f3a";
