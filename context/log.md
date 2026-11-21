@@ -1,3 +1,6 @@
+## [2026-11-21] feat | The second reading can note a finding the project records as later work
+[[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] amended: a true finding the project records as later work is kept as a nit titled Noted and counted on the card; a refutation or a note citing a place the head does not hold is unconfirmed. Two follow-ups of the waiting review added to [[pages/roadmap/followups]].
+
 ## [2026-11-21] feat | A review asked while another runs says it waits
 [[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]: one sentence in its conversation and a waiting entry in the bell with Stop, running when the worker picks it; the queue runs reviews in the order they were created or continued, across a restart.
 

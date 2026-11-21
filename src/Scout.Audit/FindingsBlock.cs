@@ -118,9 +118,11 @@ internal static class FindingsBlock
     /// The review block <paramref name="block"/> with what Scout's code counted: <c>coverage</c>, the files read of the
     /// files changed; <c>notes</c>, Scout's own sentences, when there are any; and <c>tests</c> as not run with
     /// <paramref name="testsReason"/> when the block carries no test run. Null when <paramref name="block"/> is not one
-    /// fenced JSON object.
+    /// fenced JSON object. The findings in <paramref name="unconfirmed"/> and <paramref name="noted"/> get their prefix back,
+    /// since the block's own reading strips both from every title it is given.
     /// </summary>
-    public static string? Complete(string block, int read, int of, IReadOnlyList<string> notes, string testsReason, Offer? offer = null, IReadOnlySet<string>? unconfirmed = null)
+    public static string? Complete(
+        string block, int read, int of, IReadOnlyList<string> notes, string testsReason, Offer? offer = null, IReadOnlySet<string>? unconfirmed = null, IReadOnlySet<string>? noted = null)
     {
         var start = block.IndexOf('\n', StringComparison.Ordinal);
         var end = block.LastIndexOf("```", StringComparison.Ordinal);
@@ -145,13 +147,15 @@ internal static class FindingsBlock
         }
 
         payload["coverage"] = new JsonObject { ["read"] = read, ["of"] = of };
-        if (unconfirmed is { Count: > 0 } && payload["findings"] is JsonArray presented)
+        if ((unconfirmed is { Count: > 0 } || noted is { Count: > 0 }) && payload["findings"] is JsonArray presented)
         {
             foreach (var finding in presented.OfType<JsonObject>())
             {
-                if (finding["id"]?.GetValue<string>() is { } id && unconfirmed.Contains(id) && finding["title"]?.GetValue<string>() is { } title)
+                if (finding["id"]?.GetValue<string>() is { } id && finding["title"]?.GetValue<string>() is { } title)
                 {
-                    finding["title"] = Contestation.UnconfirmedTitle(title);
+                    finding["title"] = unconfirmed?.Contains(id) == true ? Contestation.UnconfirmedTitle(title)
+                        : noted?.Contains(id) == true ? Contestation.NotedTitle(title)
+                        : title;
                 }
             }
         }

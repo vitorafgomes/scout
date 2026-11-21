@@ -560,7 +560,7 @@ internal sealed partial class AuditWorker
         LastCardTests = facts;
         var batches = await store.BatchesAsync(job.Id, ct).ConfigureAwait(false);
         var inputs = await store.InputsAsync(job.Id, ct).ConfigureAwait(false);
-        var (findings, secondReading, unconfirmed) = await SecondReadingAsync(job, await store.FindingsAsync(job.Id, ct).ConfigureAwait(false), facts, batches, stopped, inputs?.Purpose, pullRequest, ct).ConfigureAwait(false);
+        var (findings, secondReading, unconfirmed, noted) = await SecondReadingAsync(job, await store.FindingsAsync(job.Id, ct).ConfigureAwait(false), facts, batches, stopped, inputs?.Purpose, pullRequest, ct).ConfigureAwait(false);
         var preflight = await store.PreflightAsync(job.Id, ct).ConfigureAwait(false);
         var read = FilesRead(batches);
         var of = FilesChanged(batches);
@@ -598,7 +598,7 @@ internal sealed partial class AuditWorker
         }
 
         var review = string.Create(CultureInfo.InvariantCulture, $"{job.Owner}/{job.Repo}#{job.PullRequest} at {Short(job.Commit)}");
-        return block is not null && FindingsBlock.Complete(block, read, of, ReviewNotes.Fit(notes), testsReason, offer, unconfirmed) is { } card
+        return block is not null && FindingsBlock.Complete(block, read, of, ReviewNotes.Fit(notes), testsReason, offer, unconfirmed, noted) is { } card
             ? $"Review of {review}{(stopped ? ", stopped at your request" : string.Empty)}:\n\n{card}"
             : string.Create(CultureInfo.InvariantCulture, $"The review of {review} is done: {verdict}, {read} of {of} files read, {findings.Count} findings kept.");
     }
@@ -653,7 +653,7 @@ internal sealed partial class AuditWorker
     /// unreadable, whose call fails or runs out of time is left as it was. Returns the findings the card keeps, each as its
     /// recorded outcome makes it (<see cref="Contestation.Apply"/>), and the notes on what the reading did.
     /// </summary>
-    private async Task<(IReadOnlyList<Finding> Kept, IReadOnlyList<string> Notes, IReadOnlySet<string> Unconfirmed)> SecondReadingAsync(
+    private async Task<(IReadOnlyList<Finding> Kept, IReadOnlyList<string> Notes, IReadOnlySet<string> Unconfirmed, IReadOnlySet<string> Noted)> SecondReadingAsync(
         AuditJob job, IReadOnlyList<Finding> stored, TestRunFacts? facts, IReadOnlyList<AuditBatch> batches, bool stopped, ReviewPurpose? purpose,
         ReviewPullRequest? pullRequest, CancellationToken ct)
     {
@@ -712,7 +712,7 @@ internal sealed partial class AuditWorker
                 var history = new Microsoft.SemanticKernel.ChatCompletion.ChatHistory();
                 var turnStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 var (answer, failure) = await ContestGroupAsync(job, contestRequest, history, bound, ct).ConfigureAwait(false);
-                var answered = failure is null ? Contestation.Read(answer, [.. group.Select(f => f.Id)]) : null;
+                var answered = failure is null ? Checked(Contestation.Read(answer, [.. group.Select(f => f.Id)]), root) : null;
                 await runner.CountAsync(job, new AuditTurn(
                     null, Contest, i + 1, 1, false, (long)System.Diagnostics.Stopwatch.GetElapsedTime(turnStarted).TotalMilliseconds, contestRequest.Length,
                     AuditBatchRunner.CallCounts(history), group.Count, 0, 0, failure ?? (answered is null ? ContestUnreadable : null),
@@ -734,7 +734,7 @@ internal sealed partial class AuditWorker
                     continue;
                 }
 
-                if (Contestation.Read(answer, [.. group.Select(f => f.Id)]) is not { } read)
+                if (answered is not { } read)
                 {
                     notContested.Add((group.Count, ContestUnreadable));
                     continue;
@@ -755,8 +755,27 @@ internal sealed partial class AuditWorker
 
         var kept = stored.Select(f => Contestation.Apply(f, outcomes.GetValueOrDefault(f.Id))).OfType<Finding>().ToList();
         var uncertain = stored.Where(f => outcomes.GetValueOrDefault(f.Id)?.Status == ContestStatus.Uncertain).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+        var noted = stored.Where(f => outcomes.GetValueOrDefault(f.Id)?.Status == ContestStatus.Noted).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
         var changed = stored.Count(f => outcomes.GetValueOrDefault(f.Id) is { Status: ContestStatus.Holds, Severity: { } severity } && severity != f.Severity);
-        return (kept, Contestation.Notes(refutedGroups, uncertain.Count, [.. notContested.GroupBy(n => n.Reason).Select(g => (g.Sum(n => n.Findings), g.Key))], changed), uncertain);
+        return (kept, Contestation.Notes(refutedGroups, uncertain.Count, [.. notContested.GroupBy(n => n.Reason).Select(g => (g.Sum(n => n.Findings), g.Key))], changed, noted.Count), uncertain, noted);
+    }
+
+    /// <summary>
+    /// <paramref name="read"/> with each refutation and note whose cited file or line the snapshot at <paramref name="root"/>
+    /// does not hold made uncertain (<see cref="Contestation.Checked"/>); each cited file is read once, within the snapshot.
+    /// As it is when there is no snapshot to check against.
+    /// </summary>
+    private static IReadOnlyDictionary<string, ContestOutcome>? Checked(IReadOnlyDictionary<string, ContestOutcome>? read, string? root)
+    {
+        if (read is null || root is null)
+        {
+            return read;
+        }
+
+        var counts = new Dictionary<string, int?>(StringComparer.Ordinal);
+        int? Lines(string path) => counts.TryGetValue(path, out var known) ? known
+            : counts[path] = SnapshotFile(root, path) is { } text ? text.Split('\n').Length - (text.EndsWith('\n') ? 1 : 0) : null;
+        return read.ToDictionary(o => o.Key, o => Contestation.Checked(o.Value, Lines), StringComparer.Ordinal);
     }
 
     private async Task<(string? Answer, string? Failure)> ContestGroupAsync(

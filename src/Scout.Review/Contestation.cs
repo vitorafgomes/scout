@@ -9,8 +9,11 @@ public static class ContestStatus
     /// <summary>The supplied code and facts support the finding and nothing supplied contradicts it.</summary>
     public const string Holds = "holds";
 
-    /// <summary>The supplied code or facts establish that the finding's claim is false.</summary>
+    /// <summary>The supplied code or facts establish that the finding's claim is false, or that the behaviour is the design.</summary>
     public const string Refuted = "refuted";
+
+    /// <summary>The finding's claim is true, and the repository itself records it as known or later work.</summary>
+    public const string Noted = "noted";
 
     /// <summary>Something needed to decide is missing.</summary>
     public const string Uncertain = "uncertain";
@@ -28,13 +31,13 @@ public static class ContestStatus
     public static string? StatusOf(string? state) => state switch
     {
         Held => Holds,
-        Refuted or Uncertain => state,
+        Refuted or Noted or Uncertain => state,
         _ => null,
     };
 }
 
 /// <summary>What the second reading answered for one finding.</summary>
-/// <param name="Status">One of <see cref="ContestStatus.Holds"/>, <see cref="ContestStatus.Refuted"/> or <see cref="ContestStatus.Uncertain"/>.</param>
+/// <param name="Status">One of <see cref="ContestStatus.Holds"/>, <see cref="ContestStatus.Refuted"/>, <see cref="ContestStatus.Noted"/> or <see cref="ContestStatus.Uncertain"/>.</param>
 /// <param name="Reason">Why, in one or two sentences of at most <see cref="Contestation.MaxReasonLength"/> characters.</param>
 /// <param name="Severity">For a finding that holds, the severity the second reading concluded by <see cref="SeverityRule"/>; null to keep the finding's.</param>
 /// <param name="Scenario">For a finding that holds, the concrete scenario in which it goes wrong; null otherwise.</param>
@@ -76,7 +79,7 @@ public static class SeverityRule
 /// The rules of Scout's second reading of a review's findings: how its answer is checked, how an answer changes a finding,
 /// how findings are grouped for it, and the card's notes on what it did. Pure: no model call, no file, no store.
 /// </summary>
-public static class Contestation
+public static partial class Contestation
 {
     /// <summary>The findings of one request at most.</summary>
     public const int MaxGroupFindings = 4;
@@ -92,6 +95,12 @@ public static class Contestation
 
     /// <summary>What an unconfirmed finding's title starts with.</summary>
     public const string UnconfirmedPrefix = "Unconfirmed: ";
+
+    /// <summary>What a noted finding's title starts with: true, and recorded by the project as later work.</summary>
+    public const string NotedPrefix = "Noted: ";
+
+    /// <summary>What the record a noted finding rests on starts with when it is added to the finding's why.</summary>
+    public const string RecordPrefix = "Recorded by the project: ";
 
     /// <summary>The reason of a finding whose entry in the answer is missing, repeated or malformed.</summary>
     public const string NoValidEntry = "Scout's second reading gave no valid answer for this finding.";
@@ -139,7 +148,7 @@ public static class Contestation
                 var status = Text(entry, "status");
                 var reason = Bounded(Text(entry, "reason")?.Trim());
                 var scenario = Bounded(Text(entry, "scenario")?.Trim());
-                var valid = status is ContestStatus.Holds or ContestStatus.Refuted or ContestStatus.Uncertain && reason is { Length: > 0 };
+                var valid = status is ContestStatus.Holds or ContestStatus.Refuted or ContestStatus.Noted or ContestStatus.Uncertain && reason is { Length: > 0 };
                 var outcome = !valid ? null
                     : status != ContestStatus.Holds ? new ContestOutcome(status!, reason!)
                     : scenario is not { Length: > 0 } ? new ContestOutcome(ContestStatus.Uncertain, NoScenario)
@@ -186,7 +195,9 @@ public static class Contestation
     }
 
     /// <summary>
-    /// The finding as the card shows it after <paramref name="outcome"/>: null when refuted; when uncertain, never blocking
+    /// The finding as the card shows it after <paramref name="outcome"/>: null when refuted; when noted, a
+    /// <see cref="Severities.Nit"/> titled with <see cref="NotedPrefix"/>, its why ending with the record the reason names
+    /// after <see cref="RecordPrefix"/>; when uncertain, never blocking
     /// (a blocking severity becomes <see cref="Severities.Fix"/>) and titled with <see cref="UnconfirmedPrefix"/>; when it
     /// holds, with the severity the second reading concluded, or, when it gave none, the finding's own with a block lowered to
     /// fix, since a block must be concluded with its reason, and its scenario as the last sentence of its why
@@ -195,6 +206,12 @@ public static class Contestation
     public static Finding? Apply(Finding finding, ContestOutcome? outcome) => outcome?.Status switch
     {
         ContestStatus.Refuted => null,
+        ContestStatus.Noted => finding with
+        {
+            Severity = Severities.Nit,
+            Title = NotedTitle(finding.Title),
+            Why = WithTail(finding.Why, RecordPrefix, outcome.Reason),
+        },
         ContestStatus.Uncertain => finding with
         {
             Severity = Severities.IsBlocking(finding.Severity) ? Severities.Fix : finding.Severity,
@@ -212,14 +229,16 @@ public static class Contestation
     /// <paramref name="why"/> with <paramref name="scenario"/> as its last sentence, after <see cref="ScenarioPrefix"/>, within
     /// <see cref="FindingLimits.MaxTextLength"/>: the scenario is kept whole and the why before it cut, ending with <c>...</c>.
     /// </summary>
-    public static string WithScenario(string why, string? scenario)
+    public static string WithScenario(string why, string? scenario) => WithTail(why, ScenarioPrefix, scenario);
+
+    private static string WithTail(string why, string prefix, string? text)
     {
-        if (string.IsNullOrWhiteSpace(scenario) || why.EndsWith(ScenarioPrefix + scenario, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(text) || why.EndsWith(prefix + text, StringComparison.Ordinal))
         {
             return why;
         }
 
-        var tail = " " + ScenarioPrefix + scenario;
+        var tail = " " + prefix + text;
         var room = FindingLimits.MaxTextLength - tail.Length;
         return (why.Length <= room ? why : string.Concat(why.AsSpan(0, Math.Max(0, room - 3)), "...")) + tail;
     }
@@ -259,10 +278,11 @@ public static class Contestation
     /// <summary>
     /// The card's notes on the second reading: one line per group that refuted findings, naming the first one's title and
     /// reason, at most <see cref="MaxRefutedNotes"/> and then one line counting the others; one line on the findings that
-    /// could not be confirmed; one line per reason the second reading did not run for some findings.
+    /// could not be confirmed; one line on the findings kept as notes; one line per reason the second reading did not run for
+    /// some findings.
     /// </summary>
     public static IReadOnlyList<string> Notes(
-        IReadOnlyList<(int Refuted, string Title, string Reason)> refutedGroups, int uncertain, IReadOnlyList<(int Findings, string Reason)> notContested, int severitiesChanged = 0)
+        IReadOnlyList<(int Refuted, string Title, string Reason)> refutedGroups, int uncertain, IReadOnlyList<(int Findings, string Reason)> notContested, int severitiesChanged = 0, int noted = 0)
     {
         var refuted = ReviewNotes.Capped(
             [.. refutedGroups.Where(g => g.Refuted > 0).Select(g => ReviewNotes.Cut(string.Create(
@@ -277,6 +297,13 @@ public static class Contestation
             notes.Add(uncertain == 1
                 ? "1 finding could not be confirmed by Scout's second reading; it is kept as unconfirmed and does not block."
                 : string.Create(CultureInfo.InvariantCulture, $"{uncertain} findings could not be confirmed by Scout's second reading; they are kept as unconfirmed and do not block."));
+        }
+
+        if (noted > 0)
+        {
+            notes.Add(noted == 1
+                ? "1 finding is true and already recorded by the project as later work; it is kept as a note."
+                : string.Create(CultureInfo.InvariantCulture, $"{noted} findings are true and already recorded by the project as later work; they are kept as notes."));
         }
 
         if (severitiesChanged > 0)
@@ -295,20 +322,67 @@ public static class Contestation
     public static string UnconfirmedTitle(string title) =>
         title.StartsWith(UnconfirmedPrefix, StringComparison.Ordinal) ? title : Cut(UnconfirmedPrefix + title, FindingLimits.MaxTitleLength);
 
+    /// <summary><paramref name="title"/> marked as true and recorded by the project as later work, once, within its bound.</summary>
+    public static string NotedTitle(string title) =>
+        title.StartsWith(NotedPrefix, StringComparison.Ordinal) ? title : Cut(NotedPrefix + title, FindingLimits.MaxTitleLength);
+
     /// <summary>
-    /// <paramref name="finding"/> as a first reading may give it: without any leading <see cref="UnconfirmedPrefix"/>, in any
-    /// case, so only the second reading can mark a finding unconfirmed and lower its weight.
+    /// <paramref name="finding"/> as a first reading may give it: without any leading <see cref="UnconfirmedPrefix"/> or
+    /// <see cref="NotedPrefix"/>, in any case, so only the second reading can mark a finding unconfirmed or noted and lower
+    /// its weight.
     /// </summary>
     public static Finding FirstReading(Finding finding)
     {
         var title = finding.Title.TrimStart();
-        while (title.StartsWith(UnconfirmedPrefix.TrimEnd(), StringComparison.OrdinalIgnoreCase))
+        string? prefix;
+        while ((prefix = Array.Find([UnconfirmedPrefix.TrimEnd(), NotedPrefix.TrimEnd()], p => title.StartsWith(p, StringComparison.OrdinalIgnoreCase))) is not null)
         {
-            title = title[UnconfirmedPrefix.TrimEnd().Length..].TrimStart();
+            title = title[prefix.Length..].TrimStart();
         }
 
         return title.Length == finding.Title.Length ? finding : finding with { Title = title };
     }
+
+    /// <summary>The reason of a refutation or a note that cites a file or a line the pull request's head does not hold.</summary>
+    public static string CitesNothingReal(string path, int line) =>
+        string.Create(CultureInfo.InvariantCulture, $"Scout's second reading cited {path} at line {line}, which the pull request's head does not hold, so its reading is not confirmed.");
+
+    /// <summary>
+    /// <paramref name="outcome"/> with its citations checked: a refutation or a note whose reason cites a file and line
+    /// (<see cref="Cited"/>) that <paramref name="lines"/> says the head does not hold, a missing file or a file with fewer
+    /// lines, is <see cref="ContestStatus.Uncertain"/>; any other outcome as it is. Only that the place exists is checked,
+    /// never what it says.
+    /// </summary>
+    public static ContestOutcome Checked(ContestOutcome outcome, Func<string, int?> lines)
+    {
+        if (outcome.Status is not (ContestStatus.Refuted or ContestStatus.Noted))
+        {
+            return outcome;
+        }
+
+        foreach (var (path, line) in Cited(outcome.Reason))
+        {
+            if (lines(path) is not { } count || line > count)
+            {
+                return new ContestOutcome(ContestStatus.Uncertain, CitesNothingReal(path, line));
+            }
+        }
+
+        return outcome;
+    }
+
+    /// <summary>
+    /// The files and lines <paramref name="reason"/> cites: a relative path with an extension followed by <c>:N</c>,
+    /// <c>#LN</c>, <c> line N</c> or <c> lines N</c>, the first line of a range; a leading <c>./</c> or <c>/</c> is dropped.
+    /// </summary>
+    public static IReadOnlyList<(string Path, int Line)> Cited(string reason) =>
+        [.. CitationPattern().Matches(reason)
+            .Select(m => (m.Groups["path"].Value is var p && p.StartsWith("./", StringComparison.Ordinal) ? p[2..] : p.TrimStart('/'), int.TryParse(m.Groups["line"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0))
+            .Where(c => c.Item1.Length > 0 && c.Item2 > 0)
+            .Distinct()];
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?<path>[A-Za-z0-9_./-]*[A-Za-z0-9_-]\.[A-Za-z0-9]{1,10})(?::|#L|,? lines? )(?<line>\d{1,7})", System.Text.RegularExpressions.RegexOptions.CultureInvariant, 1000)]
+    private static partial System.Text.RegularExpressions.Regex CitationPattern();
 
     private static string Findings(int count) => count == 1 ? "1 finding" : string.Create(CultureInfo.InvariantCulture, $"{count} findings");
 

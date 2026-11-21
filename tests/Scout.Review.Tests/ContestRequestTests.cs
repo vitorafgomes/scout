@@ -30,7 +30,7 @@ public sealed class ContestRequestTests
             i => i.ShouldContain("your task is to refute each one before the owner sees it, and to keep only what survives.", Case.Sensitive),
             i => i.ShouldContain("the mechanism, what the code does, and the harm, what goes wrong for a user, the data or the build. Then try to show that the harm does not follow", Case.Sensitive),
             i => i.ShouldContain("Before you answer holds, look for intent: the summary or comment on the code, a test that pins the behaviour, and a page of the repository's documentation that describes it", Case.Sensitive),
-            i => i.ShouldContain("Behaviour that the repository documents or tests as intended is refuted as a defect, and the reason names the file and line that says so.", Case.Sensitive),
+            i => i.ShouldContain("Behaviour that the repository documents or tests as intended and correct as designed is refuted as a defect, and the reason names the file and line that says so.", Case.Sensitive),
             i => i.ShouldContain("Answer holds only with a concrete scenario, written in \"scenario\": the input or state, the step, and the wrong result, each tied to a file and line you read.", Case.Sensitive),
             i => i.ShouldContain("is checked by reading the whole assertion and the code under test", Case.Sensitive),
             i => i.ShouldContain("never because code was not supplied", Case.Sensitive));

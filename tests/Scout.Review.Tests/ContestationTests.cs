@@ -223,4 +223,74 @@ public sealed class ContestationTests
         outcomes["a"].Status.ShouldBe(ContestStatus.Refuted, "the entry decides the finding it names");
         outcomes["A"].ShouldBe(new ContestOutcome(ContestStatus.Uncertain, Contestation.NoValidEntry), "an id that differs only in case is another finding");
     }
+
+    [Fact]
+    public void T1_a_finding_true_and_recorded_by_the_project_as_later_work_is_kept_as_a_note_at_the_lowest_severity_titled_and_with_its_record()
+    {
+        var read = Contestation.Read("""[{"id":"F1","status":"noted","reason":"docs/followups.md:12 records the retry as later work."}]""", ["F1"]).ShouldNotBeNull();
+
+        var kept = Contestation.Apply(F("F1"), read["F1"]).ShouldNotBeNull("a noted finding is kept on the card");
+
+        read["F1"].ShouldBe(new ContestOutcome(ContestStatus.Noted, "docs/followups.md:12 records the retry as later work."), "noted is an answer of its own, with its reason");
+        kept.ShouldBe(
+            F("F1", Severities.Nit, title: "Noted: Null lookup dereferenced") with { Why = "why Recorded by the project: docs/followups.md:12 records the retry as later work." },
+            "a noted finding is a nit whatever it was, titled Noted, its why ending with the record");
+        Contestation.Apply(kept, read["F1"]).ShouldBe(kept, "applying the outcome again changes nothing");
+        ContestStatus.StatusOf(ContestStatus.StateOf(ContestStatus.Noted)).ShouldBe(ContestStatus.Noted, "noted is recorded as its own state and read back as noted");
+        Contestation.Notes([], 0, [], 0, 2).ShouldBe(["2 findings are true and already recorded by the project as later work; they are kept as notes."], "the card counts the notes");
+        Contestation.Notes([], 0, [], 0, 1).ShouldBe(["1 finding is true and already recorded by the project as later work; it is kept as a note."], "one note is counted in the singular");
+    }
+
+    [Fact]
+    public void T1_a_first_reading_s_title_never_keeps_the_noted_prefix_so_only_the_second_reading_sets_it()
+    {
+        Contestation.FirstReading(F("F1", title: "noted: Unconfirmed: NOTED:Null lookup")).Title.ShouldBe("Null lookup", "every leading prefix, in any case and any order, is removed");
+        Contestation.NotedTitle(Contestation.NotedTitle("T")).ShouldBe("Noted: T", "the mark is set once");
+    }
+
+    [Fact]
+    public void T1_the_instructions_separate_noted_from_refuted_and_keep_a_recorded_data_loss_or_secret_exposure_at_its_severity()
+    {
+        ContestRequest.Instructions.ShouldContain("intended and correct as designed is refuted", Case.Sensitive, "refuted is for behaviour that is the design");
+        ContestRequest.Instructions.ShouldContain("A real shortcoming the project has written down as not done yet is noted, not refuted", Case.Sensitive, "noted is for a real shortcoming the project recorded");
+        ContestRequest.Instructions.ShouldContain("a known weak point the pull request's own description lists", Case.Sensitive, "a weak point the description lists is noted too");
+        ContestRequest.Instructions.ShouldContain(
+            "Writing a problem down does not make it safe to ship: a recorded shortcoming that silently loses or corrupts data, or exposes a secret, holds at its severity, and the reason cites the record.",
+            Case.Sensitive, "a recorded data loss or secret exposure is not lowered to a note");
+        ContestRequest.Instructions.ShouldContain("\"holds\", \"refuted\", \"noted\" or \"uncertain\"", Case.Sensitive, "the answer may say noted");
+    }
+
+    [Fact]
+    public void T2_a_refuted_finding_is_still_removed_and_its_cited_place_that_exists_keeps_it_refuted()
+    {
+        var refuted = new ContestOutcome(ContestStatus.Refuted, "The guard at src/Queues.cs:8 returns first, and docs/design.md line 40 describes it.");
+
+        var checkedOutcome = Contestation.Checked(refuted, path => path switch { "src/Queues.cs" => 20, "docs/design.md" => 40, _ => null });
+
+        checkedOutcome.ShouldBe(refuted, "a refutation whose every cited file and line exists stands");
+        Contestation.Apply(F("F1"), checkedOutcome).ShouldBeNull("a refuted finding is removed from the card");
+    }
+
+    [Theory]
+    [InlineData(ContestStatus.Refuted, "docs/missing.md:12 says so.", "docs/missing.md", 12, "a missing file")]
+    [InlineData(ContestStatus.Noted, "Recorded at docs/followups.md#L41.", "docs/followups.md", 41, "a line past the file's end")]
+    [InlineData(ContestStatus.Noted, "src/Queues.cs:8 is fine; ./docs/later.md lines 90-95 records it.", "docs/later.md", 90, "the second citation of two")]
+    public void T3_a_refutation_or_a_note_whose_cited_file_or_line_does_not_exist_leaves_the_finding_unconfirmed(string status, string reason, string path, int line, string what)
+    {
+        var checkedOutcome = Contestation.Checked(new ContestOutcome(status, reason), p => p switch { "src/Queues.cs" => 20, "docs/followups.md" => 40, _ => null });
+
+        checkedOutcome.ShouldBe(new ContestOutcome(ContestStatus.Uncertain, Contestation.CitesNothingReal(path, line)), $"{status} citing {what} is not a reading");
+        Contestation.Apply(F("F1"), checkedOutcome).ShouldNotBeNull().Title.ShouldBe("Unconfirmed: Null lookup dereferenced", $"the finding stays, unconfirmed ({what})");
+    }
+
+    [Fact]
+    public void T3_only_refutations_and_notes_are_checked_and_a_reason_that_cites_no_line_is_left_as_it_is()
+    {
+        var holds = new ContestOutcome(ContestStatus.Holds, "src/Gone.cs:3 throws.", Scenario: "s");
+        var plain = new ContestOutcome(ContestStatus.Noted, "The pull request's description lists it as a known weak point.");
+
+        Contestation.Checked(holds, _ => null).ShouldBe(holds, "a finding that holds is not checked here");
+        Contestation.Checked(plain, _ => null).ShouldBe(plain, "a reason with no file and line has nothing to check");
+        Contestation.Cited("See .github/ROADMAP.md:7, src/a.b/C.cs line 3 and v1.2 of the API.").ShouldBe([(".github/ROADMAP.md", 7), ("src/a.b/C.cs", 3)], "a path and line are read, a version number is not");
+    }
 }

@@ -1698,6 +1698,47 @@ public sealed class AuditWorkerReviewTests : IDisposable
         Notes(card).ShouldContain("1 finding could not be confirmed by Scout's second reading; it is kept as unconfirmed and does not block.");
     }
 
+    private static string Cited(string id, string status, string reason) =>
+        JsonSerializer.Serialize(new[] { new { id, status, reason } });
+
+    [Fact]
+    public async Task T1_a_finding_true_and_recorded_by_the_project_as_later_work_is_kept_as_a_note_said_on_the_card_and_never_asks_for_changes()
+    {
+        const string Record = "src/M1/F.cs:20 records the null lookup as later work.";
+        var (notifier, _, store, job) = await ContestedAsync(_ => Task.FromResult(Cited("r1", "noted", Record)), findings: 1);
+
+        var card = Card(notifier.Posts.Last().Text);
+        var kept = card.GetProperty("findings").EnumerateArray().ShouldHaveSingleItem();
+        (kept.GetProperty("severity").GetString(), kept.GetProperty("title").GetString()).ShouldBe(("nit", "Noted: Null lookup 1 dereferenced"), "a noted blocking finding is kept as a note at the lowest severity");
+        kept.GetProperty("why").GetString().ShouldEndWith("Recorded by the project: " + Record, Case.Sensitive, "its why ends with the record the reason names");
+        card.GetProperty("offer").GetProperty("verdict").GetString().ShouldBe(ReviewOffers.Comment, "a note never asks for changes");
+        card.GetProperty("offer").GetProperty("reason").GetString().ShouldStartWith("Comment, not approve: 1 optional suggestion was kept", Case.Sensitive, "a review with only notes offers a comment that counts them as optional");
+        card.GetProperty("verdict").GetString().ShouldBe(AuditWorker.NoBlockingInFilesRead, "a note never blocks the verdict");
+        Notes(card).ShouldContain("1 finding is true and already recorded by the project as later work; it is kept as a note.", "the card says how many were kept as notes");
+        (await store.FindingStatesAsync(job.Id, CancellationToken.None))["r1"].ShouldBe((ContestStatus.Noted, Record), "noted is stored as its own state, with its reason");
+    }
+
+    [Theory]
+    [InlineData("noted", "src/M1/F.cs:99 records it.", "src/M1/F.cs", 99, "a note citing a line past the file's end")]
+    [InlineData("refuted", "docs/design.md line 3 describes it as intended.", "docs/design.md", 3, "a refutation citing a file the head does not hold")]
+    public async Task T3_a_refutation_or_a_note_whose_cited_file_or_line_does_not_exist_leaves_the_finding_unconfirmed(string status, string reason, string path, int line, string what)
+    {
+        var (notifier, _, store, job) = await ContestedAsync(_ => Task.FromResult(Cited("r1", status, reason)), findings: 1);
+
+        var card = Card(notifier.Posts.Last().Text);
+        var kept = card.GetProperty("findings").EnumerateArray().ShouldHaveSingleItem(what);
+        (kept.GetProperty("severity").GetString(), kept.GetProperty("title").GetString()).ShouldBe(("fix", "Unconfirmed: Null lookup 1 dereferenced"), $"{what} leaves the finding unconfirmed, never blocking");
+        (await store.FindingStatesAsync(job.Id, CancellationToken.None))["r1"].ShouldBe((ContestStatus.Uncertain, Contestation.CitesNothingReal(path, line)), $"{what} is recorded as uncertain, with why");
+    }
+
+    [Fact]
+    public async Task T2_a_refutation_whose_cited_line_exists_still_removes_the_finding()
+    {
+        var (notifier, _, _, _) = await ContestedAsync(_ => Task.FromResult(Cited("r1", "refuted", "src/M1/F.cs:2 refuses first, so the lookup is never null.")), findings: 1);
+
+        Ids(Card(notifier.Posts.Last().Text)).ShouldBeEmpty("a refuted finding whose citation exists is removed from the card");
+    }
+
     [Fact]
     public async Task A_missing_a_duplicated_and_an_unknown_id_refute_nothing_but_the_valid_entry()
     {

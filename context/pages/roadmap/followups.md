@@ -23,6 +23,18 @@ reliability: medium
 
 ## Entries
 
+### A waiting review stopped is said only when a batch of the running review ends (2026-11-21)
+
+- **Gap:** a review stopped while it waits for another posts its stop as the next batch of the running review ends, up to the review batch turn's bound later, not at once ([[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]). The bell waits long enough for it.
+- **Blocker:** none; the window does not wake on a stop.
+- **Unblocks with:** the window woken by the stop signal as well as by a batch's end.
+
+### A waiting entry names a review that was since stopped (2026-11-21)
+
+- **Gap:** when the review a waiting review waits for is stopped, the waiting entry keeps naming it until the worker picks the waiting review ([[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]).
+- **Blocker:** the sentence is said once, when the review starts waiting.
+- **Unblocks with:** the waiting sentence said again for the reviews behind one that leaves the queue.
+
 ### The review misses most of what a careful review finds (2026-11-21)
 
 - **Gap:** measured on real pull requests against a careful review of the same diff, Scout's review finds a minority of the confirmed problems, even after the evidence rule, the parts, the focused readings and the second reading ([[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]).

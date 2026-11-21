@@ -1,9 +1,9 @@
 ---
 title: "ADR 0069 - The second reading tries to refute, and holds a finding only with a scenario"
-version: "1.0"
+version: "1.1"
 date: 2026-11-21
 updated: 2026-11-21
-changes: "v1.0: the decision as first written"
+changes: "v1.1 (2026-11-21): amended with the noted outcome and the check of a cited place. v1.0: the decision as first written"
 page_type: adr
 status: accepted
 description: "Before the card, each finding is read again by a model turn told to refute it, offered three read-only functions held to the job's repository at the head; holds needs a concrete scenario, the severity follows a written rule in which block needs a named reason, and a failure of this reading never weakens or removes a finding."
@@ -67,4 +67,12 @@ One model turn per group, through the same chat service as the batches, and the 
 
 ## Amendments
 
-None yet.
+### 2026-11-21: a fourth outcome, noted, and the cited place checked
+
+Seen on a repository Scout had never reviewed: the second reading refuted three findings because the repository's own page recorded each as later work. All three were true in the code, so the card said nothing to the author; two of the three cited lines of that page were wrong.
+
+- **Noted** (`src/Scout.Review/Contestation.cs:209`). A finding whose claim is true and which the project records as known or later work (a followups or roadmap page, a list of known weak points, a TODO the change adds knowingly, or a known weak point the pull request's own description lists) is answered `noted`. Code keeps it as a nit whatever its severity, titles it "Noted: " (`NotedTitle`, `:326`; a first reading's "Noted:" is stripped like "Unconfirmed:", and the card puts the prefix back only on the findings the second reading noted, `src/Scout.Audit/FindingsBlock.cs:157`), and ends its why with "Recorded by the project: " and the reason. Refuted stays for a claim that is false or for behaviour that is intended and correct as designed. The card's note counts the notes. A note is a nit and is not unconfirmed, so it never counts for request changes; a review with only notes offers a comment that counts them as optional suggestions. The card selects nothing by severity, so a note is decided item by item as any nit.
+- **What writing down does not excuse** (`src/Scout.Review/ContestRequest.cs:19`). A recorded shortcoming that silently loses or corrupts data, or exposes a secret, holds at its severity with the record cited. Code cannot check that; the instructions and a test of their text carry it.
+- **The cited place** (`Contestation.Checked`, `src/Scout.Review/Contestation.cs:356`; read in the worker by `Checked`, `src/Scout.Audit/AuditWorker.Reviews.cs:768`). A refutation or a note whose reason cites a file and line (`path:N`, `path#LN`, `path line N`) that the job's snapshot does not hold, a missing file or a file with fewer lines, is uncertain. Only that the place exists is checked, never what it says. Each cited file is read once per answer from the snapshot, by the same reader the code around a finding uses, within the snapshot and at most 1 MB; with no snapshot nothing is checked.
+- **Stored.** `noted` is a state of its own in the findings' text column, with its reason; no migration. The turn table's counts of holds, refuted and uncertain gain no noted column: it would need a migration, and was left.
+- **Held by** `tests/Scout.Review.Tests/ContestationTests.cs:228` to `:287`, `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:1705`, `:1724` and `:1735`, and `tests/Scout.Audit.Tests/FindingsBlockTests.cs:79`.

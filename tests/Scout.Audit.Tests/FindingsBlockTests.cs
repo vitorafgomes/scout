@@ -74,6 +74,19 @@ public sealed class FindingsBlockTests
         written.ShouldBe(Today, "a job's findings are written with the same field names in the same order as today");
         (verdict, read.ShouldHaveSingleItem()).ShouldBe(("sound", finding), "a block written in today's shape is read back field by field");
     }
+
+    [Fact]
+    public void T1_the_card_puts_back_the_noted_and_unconfirmed_prefixes_the_block_s_own_reading_strips_and_only_on_the_findings_named()
+    {
+        Finding One(string id) => new(id, "nit", "T", "src/A.cs", 3, null, "W", "F", null);
+        var block = FindingsBlock.Write("acme", "shop", Commit, "sound", "3 of 3 files read", [One("a"), One("b"), One("c")]);
+
+        var card = FindingsBlock.Complete(block, 3, 3, [], "t", unconfirmed: new HashSet<string> { "b" }, noted: new HashSet<string> { "a" }).ShouldNotBeNull();
+
+        using var json = System.Text.Json.JsonDocument.Parse(card[(card.IndexOf('\n', StringComparison.Ordinal) + 1)..card.LastIndexOf("```", StringComparison.Ordinal)]);
+        json.RootElement.GetProperty("findings").EnumerateArray().Select(f => f.GetProperty("title").GetString()).ShouldBe(
+            ["Noted: T", "Unconfirmed: T", "T"], "a noted finding is titled Noted, an unconfirmed one Unconfirmed, and any other keeps its title");
+    }
 }
 
 /// <summary>The table of findings the three readers are pinned with: one JSON array per row.</summary>
