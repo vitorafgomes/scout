@@ -1,9 +1,9 @@
 ---
 title: "Sandbox"
-version: "1.12"
+version: "1.13"
 date: 2026-11-07
-updated: 2026-11-12
-changes: "v1.12 (2026-11-13) the Docker runs switch the host reads once also reaches the audit's review environment, for the check before a pull request review (ADR 0055).."
+updated: 2026-11-21
+changes: "v1.13 (2026-11-21): the test summary reader page. v1.12 (2026-11-13) the Docker runs switch the host reads once also reaches the audit's review environment, for the check before a pull request review (ADR 0055).."
 page_type: service
 status: active
 description: "Runs a repository snapshot's tests in a disposable Docker container on the owner's machine, through the docker command line, under fixed isolation rules: the work folder under Scout's data folder is the only mount, the image is pinned by digest, the tests run without the network, as an unprivileged user on a read-only filesystem with every capability dropped and capped pids, memory, CPU and time."
@@ -38,6 +38,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/sandbox/public-contract\|Public contract]] | Public contract | 7890 |
 | [[pages/services/sandbox/how-it-works-mermaid\|How it works: mermaid]] | mermaid; Stacks; Tests that need Docker; Scout's own repository in its sandbox; Java versions | 10901 |
 | [[pages/services/sandbox/how-it-works-net-node-bun-python-and-go-versions\|How it works: .NET, Node, Bun, Python and Go versions]] | .NET, Node, Bun, Python and Go versions; Images; Layout | 9034 |
+| [[pages/services/sandbox/test-summary-reader\|The test summary reader]] | The test summary reader; tests that could not run | 2504 |
 | [[pages/services/sandbox/the-rules\|The rules]] | The rules | 5584 |
 | [[pages/services/sandbox/failures\|Failures (Rule I)]] | Failures (Rule I) | 3400 |
 | [[pages/services/sandbox/hot-spots\|Hot spots]] | Hot spots | 693 |

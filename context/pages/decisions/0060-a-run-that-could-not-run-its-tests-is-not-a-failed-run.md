@@ -1,9 +1,9 @@
 ---
 title: "ADR 0060 - A run that could not run its tests is not a failed run"
-version: "1.1"
+version: "1.2"
 date: 2026-11-15
-updated: 2026-11-19
-changes: "v1.1 (2026-11-19): amendment, the desktop reads unrunnable. v1.0: the decision as first written"
+updated: 2026-11-21
+changes: "v1.2 (2026-11-21): amendment, the review job runs the tests itself under the Local container grant. v1.1 (2026-11-19): amendment, the desktop reads unrunnable. v1.0: the decision as first written"
 page_type: adr
 status: accepted
 description: "A container run whose failed tests all needed the Docker daemon the container does not have is reported as unrunnable, with how many, and never as failed; nothing is filtered out by a name the snapshot gives."
@@ -38,7 +38,7 @@ A review of a repository whose integration tests need a Docker daemon ran `dotne
   - every block carries one of `DotNet.Testcontainers`, `Docker.DotNet`, "Cannot connect to the Docker daemon", "Docker is either not running or misconfigured" or `docker.sock`, as the tools print them (`:305`, `:347`);
   - at least one assembly's summary line says `Failed!`, and every assembly that failed passed no test (`:352`, `:356`).
 - **The sentence** (`:362`), N the sum of the failed assemblies' `Failed:` counts and M the blocks the kept output holds: "N test(s) could not run: they need a Docker daemon, which the container does not have." when M is N or more; "N test(s) did not pass; the M whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have." when fewer.
-- **Where it is carried.** The host adapter copies it (`src/Scout.Host.Console/SandboxRunnerAdapter.cs:32`) into the plugin's `SandboxRunResult` (`src/Scout.Plugin.GitHub/Abstractions/ISandboxRunner.cs:43`); `run_pull_request_tests` answers it as `unrunnable`, and its description tells the model that such a run did not fail, to say which tests could not run and whether the commit's checks cover them (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:59`); the run kept for the head commit carries it (`:249`), so the scout-findings block's `tests` object writes `unrunnable` when set (`src/Scout.Plugin.GitHub/ReviewFindings.cs:274`).
+- **Where it is carried.** The host adapter copies it (`src/Scout.Host.Console/SandboxRunnerAdapter.cs:32`) into the plugin's `SandboxRunResult` (`src/Scout.Plugin.GitHub/Abstractions/ISandboxRunner.cs:43`); `run_pull_request_tests` answers it as `unrunnable`, and its description tells the model that such a run did not fail, to say which tests could not run and whether the commit's checks cover them (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:59`); the run kept for the head commit carries it (`:249`), so the scout-findings block's `tests` object writes `unrunnable` when set (`src/Scout.Plugin.GitHub/ReviewFindings.cs:246`).
 
 ## Calls that leave the process
 
@@ -71,5 +71,11 @@ None new. The rule reads the output the run already captured.
 ### 2026-11-19 - The desktop reads `unrunnable`
 
 - **Replaces, under "What follows",** the **Paid** sentence "the desktop's card and the verdict's tests line still say "Tests failed (exit 1)" until the desktop reads `unrunnable` ([[pages/roadmap/followups]])." It now reads: "**Paid:** nothing on the desktop: the review card says "Tests could not run" on a neutral chip with the worker's sentence under the chips, and the tests line a verdict posts reads "Tests could not run: <sentence>", never "Tests failed"; the run's last output is still shown."
-- **Where it holds:** `ReviewTests.unrunnable`, `ui/packages/shared/src/ipc-contract.ts:1716`; the parser, which keeps it only as text and only on a run that exited non-zero, `ui/packages/renderer/src/app/core/review-findings.ts:264`; the tests line, `:109`; the chip, its tone and the sentence, `ui/packages/renderer/src/app/core/review-findings.component.ts:123`, `:1460`, `:1465`; the Main artboard's state `awTestsUnrunnable`. The verdict buttons are unchanged: the commit's checks alone decide whether Approve is offered. It is described on [[pages/services/desktop-quick-ask/overview-replies]].
-- **How it is held:** `ui/packages/renderer/src/app/core/review-findings.spec.ts:302`, kept on a failed run, dropped on a passing run and when it is not text; `:438`, the tests line alone and after the checks; `ui/packages/renderer/src/app/core/review-findings.component.spec.ts:1307`, the chip, its tone, the sentence, Last output, Approve offered and the line the approval posts; `ui/e2e/tests/unrunnable-tests-card.spec.ts`, the same card over the built app.
+- **Where it holds:** `ReviewTests.unrunnable`, `ui/packages/shared/src/ipc-contract.ts:1716`; the parser, which keeps it only as text and only on a run that exited non-zero, `ui/packages/shared/src/review-findings.ts:282`; the tests line, `:109`; the chip, its tone and the sentence, `ui/packages/renderer/src/app/core/review-findings.component.ts:123`, `:1460`, `:1465`; the Main artboard's state `awTestsUnrunnable`. The verdict buttons are unchanged: the commit's checks alone decide whether Approve is offered. It is described on [[pages/services/desktop-quick-ask/overview-replies]].
+- **How it is held:** `ui/packages/shared/test/review-findings.test.ts:241`, kept on a failed run, dropped on a passing run and when it is not text; `:438`, the tests line alone and after the checks; `ui/packages/renderer/src/app/core/review-findings.component.spec.ts:1307`, the chip, its tone, the sentence, Last output, Approve offered and the line the approval posts; `ui/e2e/tests/unrunnable-tests-card.spec.ts`, the same card over the built app.
+
+### 2026-11-21 - The review job runs the pull request's tests itself
+
+- **Adds:** a review job starts the pull request's tests itself, at its head, through `run_pull_request_tests` on the shared kernel (`src/Scout.Audit/AuditBatchRunner.cs`, `RunTestsAsync`), so the write gate checks the GitHub feature's "Local container" grant as for a call by the model; without the grant the card is told why the tests were not run and no container starts. The run's counts per test project are read as the output flows (`src/Scout.Sandbox/DockerSandboxRunner.cs:338`), and a project whose failures all needed the Docker daemon is unrunnable, never failed, as this record decided.
+- **For the offer:** tests that could not run here are covered by the pull request's own checks when every check passed; with no run kept the offer says no test ran here ([[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]]).
+- **How it is held:** `tests/Scout.Host.Console.Tests/HostReviewTurnTests.cs:159` (the refusal without the grant, no container started); no automated test shows a granted run through the gate reaching the sandbox ([[pages/roadmap/followups]]).

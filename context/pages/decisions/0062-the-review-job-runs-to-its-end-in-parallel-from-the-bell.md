@@ -62,7 +62,7 @@ What Scout does:
   - One bell entry per pull request job, id `reviewjob:owner/repo#n` (`ui/packages/main/src/notifications/sources.ts:107`). It is not the mention review's `review:` entry, one turn the owner's mention starts, with no batches and no controls.
   - It shows the batches, files read and findings so far; at the end, the action `open-chat`.
   - The quiet chat: the progress, resumed and owner's pause lines never become chat turns (`ui/packages/main/src/notifications/sources.ts:234`, `ui/packages/main/src/quick-ask/quick-ask.ts:1965`). The start answer, a pause that needs the owner and the card always reach the chat.
-  - The card shows the measured line, `N of M files read`, and the notes in place of "What Scout says it read". They are kept only from a block that arrived in a worker's notice (`ui/packages/renderer/src/app/core/review-findings.store.ts:501`, `ui/packages/renderer/src/app/core/review-findings.ts:190`). A reply is the model's turn, where the model or a pull request's text could write a count no code measured.
+  - The card shows the measured line, `N of M files read`, and the notes in place of "What Scout says it read". They are kept only from a block that arrived in a worker's notice (`ui/packages/renderer/src/app/core/review-findings.store.ts:501`, `ui/packages/shared/src/review-findings.ts:241`). A reply is the model's turn, where the model or a pull request's text could write a count no code measured.
 
 ## Calls that leave the process
 
@@ -96,7 +96,7 @@ None new. The batch turns of ADR 0061 run up to `ReviewParallelBatches` at once.
   - `tests/Scout.Audit.Tests/SqliteAuditStoreTests.cs:433`, `:454`, `:473`, `:484`.
   - No test holds that a wave begun before the bound ends.
 - The stopped card: `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:816`, `:941`, `:960`, `:973`.
-- The desktop: `ui/packages/main/test/notifications-sources.test.ts:587`, `:798`; `ui/packages/main/test/notifications-job-controls.test.ts:1486`, `:1507`, `:1523`, `:1555`; `ui/packages/main/test/quick-ask.test.ts:636`; `ui/packages/renderer/src/app/core/review-findings.spec.ts:457`, `:484`; `ui/packages/renderer/src/app/chat/chat.component.spec.ts:658`; `ui/packages/renderer/src/app/core/review-findings.component.spec.ts:2037`, `:2055`; `ui/packages/renderer/src/app/shell/notification-bell.component.spec.ts:625`, `:650`.
+- The desktop: `ui/packages/main/test/notifications-sources.test.ts:587`, `:798`; `ui/packages/main/test/notifications-job-controls.test.ts:1486`, `:1507`, `:1523`, `:1555`; `ui/packages/main/test/quick-ask.test.ts:636`; the card parser's tests in `ui/packages/shared/test/review-findings.test.ts` (unconfirmed since the card code moved to `ui/packages/shared`), `:484`; `ui/packages/renderer/src/app/chat/chat.component.spec.ts:658`; `ui/packages/renderer/src/app/core/review-findings.component.spec.ts:2037`, `:2055`; `ui/packages/renderer/src/app/shell/notification-bell.component.spec.ts:625`, `:650`.
 - Invariants: [[pages/invariants/no-executive-writes]], [[pages/invariants/review-writes-on-its-pull-request]], [[pages/invariants/local-first-default]].
 
 ## Links

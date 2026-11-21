@@ -1,9 +1,9 @@
 ---
 title: "ADR 0058 - Scout approves a pull request only when every check of the commit passed"
-version: "1.1"
+version: "1.2"
 date: 2026-11-15
-updated: 2026-11-15
-changes: "v1.1 (2026-11-15): amendment: an approval also needs a pull request without conflicts whose mergeability GitHub computed. v1.0: the decision as first written"
+updated: 2026-11-21
+changes: "v1.2 (2026-11-21): amendment, no approval is offered for now (ADR 0070). v1.1 (2026-11-15): amendment: an approval also needs a pull request without conflicts whose mergeability GitHub computed. v1.0: the decision as first written"
 page_type: adr
 status: accepted
 description: "Before an approval is sent, Scout reads the check runs and commit statuses of the reviewed commit and refuses it while one is still running, did not pass or could not be read; requesting changes and commenting are not held back."
@@ -70,3 +70,8 @@ None new in kind: `GET repos/{o}/{r}/commits/{sha}/check-runs` and `GET repos/{o
 ### 2026-11-15: an approval also needs a pull request GitHub can merge
 
 Extends the sentence "Before an approval is sent, Scout reads the check runs and commit statuses of the reviewed commit and refuses it while one is still running, did not pass or could not be read". Now also: "An approval is refused when GitHub says the pull request conflicts with its base branch (`mergeable` false or `mergeable_state` `dirty`) or has not computed `mergeable` yet; both come from the pull request read the verdict already makes, and the refusal comes before the checks are read." Requesting changes is not held back. Holds in `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:229` and `:234`, [[pages/services/plugin-github/the-writes]], and `tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginVerdictTests.cs:185`, `:197`, `:209`, `:222`.
+
+### 2026-11-21 - No approval is offered for now
+
+- **Adds, in front of the gate's refusals,** that an approval the review does not offer is refused with "Scout approves only when the review offers approval." and the offer's reason (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:318`), and the review does not offer one on its own, by [[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]]. The check rule of this record stays in the code and applies again when the approval returns under the owner's flag.
+- **How it is held:** `tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginVerdictTests.cs:67`.

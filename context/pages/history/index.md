@@ -29,6 +29,7 @@ source: ["context/pages/history/"]
 - [[pages/history/meetings|Meetings - history]] - What changed in the meetings store and when.
 - [[pages/history/operator|Operator - history]] - What changed in the channel operator worker and when, and the dated acceptance runs the service page points to.
 - [[pages/history/plugin-github|Plugin.GitHub - history]] - What changed in the GitHub plugin and when.
+- [[pages/history/review|Review - history]] - What changed in Scout.Review, the project that holds the review's rules, and when.
 - [[pages/history/sandbox|Sandbox - history]] - What changed in Scout.Sandbox and when.
 - [[pages/history/skills|Skills - history]] - What changed in the Skills project and when.
 - [[pages/history/transcription-whisper|Transcription.Whisper - history]] - What changed in local Whisper transcription and when.

@@ -1,9 +1,9 @@
 ---
 title: "Project map"
-version: "1.10"
+version: "1.11"
 date: 2026-10-21
-updated: 2026-11-07
-changes: "Host.Console references Scout.Sandbox and adapts it to the GitHub plugin's ISandboxRunner (2026-11-07). Earlier: Scout.Audit, the whole-repository audit job over Llm, Conversation and Knowledge, referenced by Host.Console (2026-11-07).."
+updated: 2026-11-21
+changes: "Scout.Review, the review's rules, a library with no reference, used by Scout.Audit and Scout.Plugin.GitHub (2026-11-21). Earlier: Host.Console references Scout.Sandbox and adapts it to the GitHub plugin's ISandboxRunner (2026-11-07). Earlier: Scout.Audit, the whole-repository audit job over Llm, Conversation and Knowledge, referenced by Host.Console (2026-11-07).."
 page_type: longform
 status: active
 description: "Every project under src/ with its kind, its ProjectReference dependencies and the test project that covers it."
@@ -33,6 +33,7 @@ Derived from the `ProjectReference` items in each `.csproj`. Package references 
 | [[pages/services/transcription-whisper]] | library | Conversation | `Scout.Transcription.Whisper.Tests` |
 | [[pages/services/meetings]] | library | Conversation | `Scout.Meetings.Tests` |
 | [[pages/services/sandbox]] | library | none | `Scout.Sandbox.Tests` |
+| [[pages/services/review]] | library | none | `Scout.Review.Tests` |
 | [[pages/services/operator]] | library | Llm, Conversation, Plugin.YouTube | `Scout.Operator.Tests` |
 | [[pages/services/audit]] | library | Llm, Conversation, Knowledge | `Scout.Audit.Tests` |
 | [[pages/services/control-plane-contracts]] | contracts | none | none of its own (`Scout.ControlPlane.Tests`) |

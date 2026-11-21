@@ -1,9 +1,9 @@
 ---
 title: "Testing"
-version: "1.29"
+version: "1.30"
 date: 2026-10-21
-updated: 2026-11-12
-changes: "A test that asserts a relative time pins the clock, so the minutes between module load and assertion cannot change the text; notification-bell.component.spec.ts pins Date for the whole file (2026-11-12).."
+updated: 2026-11-21
+changes: "v1.30 (2026-11-21): Scout.Review.Tests listed. A test that asserts a relative time pins the clock, so the minutes between module load and assertion cannot change the text; notification-bell.component.spec.ts pins Date for the whole file (2026-11-12).."
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -61,6 +61,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 | `Scout.Transcription.Whisper.Tests` | 15 | [[pages/services/transcription-whisper]] |
 | `Scout.Meetings.Tests` | 12 | [[pages/services/meetings]] |
 | `Scout.Sandbox.Tests` | 126 (271 cases; 10 need Docker, recounted 2026-11-12) | [[pages/services/sandbox]] |
+| `Scout.Review.Tests` | 102 (2026-11-21) | [[pages/services/review]] |
 
 `tests/old`, the 653 test attributes of the retired first cut, was deleted with it on 2026-11-06; both are in the history before `93da0d4`.
 

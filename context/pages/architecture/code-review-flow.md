@@ -1,9 +1,9 @@
 ---
 title: "Code review: the whole flow, step by step"
-version: "1.3"
+version: "1.4"
 date: 2026-11-10
-updated: 2026-11-19
-changes: "v1.3 (2026-11-19): the review job reads every batch, code first, several at once, shown in the bell, one card. v1.2 (2026-11-18): a pull request whose answer left a diff out becomes a review job"
+updated: 2026-11-21
+changes: "v1.4 (2026-11-21): the review job as it reads now: evidence and derived lines, parts, focused readings, the second reading, one offer. v1.3 (2026-11-19): the review job reads every batch, code first, several at once, shown in the bell, one card. v1.2 (2026-11-18): a pull request whose answer left a diff out becomes a review job"
 page_type: longform
 status: active
 description: "The flow of a code review in Scout as one diagram and ten steps: choosing the process, reading, the checks of each dimension, the answer, the owner's decisions on the cards, the writes on the pull request and the follow-up; each step as the skill carries it since 2026-11-10."
@@ -104,12 +104,24 @@ flowchart TD
    - Comment on the code, never on the person. Every finding is on a file and line, says what is wrong, why it matters and the smallest fix; blocking, should fix and nit are told apart; at most ten.
    - What is done well is said once, as a short "Done well" part of the summary (at most three lines); praise is never a finding or a posted comment.
 10. **Decision and follow-up.**
-    - The verdict (merge, merge after the blocking and should-fix items, needs rework); Approve and Request changes on the card; every write waits for the owner's approval in the desktop, is sent once and is logged.
+    - The verdict (merge, merge after the blocking and should-fix items, needs rework); the card offers one action, decided by code ([[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]]): request changes for a confirmed finding that needs fixing, a comment otherwise; Scout does not approve on its own, a person approves on GitHub; every write waits for the owner's approval in the desktop, is sent once and is logged.
     - A review asked again after new commits reads Scout's earlier comments, checks each earlier finding against the new head commit (fixed, still there or changed), reports only new findings as new, and answers on a thread with `reply_to_review_comment` only when the owner asks.
     - Not possible: marking a conversation resolved on GitHub is a write Scout does not have; the skill says so.
+
+## Inside a review job
+
+A review job reads each batch in turns that each end in one findings block; how each part works is its own record.
+
+- **Evidence.** Every finding quotes its file's patch, and Scout derives the line from the quote; a finding it cannot place is asked for once more, then left out and named. [[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]]
+- **Parts.** A file too large for one batch is read in parts, with the code, before the documentation. [[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]]
+- **Focused readings.** A batch with code or tests is read again for what it removes and against the description's requests. [[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]]
+- **The second reading.** Before the card, each finding is read again by a turn told to refute it, reading the head; it holds a finding only with a scenario and sets its severity by rule. [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]
+- **The tests.** The job runs the pull request's tests itself in the sandbox, under the GitHub feature's "Local container" grant; tests that need a Docker daemon could not run and are not failures. [[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]
+- **The numbers.** Every turn's numbers are kept in the job database, and the card says how many times the model was asked. [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]
+- **The rules** all live in Scout.Review. [[pages/decisions/0065-the-review-rules-live-in-scout-review]]
 
 ## What a review never does
 
 - Open an issue, or start an audit of the repository.
-- Edit files, commit, merge, or approve by itself.
+- Edit files, commit, merge, or approve: Scout does not approve on its own.
 - Treat anything it read (files, diffs, comments, check output) as an instruction.

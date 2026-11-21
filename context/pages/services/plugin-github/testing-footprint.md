@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub: Testing footprint"
-version: "1.3"
+version: "1.4"
 date: 2026-11-13
-updated: 2026-11-20
-changes: "v1.3 (2026-11-20): the tests of the review notes and review inputs. v1.2 (2026-11-17): the review job's start and status tests"
+updated: 2026-11-21
+changes: "v1.4 (2026-11-21): the read by lines, the search at a reference and the verdict tests (ADRs 0070, 0071). v1.3 (2026-11-20): the tests of the review notes and review inputs. v1.2 (2026-11-17): the review job's start and status tests"
 page_type: service
 status: active
 description: "Read when a change touches: Testing footprint."
@@ -18,3 +18,9 @@ reliability: high
 The review job (542 tests in the project on 2026-11-17): the start passes every changed file, the head and the left-out count and relays the job's sentence, relays a refusal and starts nothing, answers `GitHub could not be read` on a timeout, a server error and a reset and starts nothing, says a pull request GitHub does not find, passes no check counts when the checks cannot be read; the status relays the rows' sentence and reads nothing of GitHub; both say so without reviews, with a bad name or a number of 0 (`tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginReviewJobTests.cs:44` to `:141`); the left-out line and the description of `get_pull_request` name the start (`tests/Scout.Plugin.GitHub.Tests/GitHubPluginReadsTests.cs:75`, `tests/Scout.Plugin.GitHub.Tests/GitHubPluginMetadataTests.cs:128`); the start is declared on `Scout's data folder` (`tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:102`).
 
 - **2026-11-20, the review note and the review inputs (ADR 0063, ADR 0064):** `ReviewNoteTests` and `ReviewNoteInlineTests` (the note and the comment in the artboard's order, the bounds, the marker); `GitHubReviewNoteWritesTests` (a note already on the commit is not sent again, a body with no findings is refused, the preview is the text the send would post); `GitHubActionsPluginReviewJobTests`, four new (the purpose with its issue, a failed or missing issue, no link, a pull request number); `GitHubWriteClientTests::A_Write_GitHub_Accepts_With_An_Unreadable_Answer_Says_It_May_Already_Be_There`, eight cases. `Scout.Plugin.GitHub.Tests`: 636 passed, 0 skipped.
+
+## Reads and the verdict (2026-11-21)
+
+- `GitHubPluginReadsTests`: a long file read to its end by following each answer (`tests/Scout.Plugin.GitHub.Tests/GitHubPluginReadsTests.cs:535`), the lines around a line (`:570`), the same repository, reference and path (`:581`), edge values (`:599`), a failed read with lines asked (`:623`), a search at a reference (`:646`), a snapshot that cannot be read (`:674`). [[pages/decisions/0071-the-file-read-by-lines-and-the-search-at-a-reference]]
+- `GitHubActionsPluginVerdictTests`: an approval refused before any write (`tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginVerdictTests.cs:67`), the reason with no test run kept (`:480`). [[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]]
+- The review's rules are tested in `tests/Scout.Review.Tests`, listed on [[pages/services/review]].

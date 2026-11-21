@@ -1,9 +1,9 @@
 ---
 title: "Audit"
-version: "1.19"
+version: "1.20"
 date: 2026-11-11
-updated: 2026-11-20
-changes: "v1.19 (2026-11-20): the review inputs page linked (ADR 0064). v1.18 (2026-11-13) the checks before a review, first part (a done review at the same commit blocks; the size never past 60 minutes): a review start answers ReviewStart with its checks, size, Docker runs, head, another review and grants, each ok, a warning or a block, kept once on the job's new."
+updated: 2026-11-21
+changes: "v1.20 (2026-11-21): a topic page added. v1.19 (2026-11-20): the review inputs page linked (ADR 0064). v1.18 (2026-11-13) the checks before a review, first part (a done review at the same commit blocks; the size never past 60 minutes): a review start answers ReviewStart with its checks, size, Docker runs, head, another review and grants, each ok, a warning or a block, kept once on the job's new."
 page_type: service
 status: active
 description: "Runs a whole-repository audit as a job: plans the batches from the repository snapshot, runs one model turn per batch with a closed scope, keeps the plan, the files read and the findings in SQLite under Scout's data folder, posts the findings into the conversation that started it, and resumes after a restart."
@@ -30,6 +30,7 @@ Read the page your change touches, not all of them.
 | Page | Read when a change touches | Characters |
 |---|---|---|
 | [[pages/services/audit/public-contract\|Public contract]] | Public contract | 8338 |
+| [[pages/services/audit/public-contract-review-quality\|Public contract, review quality]] | A finding's evidence, parts, focused readings, the second reading, the turn table | 2938 |
 | [[pages/services/audit/how-it-works-mermaid\|How it works: mermaid]] | mermaid; Start; Review start; Checks before a review | 11994 |
 | [[pages/services/audit/how-it-works-plan\|How it works: Plan]] | Plan; Rows; Merge | 7984 |
 | [[pages/services/audit/how-it-works-batch-turn\|How it works: Batch turn]] | Batch turn; Worker | 11154 |

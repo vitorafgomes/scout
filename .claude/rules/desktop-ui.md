@@ -46,6 +46,7 @@ The full statement of each, with the code and tests that hold it: `context/pages
 
 Read one when your change touches what its title names.
 
+- [[pages/decisions/0072-the-desktop-app-serves-a-local-mcp-server|ADR 0072 - The desktop app serves a local MCP server]] - `ui/packages/main/src/mcp/`
 - [[pages/invariants/secrets-never-in-source|Secrets never live in source]] - credentials go to the OS keychain through `safeStorage`, never to a file in the repo.
 - [[pages/invariants/no-executive-writes|Scout performs descriptive writes only]] - the UI is the one place Scout mutates the host on the user's behalf (model pulls, worker process); the download and delete of local models are ruled a reviewed local write on the owner's click by the amendment of 2026-11-11 to [[pages/decisions/0032-per-feature-write-permissions|ADR 0032 - Features declare what they write, and the owner grants each one]], and starting the worker process is still not classified.
 - [[pages/decisions/0004-web-stack-angular|ADR - Web stack is Angular]] and [[pages/decisions/0005-scout-desktop-m1-scope|Scout Desktop M1 scope and deferrals]] - the stack and the M1 deferrals.
@@ -71,6 +72,7 @@ Find the row your change matches and read that page. Read one or two rows, not t
 | If the change touches | Read |
 |---|---|
 | Layout | `context/pages/services/desktop-ui/layout.md` |
+| The MCP server; its Settings group; its token; its four tools | `context/pages/services/desktop-ui/mcp-server.md` |
 | Since 2026-11-06 (pages/decisions/0041-angular-material-in-the-renderer) the renderer carries; Theme choice; Top bar; Icons; Notices | `context/pages/services/desktop-ui/theme-and-notices-since-2026-11-06-the-renderer.md` |
 | Tests: ui/packages/renderer/src/styles.spec.ts (the base not dark,; Notification center | `context/pages/services/desktop-ui/theme-and-notices-tests-ui-packages-renderer-src.md` |
 | ADR 0045 (pages/decisions/0045-theme-and-notification-center). NotificationStore (ui/packages/main/src/notifications/notification-store.ts:55) keeps | `context/pages/services/desktop-ui/theme-and-notices-adr-0045-notificationstore-kee.md` |

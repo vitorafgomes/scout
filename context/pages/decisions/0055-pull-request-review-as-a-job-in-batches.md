@@ -1,9 +1,9 @@
 ---
 title: "ADR 0055 - The pull request review as a job in batches"
-version: "1.4"
+version: "1.5"
 date: 2026-11-13
-updated: 2026-11-19
-changes: "v1.4 (2026-11-19) dated line: amended by ADR 0062"
+updated: 2026-11-21
+changes: "v1.5 (2026-11-21): dated line: amended by ADRs 0066 to 0069 and 0073. v1.4 (2026-11-19) dated line: amended by ADR 0062"
 page_type: adr
 status: accepted
 description: "When a pull request's answer leaves any diff out, code-review starts a review job: an audit_job row of kind review with its pull request number, run by the audit worker before any audit, in batches cut by Scout from the head commit's patches, each batch a closed read-only turn, bounded, checked before it starts, and ending in one scout-findings card through present_review_findings with the verdict and the read line computed by code."
@@ -47,6 +47,8 @@ Amended 2026-11-13: the checks before the start are built in part, still with no
 Amended 2026-11-18 by [[pages/decisions/0061-the-pull-request-review-job-as-built]]: the third change is built; that record says where the build differs from this text.
 
 Amended 2026-11-19 by [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]: no bound on batches, code first, batches at once, the bell, a pause at 60 minutes.
+
+Amended 2026-11-21 by [[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]], [[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]], [[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]], [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] and [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]: a finding's line comes from its quote, a large file is read in parts, two focused readings run on code batches, a second reading tries to refute each finding, and every turn's numbers are kept.
 
 ## Context
 

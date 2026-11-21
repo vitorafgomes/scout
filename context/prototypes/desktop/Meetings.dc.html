@@ -51,6 +51,9 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
 </sc-if>
 </button>
+<a href="Settings.dc.html" aria-label="Settings" title="Settings" style="width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center; text-decoration: none; box-sizing: border-box">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 12h4M12 12h8M8 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 18h11M19 18h1M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0"></path></svg>
+</a>
 
 <sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
 <section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
@@ -232,7 +235,6 @@ class Component extends DCLogic {
       ['Meetings', 'Meetings.dc.html', 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],
       ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
       ['Logs', 'Logs.dc.html', 'M4 6h16M4 12h16M4 18h10'],
-      ['Settings', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1'],
       ['YouTube operator', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
     ].filter(([label]) => label !== 'YouTube operator' || this.state.youtubeConnected !== false);
     const nav = navDefs.map(([label, href, d]) => {

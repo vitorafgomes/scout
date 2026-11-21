@@ -66,6 +66,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
 </sc-if>
 </button>
+<a href="Settings.dc.html" aria-label="Settings" title="Settings" style="width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center; text-decoration: none; box-sizing: border-box">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 12h4M12 12h8M8 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 18h11M19 18h1M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0"></path></svg>
+</a>
 
 <sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
 <section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
@@ -186,6 +189,14 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </sc-for>
 <span>A proposal for the owner (approve together): an audit card's Open issues is the approval and nothing waits in Approvals; today the issues wait there one by one.</span>
 </div>
+<div role="group" aria-labelledby="pv-offer" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-offer">What the review offers</span>
+<sc-for list="{{offerStates}}" as="ps" hint-placeholder-count="6">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>The worker decides the one action of a review card and says why; the card shows it and decides nothing.</span>
+<span>The worker does not give the Approve or the Approve when the checks pass offer today; the card still draws them when given one.</span>
+</div>
 <div role="group" aria-labelledby="pv-dictation" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
 <span id="pv-dictation">Hold to talk and alerts</span>
 <sc-for list="{{dictationStates}}" as="ps" hint-placeholder-count="5">
@@ -205,7 +216,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <sc-for list="{{awStates}}" as="ps" hint-placeholder-count="12">
 <button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
 </sc-for>
-<span>A design for the owner, not built: Scout approves only when every check of the reviewed commit passed. One click on Approve when the checks pass is your approval; Scout cancels it when a check fails, a new commit arrives or 2 hours pass.</span>
+<span>A design for the owner, not built: Scout does not approve on its own today, so a person approves on GitHub. When the approval returns, one click on Approve when the checks pass is your approval; Scout cancels it when a check fails, a new commit arrives or 2 hours pass.</span>
 </div>
 <div role="group" aria-labelledby="pv-merge" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
 <span id="pv-merge">Merge after approving</span>
@@ -243,7 +254,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </article>
 </sc-for>
 <p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{rjVerdict}}</p>
-<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Each finding has Yes, No and Edit, and the card has Post, Request changes and Approve, as on the findings card above; nothing is written on GitHub before you choose.</p>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Each finding has Yes, No and Edit, and the card has one action, the one Scout offers for the findings selected (Request changes or Comment; Scout does not approve on its own, so a person approves on GitHub), with its reason; Request changes also offers Send as a comment instead. Nothing is written on GitHub before you choose.</p>
 </div>
 </sc-if>
 </sc-if>
@@ -332,8 +343,18 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <span style="font-size: 13px; color: {{t.fg2}}">{{cardSummary}}</span>
 <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end">
 <button type="button" onClick="{{cardYesAll}}" style="min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Yes to all</button>
+<sc-if value="{{cardHasPrimary}}" hint-placeholder-val="{{true}}">
 <button type="button" aria-disabled="{{cardPostDisabled}}" onClick="{{cardPost}}" style="min-height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: {{cardPostBg}}; color: {{cardPostFg}}; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>{{cardPostLabel}}</button>
+</sc-if>
 </div>
+<sc-if value="{{cardIsReview}}" hint-placeholder-val="{{true}}">
+<p role="status" style="margin: 0; font-size: 12px; color: {{t.fg2}}; text-align: right">{{offerReason}}</p>
+</sc-if>
+<sc-if value="{{offerCommentInstead}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; justify-content: flex-end">
+<button type="button" aria-disabled="{{cardPostDisabled}}" onClick="{{offerSendComment}}" style="min-height: 28px; padding: 0 8px; border-radius: 8px; border: 0; background: transparent; color: {{t.fg2}}; font-size: 12px; text-decoration: underline">Send as a comment instead</button>
+</div>
+</sc-if>
 </sc-if>
 <sc-if value="{{cardHasApprovalLine}}" hint-placeholder-val="{{true}}">
 <p style="margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.fg2}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>{{cardApprovalLine}}</p>
@@ -365,15 +386,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <sc-if value="{{awShowVerdict}}" hint-placeholder-val="{{true}}">
 <div role="group" aria-label="Verdict" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid {{t.line}}">
 <span style="font-size: 12px; color: {{t.muted}}; margin-right: auto">Verdict on the reviewed commit</span>
-<sc-if value="{{awPlainApprove}}" hint-placeholder-val="{{true}}">
-<button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>{{awApproveLabel}}</button>
-</sc-if>
-<sc-if value="{{awOffersWait}}" hint-placeholder-val="{{false}}">
-<button type="button" aria-label="{{awWaitAria}}" onClick="{{awArm}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>{{awWaitLabel}}</button>
-</sc-if>
-<sc-if value="{{cardDecides}}" hint-placeholder-val="{{true}}">
-<button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Request changes</button>
-</sc-if>
+<span style="font-size: 12px; color: {{t.fg2}}">The one action above is what Scout offers for the findings selected.</span>
 </div>
 <sc-if value="{{awHasMergeLine}}" hint-placeholder-val="{{false}}">
 <p style="margin: 0; font-size: 12px; color: {{awMergeLineFg}}">{{awMergeLine}}</p>
@@ -973,6 +986,18 @@ class Component extends DCLogic {
       ? (n - failedCount) + ' of ' + n + ' opened on acme/shop' + (failedCount ? '; 1 failed and was not sent again.' : '.') + ' Each is in History and the write log.'
       : 'Opening ' + n + ' issues on acme/shop, one second apart: ' + (doneCount - (selected.slice(0, doneCount).some((x) => x.id === failId) ? 1 : 0)) + ' opened, ' + (selected.slice(0, doneCount).some((x) => x.id === failId) ? '1 failed, ' : '') + (doneCount < n ? 1 : 0) + ' opening, ' + Math.max(n - doneCount - 1, 0) + ' waiting. Your click on Open was the approval.';
     const previewOpen = this.state.cardPreview === true && audit && open;
+    const offerId = this.state.offer || (['awPending', 'awTimedOut', 'awRefused', 'mgOwnPending'].includes(aw) ? 'wait' : ['mgOwn', 'mgOther'].includes(aw) ? 'approve' : 'request_changes');
+    const offers = {
+      approve: [aw === 'mgOwn' ? 'Approve and merge' : 'Approve', 'Approve: every changed file was read, nothing needs fixing, the tests passed and every check passed.'],
+      request_changes: ['Request changes', 'Request changes: 1 finding needs fixing.'],
+      comment: ['Comment', 'Comment, not approve: 1 optional suggestion was kept.'],
+      wait: [aw === 'mgOwnPending' ? 'Approve and merge when the checks pass' : 'Approve when the checks pass', 'Approve when the checks pass: 2 checks are still running.'],
+      none: ['', 'The pull request changed since the review; review it again.'],
+      asking: ['', 'Asking Scout what it offers for this selection.'],
+      old: ['Comment', 'This review was made before Scout decided the verdict; review it again to see what Scout offers.'],
+    };
+    const offer = offers[offerId];
+    const offerBlocked = offerId === 'none' || offerId === 'asking';
     const picksAll = (ids) => { const p = {}; ids.forEach((id) => { p[id] = 'yes'; }); return p; };
     return {
       turnQuestion: audit ? 'Audit acme/shop' : 'Review ' + pr[0] + '#' + pr[1] + ' and run its tests',
@@ -1007,14 +1032,24 @@ class Component extends DCLogic {
       cardDecides: !clean,
       cardYesAll: () => { if (open) this.setState({ picks: { ...picks, ...picksAll(unsent.map((f) => f.id)) } }); },
       cardAllSent: allSent,
-      cardPostLabel: label,
-      cardPostDisabled: n === 0 ? 'true' : 'false',
-      cardPostBg: n === 0 ? t.surface : t.accentStrong,
-      cardPostFg: n === 0 ? t.muted : '#ffffff',
+      cardPostLabel: audit ? label : (offerId === 'asking' ? 'Request changes' : offer[0]),
+      cardHasPrimary: audit || offerId !== 'none',
+      cardPostDisabled: (audit ? n === 0 : offerBlocked) ? 'true' : 'false',
+      cardPostBg: (audit ? n === 0 : offerBlocked) ? t.surface : t.accentStrong,
+      cardPostFg: (audit ? n === 0 : offerBlocked) ? t.muted : '#ffffff',
       cardPost: () => {
-        if (n === 0 || !open) return;
-        if (audit) { this.setState({ card: 'auditSending', cardSent: 0, cardPreview: false }); this.cardTick(); } else this.setState({ card: 'reviewPosting' });
+        if (!open) return;
+        if (audit) { if (n > 0) { this.setState({ card: 'auditSending', cardSent: 0, cardPreview: false }); this.cardTick(); } return; }
+        if (offerBlocked) return;
+        if (offerId === 'wait') this.setState({ aw: aw === 'mgOwnPending' ? 'mgWaiting' : 'awWaiting', bellOpen: true, bellTab: 'all' }); else this.setState({ card: 'reviewPosting' });
       },
+      offerReason: offer[1],
+      offerCommentInstead: !audit && offerId === 'request_changes',
+      offerSendComment: () => { if (open) this.setState({ card: 'reviewPosting' }); },
+      offerStates: [['request_changes', 'Request changes'], ['comment', 'Comment'], ['approve', 'Approve'], ['wait', 'Approve when the checks pass'], ['none', 'None: the head moved'], ['asking', 'Waiting for the offer of a new selection'], ['old', 'A card from before the offer']].map(([id, lbl]) => ({
+        label: lbl, pressed: offerId === id ? 'true' : 'false', bg: offerId === id ? t.surface2 : 'transparent', fg: offerId === id ? t.fg : t.muted,
+        pick: () => this.setState({ offer: id }),
+      })),
       cardHasApprovalLine: n > 0,
       cardApprovalLine: audit ? 'This sends them now. Nothing else to approve.' : 'This posts the review now. Nothing else to approve.',
       cardPreviewOpen: previewOpen ? 'true' : 'false',
@@ -1022,12 +1057,12 @@ class Component extends DCLogic {
       cardTogglePreview: () => this.setState({ cardPreview: !previewOpen }),
       cardPreview: previewOpen ? selected.map((f) => ({ title: f.title, body: this.issueBody(f) })) : [],
       cardPosting: card === 'reviewPosting',
-      cardPostingLine: 'Posting the review… ' + n + ' comment' + (n === 1 ? '' : 's') + ' in one review on PR #5; your click on Post was the approval.',
+      cardPostingLine: 'Posting the review… ' + n + ' comment' + (n === 1 ? '' : 's') + ' in one review on PR #5; your click was the approval.',
       cardSending: card === 'auditSending' || card === 'auditDone',
       cardSendingLabel: 'Opening the issues on acme/shop',
       cardSendingHead: head,
       cardProgress: progress,
-      cardStates: [['review', 'Review: Post'], ['reviewTestsFailed', 'Review: tests failed, with their last output'], ['reviewGivenOffered', 'Review: verdict given, the Verdict group still offered'], ['reviewSameAgain', 'Review: the same verdict again, nothing sent'], ['reviewSecondVerdict', 'Review: a second verdict at the same commit'], ['reviewNotePreview', 'Review: preview of the note'], ['reviewNotePreviewFailed', 'Review: the preview could not be composed'], ['reviewClean', 'Review: no findings'], ['audit', 'Audit: Open issues'], ['auditSending', 'Audit: sending'], ['auditDone', 'Audit: one failed'], ['auditNewBatch', 'Audit: new batch after sending'], ['auditAllSent', 'Audit: every chosen issue sent']].map(([id, lbl]) => ({
+      cardStates: [['review', 'Review: its one action'], ['reviewTestsFailed', 'Review: tests failed, with their last output'], ['reviewGivenOffered', 'Review: verdict given, the Verdict group still offered'], ['reviewSameAgain', 'Review: the same verdict again, nothing sent'], ['reviewSecondVerdict', 'Review: a second verdict at the same commit'], ['reviewNotePreview', 'Review: preview of the note'], ['reviewNotePreviewFailed', 'Review: the preview could not be composed'], ['reviewClean', 'Review: no findings'], ['audit', 'Audit: Open issues'], ['auditSending', 'Audit: sending'], ['auditDone', 'Audit: one failed'], ['auditNewBatch', 'Audit: new batch after sending'], ['auditAllSent', 'Audit: every chosen issue sent']].map(([id, lbl]) => ({
         label: lbl, pressed: card === id ? 'true' : 'false', bg: card === id ? t.surface2 : 'transparent', fg: card === id ? t.fg : t.muted,
         pick: () => this.setState({ aw: 'off', mention: 'off', mr: {}, card: id, cardPreview: false, cardSent: id === 'auditSending' ? 2 : id === 'auditDone' ? 6 : 0, editing: undefined, picks: id === 'reviewNotePreview' ? { r1: 'yes', r2: 'yes' } : ['reviewGivenOffered', 'reviewSameAgain', 'reviewSecondVerdict'].includes(id) ? { r1: 'yes', r2: 'no' } : id === 'review' || id === 'reviewTestsFailed' || id === 'reviewClean' || id === 'reviewNotePreviewFailed' ? {} : picksAll(this.cardFindings(true).map((f) => f.id)) }),
       })),
@@ -1062,7 +1097,7 @@ class Component extends DCLogic {
     const merges = ['mgOwnPending', 'mgWaiting'].includes(aw);
     const marks = ['awApproved', 'awRefused', 'awTestsUnrunnable', 'awConflict', 'mgOwn', 'mgOther', 'mgMerged', 'mgNoSquash', 'mgRefused'].includes(aw) ? ['passed', 'passed', 'passed'] : ['awCheckFailed', 'awFailedAtReview'].includes(aw) ? ['passed', 'passed', 'failed'] : ['passed', 'pending', 'pending'];
     const chip = (label, title, mark) => ({ label, title, bg: tones[mark][0], fg: tones[mark][1], icon: tones[mark][2] });
-    const checkLine = { awPending: '2 checks are still running. Scout approves only when every check passed.', mgOwnPending: '2 checks are still running. Scout approves only when every check passed.', awFailedAtReview: 'lint did not pass. Scout approves only when every check passed.', awTestsUnrunnable: '122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.' }[aw] || '';
+    const checkLine = { awPending: '2 checks are still running. Scout does not approve on its own; a person approves on GitHub.', mgOwnPending: '2 checks are still running. Scout does not approve on its own; a person approves on GitHub.', awFailedAtReview: 'lint did not pass. Scout does not approve on its own; a person approves on GitHub.', awTestsUnrunnable: '122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.' }[aw] || '';
     const alert = {
       awCheckFailed: 'Not approved: lint did not pass. Review it again once it is fixed.',
       awNewCommit: 'Not approved: a new commit arrived after the review. Review it again.',
@@ -1083,8 +1118,6 @@ class Component extends DCLogic {
       awHasCheckLine: checkLine !== '',
       awCheckLine: checkLine,
       awShowVerdict: !['awWaiting', 'mgWaiting'].includes(aw),
-      awPlainApprove: ['off', 'mgOwn', 'mgOther', 'awTestsUnrunnable'].includes(aw),
-      awOffersWait: ['awPending', 'awTimedOut', 'awRefused', 'mgOwnPending'].includes(aw),
       awArm: () => this.setState({ aw: merges ? 'mgWaiting' : 'awWaiting', bellOpen: true, bellTab: 'all' }),
       awWaiting: ['awWaiting', 'mgWaiting'].includes(aw),
       awCancel: () => this.setState({ aw: merges ? 'mgOwnPending' : 'awPending' }),
@@ -1092,13 +1125,12 @@ class Component extends DCLogic {
         label, pressed: aw === id ? 'true' : 'false', bg: aw === id ? t.surface2 : 'transparent', fg: aw === id ? t.fg : t.muted,
         pick: () => this.setState({ ...drawn, aw: id, bellOpen: inBell.includes(id) }),
       })),
-      awApproveLabel: aw === 'mgOwn' ? 'Approve and merge' : 'Approve',
       awWaitLabel: merges ? 'Approve and merge when the checks pass' : 'Approve when the checks pass',
       awWaitAria: merges ? 'Approve and merge acme/api#44 when its checks pass' : 'Approve acme/api#44 when its checks pass',
       awHasMergeLine: ['mgOwn', 'mgOwnPending', 'mgOther'].includes(aw),
       awMergeLine: aw === 'mgOther' ? 'Scout only approves here: merging is limited to your own repositories.' : 'Scout approves, then merges with squash. This cannot be undone.',
       awMergeLineFg: aw === 'mgOther' ? t.fg2 : t.warn,
-      awWaitingLine: aw === 'mgWaiting' ? 'Waiting to approve and merge: 2 checks still running. Scout approves, then merges with squash, when they pass.' : 'Waiting for the checks: 2 still running. Scout approves when they pass.',
+      awWaitingLine: aw === 'mgWaiting' ? 'Waiting to approve and merge: 2 checks still running. Your approval is sent, then the merge with squash, when they pass.' : 'Waiting for the checks: 2 still running. Your approval is sent when they pass.',
       awCancelAria: aw === 'mgWaiting' ? 'Cancel the approval and merge of acme/api#44' : 'Cancel the approval of acme/api#44',
       mgHasOutcome: ['mgMerged', 'mgNoSquash', 'mgRefused'].includes(aw),
       mgo: aw === 'mgMerged' ? { bg: t.okBg, fg: t.ok, title: 'Approved and merged', detail: 'Squash merge commit 9c41e07 on PR #44.' }
@@ -1567,7 +1599,6 @@ class Component extends DCLogic {
       ['Meetings', 'Meetings.dc.html', 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],
       ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
       ['Logs', 'Logs.dc.html', 'M4 6h16M4 12h16M4 18h10'],
-      ['Settings', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1'],
       ['YouTube operator', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
     ].filter(([label]) => label !== 'YouTube operator' || this.state.youtubeConnected !== false);
     const ap = this.state.approval || 'waiting';

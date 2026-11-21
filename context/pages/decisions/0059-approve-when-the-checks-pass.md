@@ -1,9 +1,9 @@
 ---
 title: "ADR 0059 - The owner approves once, and Scout gives the approval when the checks pass"
-version: "1.2"
+version: "1.3"
 date: 2026-11-15
-updated: 2026-11-20
-changes: "v1.2 (2026-11-20): amendment, one action per commit becomes one per request (ADR 0063). v1.1 (2026-11-19): amendment, a conflict ends the wait and the approval needs GitHub to say the pull request can be merged; line citations re-pointed. v1.0: the decision as first written"
+updated: 2026-11-21
+changes: "v1.3 (2026-11-21): amendment, the waiting approval is not offered for now (ADR 0070). v1.2 (2026-11-20): amendment, one action per commit becomes one per request (ADR 0063). v1.1 (2026-11-19): amendment, a conflict ends the wait and the approval needs GitHub to say the pull request can be merged; line citations re-pointed. v1.0: the decision as first written"
 page_type: adr
 status: accepted
 description: "On a review card whose checks still run, Approve when the checks pass is the owner's approval of that one verdict; the desktop keeps it, reads the pull request and its checks every minute, gives it once every check passed, and ends it when a check fails, a new commit arrives, the pull request closes, two hours pass or the owner cancels."
@@ -95,3 +95,8 @@ By [[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templa
 - **Replaces, under "The decision",** the sentence "One action per commit. An approval does not start waiting once a verdict or a review was sent on that commit, and a verdict or a review the owner sends from the card ends the one that waits." It now reads: "A verdict or a review the owner sends from the card ends the approval that waits; a different verdict at the same commit is its own action, and an identical request answers the action already there."
 - **Where it holds:** `src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:116`.
 - **How it is held:** `tests/Scout.ControlPlane.Tests/WriteGate/PullRequestVerdictServiceTests.cs:127`, `:155`.
+
+### 2026-11-21 - The waiting approval is not offered for now
+
+- **Replaces** "On a review card whose checks still run, Approve when the checks pass is the owner's approval of that one verdict" for now: the review's one decision never offers the wait, by [[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]]; the card still draws the offer when given one, and the desktop's waiting approval stays in the code for a later flag of the owner. The card's lines under the checks now read "… Scout does not approve on its own; a person approves on GitHub." and, while an approval waits, "Waiting for the checks: N still running. Your approval is sent when they pass."
+- **How it is held:** `tests/Scout.Review.Tests/ReviewOfferTests.cs:117`; the renderer's card matrix, `ui/packages/renderer/src/app/core/review-findings.component.matrix.spec.ts`.

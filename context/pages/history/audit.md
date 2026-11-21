@@ -1,9 +1,9 @@
 ---
 title: "Audit - history"
-version: "1.6"
+version: "1.7"
 date: 2026-11-08
-updated: 2026-11-20
-changes: "v1.6 (2026-11-20): a review batch is handed the purpose, the rules and what was removed. v1.5 (2026-11-19): the review runs to its end, code first, in waves, with the owner's controls and a pause at 60 minutes. v1.4 (2026-11-18): a batch read only when presented, a card that fits, running time only. v1.3 (2026-11-17): the review job runs its batches and posts one card. v1.2 (2026-11-15): the notifier is resolved on use, so the worker starts with GitHub and the local chat. v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
+updated: 2026-11-21
+changes: "v1.7 (2026-11-21): the review quality work (ADRs 0066 to 0069, 0073). v1.6 (2026-11-20): a review batch is handed the purpose, the rules and what was removed. v1.5 (2026-11-19): the review runs to its end, code first, in waves, with the owner's controls and a pause at 60 minutes. v1.4 (2026-11-18): a batch read only when presented, a card that fits, running time only. v1.3 (2026-11-17): the review job runs its batches and posts one card. v1.2 (2026-11-15): the notifier is resolved on use, so the worker starts with GitHub and the local chat. v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
 page_type: reference
 status: artefact
 description: "What changed in the audit job's project and when."
@@ -20,6 +20,13 @@ reliability: high
 # Audit - history
 
 > Dated changes to [[pages/services/audit]]; the service page states how it works now.
+
+## 2026-11-21 - Evidence, parts, focused readings, the second reading with reads, the turn table
+
+- **Asked for:** the owner's requests during the review quality work ([[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]], [[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]], [[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]], [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]], [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]).
+- **What it was:** a finding carried the model's line; a large file was not read; one reading per batch; a second reading with no tools that assessed; the card's counts in memory.
+- **What it is:** a finding's line is derived from its quote and a finding the quote cannot place is asked for once more; a large file is read in parts with its group; two focused readings on code batches; a second reading that reads the head, tries to refute, holds only with a scenario and sets severity by rule, each group with its own time inside 30 minutes; every turn's numbers in `audit_turn` (migration `20261122120000_AuditTurns`), the job's version and model names, and the card's counts read from them; the opt-in record always under Scout's own data folder; the review's own tests through the write gate.
+- **Tests:** new tests in `AuditBatchRunnerTests`, `AuditWorkerReviewTests`, `RepositoryReviewsTests`, `SqliteAuditStoreTests` and `DefinitionReaderTests`; changed on purpose: the runner tests that read only the general turns, the extra request's tests, and the test that locked an extra request that fails as a failed batch.
 
 ## 2026-11-20 - A review batch is handed the purpose, the rules and what was removed
 

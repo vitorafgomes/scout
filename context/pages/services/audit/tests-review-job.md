@@ -1,9 +1,9 @@
 ---
 title: "Audit: Tests: Review job"
-version: "1.1"
+version: "1.2"
 date: 2026-11-19
-updated: 2026-11-20
-changes: "v1.1 (2026-11-20): the tests of the review notes and review inputs. v1.0: the review job's tests, moved from the Tests page, with the waves, the order of reading, the owner's controls and the pause at 60 minutes"
+updated: 2026-11-21
+changes: "v1.2 (2026-11-21): the review quality tests (ADRs 0066 to 0069, 0073). v1.1 (2026-11-20): the tests of the review notes and review inputs. v1.0: the review job's tests, moved from the Tests page, with the waves, the order of reading, the owner's controls and the pause at 60 minutes"
 page_type: service
 status: active
 description: "Read when a change touches the tests of the pull request review job."
@@ -51,3 +51,12 @@ reliability: high
 
 `Scout.Audit.Tests`: 427 passed, 0 skipped.
 
+## Review quality (2026-11-21)
+
+The rules themselves are tested in `tests/Scout.Review.Tests`, listed on [[pages/services/review]]; these tests hold how the job applies them.
+
+- **Evidence and the extra request** (`AuditBatchRunnerTests.cs`): a finding whose quote cannot place it is asked again once, then left out and named (`tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs:1037`); a finding with no evidence is asked for once more after a failed attempt (`:1084`); the request names each finding by id, title, path and problem and repeats the evidence rule (`:1126`); an extra request that throws or times out keeps the first answer's placed findings (`:1067`). [[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]]
+- **Parts** (`RepositoryReviewsTests.cs`): a large file planned as parts with nothing left out (`tests/Scout.Audit.Tests/RepositoryReviewsTests.cs:672`), with the code before the documentation, in order (`:692`). [[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]]
+- **The second reading** (`AuditWorkerReviewTests.cs`): its offered set and filter (`tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:1596`), a failure leaves every finding (`:1667`), its calls in the record (`:1682`), severity and scenario on the card (`:1721`), a group out of time while the next runs (`:1740`). [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]
+- **Turns and the record**: one row per turn with no text (`AuditWorkerReviewTests.cs:1806`), the counts after a restart (`:1829`), a row that cannot be written (`:1845`), the version and model names (`:1858`), the card's count (`:398`); the record off and on (`tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs:1323`), always in Scout's own folder (`:1351`), a record that cannot be written (`:1360`); an older database (`tests/Scout.Audit.Tests/SqliteAuditStoreTests.cs:650`). [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]
+- **The checks and the tests**: the card built when the checks cannot be read (`AuditWorkerReviewTests.cs:420`); a test run cancelled by something other than the review (`AuditBatchRunnerTests.cs:1049`); the run refused without the "Local container" grant, in the host (`tests/Scout.Host.Console.Tests/HostReviewTurnTests.cs:159`).
