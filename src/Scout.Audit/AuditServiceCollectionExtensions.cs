@@ -49,6 +49,7 @@ public static class AuditServiceCollectionExtensions
                     options.ReviewParallelBatches = 1;
                 }
             })
+            .Validate(options => options.ReviewTurnTimeout > TimeSpan.Zero, "Scout:Audit:ReviewTurnTimeout must be above zero; every review batch turn would end before the model answers.")
             .Validate(options => options.TurnTimeout > TimeSpan.Zero, "Scout:Audit:TurnTimeout must be above zero; every batch turn would end before the model answers.")
             .Validate(options => options.ReviewParallelBatches is >= 1 and <= 8, "Scout:Audit:ReviewParallelBatches must be 1 to 8.")
             .ValidateOnStart();
@@ -65,7 +66,8 @@ public static class AuditServiceCollectionExtensions
             sp.GetRequiredService<ILogger<AuditBatchRunner>>(),
             RecordFolder(sp.GetRequiredService<IOptions<AuditOptions>>().Value),
             sp.GetRequiredService<IAuditJobStore>(),
-            provider));
+            provider,
+            sp.GetRequiredService<IOptions<AuditOptions>>().Value.ReviewTurnTimeout));
         services.AddSingleton(sp => new RepositoryAudits(
             sp.GetRequiredService<IAuditJobStore>(),
             sp.GetRequiredService<AuditSignal>(),

@@ -30,6 +30,7 @@ export const SAVE_DELAY_MS = 1_000;
 const VAULT_KEY = 'app.notifications';
 const KINDS = new Set<NotificationKind>([
   'running',
+  'waiting',
   'done',
   'failed',
   'paused',

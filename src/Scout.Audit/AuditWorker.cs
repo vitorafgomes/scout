@@ -24,6 +24,14 @@ internal sealed class AuditSignal
         Wake();
     }
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _waiting = new();
+
+    /// <summary>Note that the review <paramref name="jobId"/> was said to wait, so the worker says when it picks it.</summary>
+    public void Waits(string jobId) => _waiting[jobId] = true;
+
+    /// <summary>Whether the review <paramref name="jobId"/> was said to wait, each answered true once.</summary>
+    public bool TookWaiting(string jobId) => _waiting.TryRemove(jobId, out _);
+
     /// <summary>The next stopped paused review whose card the worker has not posted, each handed out once.</summary>
     public bool TryTakeStopped(out string jobId) => _stopped.TryDequeue(out jobId!);
 
@@ -90,6 +98,7 @@ internal sealed partial class AuditWorker(
     {
         try
         {
+            await WaitingAtStartAsync(stoppingToken).ConfigureAwait(false);
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -129,6 +138,26 @@ internal sealed partial class AuditWorker(
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
+        }
+    }
+
+    /// <summary>
+    /// The reviews that wait when the worker starts, each behind another running review, noted so their entries turn
+    /// running when the worker picks them, as after a restart; a database that cannot be read is logged and nothing is noted.
+    /// </summary>
+    private async Task WaitingAtStartAsync(CancellationToken ct)
+    {
+        try
+        {
+            var running = await store.RunningJobsAsync(ct).ConfigureAwait(false);
+            foreach (var waiting in running.Where(j => RepositoryAudits.Ahead(running, j.Id) is not null))
+            {
+                signal.Waits(waiting.Id);
+            }
+        }
+        catch (AuditStoreException ex)
+        {
+            logger.LogError("The audit worker could not use its database: {Reason}", ex.Message);
         }
     }
 

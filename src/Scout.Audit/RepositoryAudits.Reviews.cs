@@ -191,13 +191,14 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
             if (same is { Status: AuditStatus.Paused })
             {
                 await store.ResumeAsync(same.Id, origin(), ct).ConfigureAwait(false);
+                await PostReviewResumedAsync(same.Id, ct).ConfigureAwait(false);
                 signal.Wake();
                 return new ReviewStart(true, $"Resuming the {review} at {Short(headSha)} from the first batch not done. {await ProgressAsync(same, ct).ConfigureAwait(false)}", ReviewPreflight.None);
             }
 
             preflight.Add(same switch
             {
-                { Status: AuditStatus.Running } => new(PreflightName.Duplicate, PreflightOutcome.Block, $"A {review} at {Short(headSha)} is already running. {await ProgressAsync(same, ct).ConfigureAwait(false)}"),
+                { Status: AuditStatus.Running } => new(PreflightName.Duplicate, PreflightOutcome.Block, $"A {review} at {Short(headSha)} is already {await RunningOrWaitingAsync(same, ct).ConfigureAwait(false)}. {await ProgressAsync(same, ct).ConfigureAwait(false)}"),
                 { Status: AuditStatus.Done } when again => new(PreflightName.Duplicate, PreflightOutcome.Warning, $"The {review} at {Short(headSha)} was already done at {DoneAt(same)}; this start reviews it again."),
                 { Status: AuditStatus.Done } => new(PreflightName.Duplicate, PreflightOutcome.Block, $"The {review} at {Short(headSha)} is already done. {await ProgressAsync(same, ct).ConfigureAwait(false)} {AskAgain}"),
                 { Status: AuditStatus.Stopped } => new(PreflightName.Duplicate, PreflightOutcome.Warning, $"A {review} at {Short(headSha)} was stopped; this start reviews it again."),
@@ -240,7 +241,8 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
                 ? $" Stopped the review at {Short(latest.Commit)}: the pull request moved from {Short(latest.Commit)} to {Short(taken.Commit)}."
                 : string.Empty;
             var kept = new ReviewPreflight(preflight);
-            await store.CreateJobAsync(owner, repo, number, taken.Commit, origin(), plan, kept, ct, inputs).ConfigureAwait(false);
+            var id = await store.CreateJobAsync(owner, repo, number, taken.Commit, origin(), plan, kept, ct, inputs).ConfigureAwait(false);
+            await PostWaitingAsync(id, ct).ConfigureAwait(false);
             signal.Wake();
             var started = string.Create(
                 CultureInfo.InvariantCulture,
@@ -412,7 +414,7 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
                     return new AuditControlAnswer(true, $"Resuming the {review} at {Short(job.Commit)} from the first batch not done. {await ProgressAsync(job, ct).ConfigureAwait(false)}");
                 case Continue:
                     return new AuditControlAnswer(false, job is { Status: AuditStatus.Running }
-                        ? $"The {review} is already running. {await ProgressAsync(job, ct).ConfigureAwait(false)}"
+                        ? $"The {review} is already {await RunningOrWaitingAsync(job, ct).ConfigureAwait(false)}. {await ProgressAsync(job, ct).ConfigureAwait(false)}"
                         : $"No paused {review} to continue.");
                 case Stop when await store.StopAsync(owner, repo, number, ct).ConfigureAwait(false):
                     AuditJob? stopped;
@@ -450,12 +452,69 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
     }
 
     /// <summary>
+    /// The sentence of a review that waits for <paramref name="ahead"/>, the review directly ahead of it in the worker's
+    /// queue, said once in its conversation and shown by the bell until the worker picks it.
+    /// </summary>
+    internal static string WaitingNotice(AuditJob job, AuditJob ahead) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"The review of {job.Owner}/{job.Repo}#{job.PullRequest} waits for the review of {ahead.Owner}/{ahead.Repo}#{ahead.PullRequest} to end; it starts by itself.");
+
+    /// <summary>
+    /// The running review directly ahead of <paramref name="jobId"/> in <paramref name="running"/>, the worker's queue in the
+    /// order it runs them; null when the job is the review the worker runs, or not a running review. The one place that
+    /// says whether a review waits.
+    /// </summary>
+    internal static AuditJob? Ahead(IReadOnlyList<AuditJob> running, string jobId)
+    {
+        var reviews = running.Where(j => j.Kind == AuditKind.Review).ToList();
+        var at = reviews.FindIndex(j => j.Id == jobId);
+        return at > 0 ? reviews[at - 1] : null;
+    }
+
+    /// <summary>"running", or what a running review waits for: "waiting for the review of owner/repo#N to end".</summary>
+    private async Task<string> RunningOrWaitingAsync(AuditJob job, CancellationToken ct) =>
+        Ahead(await store.RunningJobsAsync(ct).ConfigureAwait(false), job.Id) is { } ahead
+            ? $"waiting for the {Review(ahead.Owner, ahead.Repo, ahead.PullRequest ?? 0)} to end"
+            : "running";
+
+    /// <summary>
+    /// The waiting sentence of a review another review is ahead of, posted once to the conversation the job holds; true
+    /// when the review waits. A post or a read that fails is logged, and the review stays in the queue.
+    /// </summary>
+    private async Task<bool> PostWaitingAsync(string jobId, CancellationToken ct)
+    {
+        try
+        {
+            if (await store.JobAsync(jobId, ct).ConfigureAwait(false) is not { Origin: { } conversation } job
+                || Ahead(await store.RunningJobsAsync(ct).ConfigureAwait(false), jobId) is not { } ahead)
+            {
+                return false;
+            }
+
+            signal.Waits(jobId);
+            if (notifier is not null && !await notifier().PostAsync(conversation, WaitingNotice(job, ahead), ct).ConfigureAwait(false))
+            {
+                logger.LogWarning("Review {JobId} could not post that it waits to the conversation it holds.", jobId);
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Review {JobId} could not post that it waits to the conversation it holds ({ExceptionType}).", jobId, ex.GetType().Name);
+            return true;
+        }
+    }
+
+    /// <summary>
     /// The resume line of a review, only to a job the desktop's local chat holds after the resume, so its entry turns
-    /// running at once; a post or a read that fails is logged and the resume stands.
+    /// running at once; the waiting sentence instead, to any conversation, when another review is ahead of it. A post or a
+    /// read that fails is logged and the resume stands.
     /// </summary>
     private async Task PostReviewResumedAsync(string jobId, CancellationToken ct)
     {
-        if (notifier is null)
+        if (notifier is null || await PostWaitingAsync(jobId, ct).ConfigureAwait(false))
         {
             return;
         }
@@ -499,7 +558,12 @@ internal sealed partial class RepositoryAudits : IPullRequestReviews
                 return $"No {Review(owner, repo, number)} has been started.";
             }
 
-            var state = job is { Status: AuditStatus.Paused, PausedReason: { } reason } ? $"{job.Status}: {reason}" : job.Status;
+            var state = job switch
+            {
+                { Status: AuditStatus.Paused, PausedReason: { } reason } => $"{job.Status}: {reason}",
+                { Status: AuditStatus.Running } => await RunningOrWaitingAsync(job, ct).ConfigureAwait(false),
+                _ => job.Status,
+            };
             return $"The {Review(owner, repo, number)} at {Short(job.Commit)} is {state}. {await ProgressAsync(job, ct).ConfigureAwait(false)}";
         }
         catch (AuditStoreException ex)

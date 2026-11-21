@@ -460,6 +460,70 @@ public sealed class DockerSandboxRunnerTests : IDisposable
         result.Output.Length.ShouldBeLessThanOrEqualTo(DockerSandboxRunner.FailedOutputLimit, "the output kept is unchanged by the counting");
     }
 
+    /// <summary>A failure of a test that needs the Docker daemon, with a stack longer than a whole kept tail would hold.</summary>
+    private static string DockerFailure(int n, bool names = true) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"  Failed Shop.Api.Tests.StoreTests.Saves_{n} [3 ms]\n  Error Message:\n   ")
+        + (names ? "DotNet.Testcontainers.Builders.DockerUnavailableException : Docker is either not running or misconfigured." : "Assert.Equal() Failure: Expected 10, Actual 9")
+        + "\n  Stack Trace:\n" + string.Concat(Enumerable.Repeat("     at Shop.Api.Tests.Support.Database.StartAsync() in /src/Support/Database.cs:line 12\n", 40));
+
+    private static string MixedProject(bool allName) =>
+        string.Concat(Enumerable.Range(1, 124).Select(n => DockerFailure(n, allName || n != 60)))
+        + "Failed!  - Failed:   124, Passed:     5, Skipped:     0, Total:   129, Duration: 88 s - Shop.Api.Tests.dll (net10.0)\n";
+
+    [Fact]
+    public void R1_a_project_whose_failures_all_need_the_daemon_could_not_run_beside_its_tests_that_passed_however_long_their_output()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+        var output = MixedProject(allName: true) + UnitTestsPassed.Replace("634", "91", StringComparison.Ordinal);
+        foreach (var piece in output.Chunk(8_192))
+        {
+            reader.Read(new string(piece));
+        }
+
+        var counts = reader.Counts().ShouldNotBeNull();
+        output.Length.ShouldBeGreaterThan(200_000, "the failures' output is longer than the kept tail");
+        counts.Projects.Select(p => (p.Name, p.Passed, p.Failed, p.Unrunnable)).ShouldBe(
+            [("Shop.Api.Tests", 5L, 124L, true), ("Shop.Tests", 91L, 0L, false)], "the failures that all need the daemon could not run, and the tests that passed stay passed");
+        counts.Sentence.ShouldBe("96 tests passed in 2 test projects; 124 in 1 test project could not run: they need a Docker daemon, which the container does not have.");
+    }
+
+    [Fact]
+    public void A_project_with_one_failure_that_does_not_name_the_daemon_stays_failed()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+
+        reader.Read(MixedProject(allName: false));
+
+        var project = reader.Counts().ShouldNotBeNull().Projects.ShouldHaveSingleItem();
+        project.Unrunnable.ShouldBeFalse("one real failure among them keeps the project failed");
+        reader.Counts()!.Sentence.ShouldStartWith("5 tests passed and 124 failed: 124 in Shop.Api.Tests.", Case.Sensitive);
+    }
+
+    [Fact]
+    public void A_failure_line_cut_by_the_line_bound_before_it_names_the_daemon_keeps_the_project_failed()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+
+        reader.Read("  Failed Shop.Api.Tests.StoreTests.Saves [3 ms]\n   " + new string('x', DockerSandboxRunner.MaxLineLength) + " Docker is either not running or misconfigured.\n"
+            + "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - Shop.Api.Tests.dll (net10.0)\n");
+
+        reader.Counts().ShouldNotBeNull().Projects.ShouldHaveSingleItem().Unrunnable.ShouldBeFalse(
+            "a daemon named past the line bound is not read, so the failure is not taken as one that could not run");
+    }
+
+    [Fact]
+    public void Two_projects_one_whole_and_one_mixed_could_not_run_together()
+    {
+        var reader = new DockerSandboxRunner.TestSummaryReader();
+
+        reader.Read(MixedProject(allName: true) + DockerFailure(1).Replace("Shop.Api.Tests", "Shop.IntegrationTests", StringComparison.Ordinal)
+            + "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - Shop.IntegrationTests.dll (net10.0)\n");
+
+        var counts = reader.Counts().ShouldNotBeNull();
+        counts.Projects.ShouldAllBe(p => p.Unrunnable, "both projects' failures need the daemon");
+        counts.Sentence.ShouldBe("5 tests passed in 1 test project; 125 in 2 test projects could not run: they need a Docker daemon, which the container does not have.");
+    }
+
     [Fact]
     public void A_summary_line_split_across_two_pieces_is_counted_once()
     {

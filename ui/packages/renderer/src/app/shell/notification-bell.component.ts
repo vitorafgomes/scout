@@ -37,8 +37,8 @@ const FILTERS: readonly { readonly id: NotificationFilter; readonly label: strin
 ];
 
 const SHOWN_BY: Readonly<Record<NotificationFilter, readonly NotificationKind[]>> = {
-  all: ['running', 'paused', 'github', 'mention', 'done', 'failed'],
-  running: ['running', 'paused'],
+  all: ['running', 'waiting', 'paused', 'github', 'mention', 'done', 'failed'],
+  running: ['running', 'waiting', 'paused'],
   github: ['github', 'mention'],
   done: ['done', 'failed'],
 };
@@ -57,6 +57,7 @@ const STOP_PATH = 'M7 7h10v10H7z';
 
 const KIND_TONES: Readonly<Record<NotificationKind, EntryTone>> = {
   running: 'accent',
+  waiting: 'muted',
   paused: 'warn',
   done: 'ok',
   failed: 'err',
@@ -768,7 +769,7 @@ export class NotificationBellComponent implements OnInit {
    */
   waitingText(n: AppNotification): string {
     const action = n.control?.action ?? 'stop';
-    if (n.id.startsWith('tests:') || (n.kind === 'paused' && action === 'stop')) return 'Stopping';
+    if (n.id.startsWith('tests:') || (n.kind !== 'running' && action === 'stop')) return 'Stopping';
     return (n.id.startsWith('reviewjob:') ? REVIEW_WAITING : AUDIT_WAITING)[action];
   }
 

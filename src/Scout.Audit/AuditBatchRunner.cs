@@ -37,7 +37,7 @@ internal sealed record BatchOutcome(
 /// </summary>
 internal sealed class AuditBatchRunner(
     Kernel kernel, IChatCompletionService chat, ISkillCatalog? skills, TimeSpan turnTimeout, ILogger<AuditBatchRunner> logger, string? recordFolder = null,
-    IAuditJobStore? turns = null, string? provider = null)
+    IAuditJobStore? turns = null, string? provider = null, TimeSpan? reviewTurnTimeout = null)
 {
     internal const string GitHubPlugin = "GitHub";
     internal const string KnowledgePlugin = "ProjectKnowledge";
@@ -205,13 +205,14 @@ internal sealed class AuditBatchRunner(
         {
             var history = new ChatHistory();
             var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            var timing = new CallTiming(started);
             var asked = request.Length;
             var noted = new TurnNote(0, 0, 0, null, null);
             try
             {
                 using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                limit.CancelAfter(turnTimeout);
-                var blocks = await TurnAsync(job, batch, instructions, request, review ? ReviewOffered : Offered, [new HeldToJobRepository(job), (IFunctionInvocationFilter?)pinned ?? read!], history, limit.Token).ConfigureAwait(false);
+                limit.CancelAfter(review ? reviewTurnTimeout ?? turnTimeout : turnTimeout);
+                var blocks = await TurnAsync(job, batch, instructions, request, review ? ReviewOffered : Offered, [new HeldToJobRepository(job), (IFunctionInvocationFilter?)pinned ?? read!, timing], history, limit.Token).ConfigureAwait(false);
                 var (verdict, presented, dropped, accepted, leftOut) = FindingsBlock.Read(blocks, job.Owner, job.Repo, job.Commit, review ? job.PullRequest ?? 0 : null, place);
                 noted = new TurnNote(presented.Count + dropped + (leftOut?.Count ?? 0), presented.Count, leftOut?.Count ?? 0, leftOut?.Sentence, accepted || !review ? null : NothingPresented);
                 if (review && !accepted)
@@ -261,7 +262,7 @@ internal sealed class AuditBatchRunner(
                 var elapsed = (long)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                 await CountAsync(job, new AuditTurn(
                     batch.Order, reading, null, attempt + 1, attempt == extraAt, elapsed, asked, CallCounts(history),
-                    noted.Presented, noted.Placed, noted.LeftOut, noted.Failure)).ConfigureAwait(false);
+                    noted.Presented, noted.Placed, noted.LeftOut, noted.Failure, LastCallMs: timing.LastEndMs)).ConfigureAwait(false);
                 Record(job, $"batch-{batch.Order}-{reading}", new
                 {
                     attempt = attempt + 1,
@@ -834,6 +835,26 @@ internal sealed class AuditBatchRunner(
         1 => "Scout asked the model once for this review.",
         _ => string.Create(CultureInfo.InvariantCulture, $"Scout asked the model {count} times for this review."),
     };
+
+    /// <summary>Keeps when the turn's last function call ended, in milliseconds from <paramref name="started"/>.</summary>
+    private sealed class CallTiming(long started) : IFunctionInvocationFilter
+    {
+        private long _lastEnd = -1;
+
+        public long? LastEndMs => Interlocked.Read(ref _lastEnd) is var end and >= 0 ? end : null;
+
+        public async Task OnFunctionInvocationAsync(FunctionInvocationContext context, Func<FunctionInvocationContext, Task> next)
+        {
+            try
+            {
+                await next(context).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _lastEnd, (long)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+        }
+    }
 
     /// <summary>What one turn presented, as its record says it: the findings presented, placed and left out, why, and how it failed.</summary>
     private sealed record TurnNote(int Presented, int Placed, int LeftOut, string? LeftOutWhy, string? Failure);

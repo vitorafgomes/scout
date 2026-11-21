@@ -64,6 +64,7 @@ internal sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) :
             turn.Property(t => t.Held).HasColumnName("held");
             turn.Property(t => t.Refuted).HasColumnName("refuted");
             turn.Property(t => t.Uncertain).HasColumnName("uncertain");
+            turn.Property(t => t.LastCallMs).HasColumnName("last_call_ms");
             turn.HasOne<AuditJobRow>().WithMany().HasForeignKey(t => t.JobId).HasPrincipalKey(j => j.Id).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -204,6 +205,9 @@ internal sealed class AuditTurnRow
     public int? Refuted { get; set; }
 
     public int? Uncertain { get; set; }
+
+    /// <summary>When the turn's last function call ended, in milliseconds from its start; null when it called none.</summary>
+    public long? LastCallMs { get; set; }
 }
 
 /// <summary>A row of <c>audit_batch</c>.</summary>

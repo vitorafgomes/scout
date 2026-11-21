@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -9,7 +10,7 @@ using Scout.Review;
 
 namespace Scout.Audit.Tests;
 
-public sealed class RepositoryReviewsTests : IDisposable
+public sealed partial class RepositoryReviewsTests : IDisposable
 {
     private const string Head = "abc1234def5678";
     private const string Earlier = "0123456789abcdef";
@@ -829,6 +830,166 @@ public sealed class RepositoryReviewsTests : IDisposable
         card.Task.IsCompletedSuccessfully.ShouldBeTrue($"the worker, waiting with nothing to run, ran the review to its card after the {action}");
         chat.Turns.Count.ShouldBe(2, "the general reading and, since the patch removes a line, the removed reading");
         (await store.LatestJobAsync("acme", "shop", 12, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
+    }
+
+    /// <summary>
+    /// The worker and the review service over one store, the model held at <c>release</c> on every turn; <c>asked</c> holds
+    /// the pull request of each turn in the order the model was asked.
+    /// </summary>
+    private (SqliteAuditStore Store, RepositoryAudits Reviews, AuditWorker Worker, RecordingNotifier Notifier, ConcurrentQueue<int> Asked, TaskCompletionSource Release) Queue()
+    {
+        var store = Store();
+        var asked = new ConcurrentQueue<int>();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var chat = new ScriptedChat(async (history, kernel, _) =>
+        {
+            var number = int.Parse(AskedFor().Match(string.Join("\n", history.Select(m => m.Content))).Groups[1].Value, CultureInfo.InvariantCulture);
+            asked.Enqueue(number);
+            await release.Task;
+            await Kernels.PresentReviewAsync(kernel, Kernels.ReviewBlock(number, "ready to merge"));
+        });
+        var kernel = TakingTheSnapshot([]);
+        var signal = new AuditSignal();
+        var notifier = new RecordingNotifier();
+        var worker = new AuditWorker(
+            store, Kernels.Runner(kernel, chat), notifier, signal, new FakePullRequests(() => new ReviewPullRequest(Head, OneFile)),
+            NullLogger<AuditWorker>.Instance);
+        var reviews = new RepositoryAudits(store, signal, Options, Snapshots, Environment, () => kernel, () => "local:session", NullLogger<RepositoryAudits>.Instance, () => notifier);
+        return (store, reviews, worker, notifier, asked, release);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"Review pull request acme/shop#(\d+) at head commit")]
+    private static partial System.Text.RegularExpressions.Regex AskedFor();
+
+    private static async Task Until(Func<bool> condition)
+    {
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        while (!condition() && !limit.IsCancellationRequested)
+        {
+            await Task.Delay(20, CancellationToken.None);
+        }
+    }
+
+    private static int PostAt(RecordingNotifier notifier, string start) =>
+        notifier.Posts.Select(p => p.Text).ToList().FindIndex(t => t.StartsWith(start, StringComparison.Ordinal));
+
+    private static string Waits(int number, int ahead) =>
+        string.Create(CultureInfo.InvariantCulture, $"The review of acme/shop#{number} waits for the review of acme/shop#{ahead} to end; it starts by itself.");
+
+    [Fact]
+    public async Task Q1_a_review_asked_while_another_runs_waits_says_so_once_and_starts_by_itself_when_the_first_ends()
+    {
+        var (store, reviews, worker, notifier, asked, release) = Queue();
+        using var running = worker;
+        await worker.StartAsync(CancellationToken.None);
+        (await reviews.StartAsync("acme", "shop", 12, Head, OneFile, 1, 0, Green, CancellationToken.None)).Started.ShouldBeTrue();
+        await Until(() => asked.Contains(12));
+
+        var second = await reviews.StartAsync("acme", "shop", 13, Head, OneFile, 1, 0, Green, CancellationToken.None);
+        var postsAtStart = notifier.Posts.Select(p => p.Text).ToList();
+        var status = await reviews.StatusAsync("acme", "shop", 13, CancellationToken.None);
+        var askedWhileWaiting = asked.ToList();
+        release.SetResult();
+        await Until(() => PostAt(notifier, "Review of acme/shop#13 at ") >= 0);
+        await worker.StopAsync(CancellationToken.None);
+
+        second.Started.ShouldBeTrue(second.Sentence);
+        postsAtStart.ShouldContain(Waits(13, 12), "a review asked while another runs says at once in its conversation which review it waits for");
+        status.ShouldStartWith($"The review of acme/shop#13 at {Head[..7]} is waiting for the review of acme/shop#12 to end.", Case.Sensitive, "the review's state, read while it waits, is waiting with the review it waits for");
+        askedWhileWaiting.ShouldNotContain(13, "a waiting review asks the model nothing while the review ahead of it runs");
+        notifier.Posts.Count(p => p.Text == Waits(13, 12)).ShouldBe(1, "the waiting sentence is said once, and not again when the review starts");
+        notifier.Posts.Where(p => p.Text == Waits(13, 12)).ShouldAllBe(p => p.Origin == "local:session", "the sentence goes to the conversation the review was asked from");
+        var picked = PostAt(notifier, "Review of acme/shop#13: 0 of ");
+        (PostAt(notifier, "Review of acme/shop#12 at ") < picked, picked < PostAt(notifier, "Review of acme/shop#13 at "))
+            .ShouldBe((true, true), "the waiting review starts by itself when the first ends, and says it runs when the worker picks it, before its card");
+        (await store.LatestJobAsync("acme", "shop", 13, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done, "the waiting review ran to its end");
+    }
+
+    [Fact]
+    public async Task Q2_three_reviews_asked_one_after_another_run_one_at_a_time_in_the_order_they_were_asked()
+    {
+        var (_, reviews, worker, notifier, asked, release) = Queue();
+        using var running = worker;
+        await worker.StartAsync(CancellationToken.None);
+        foreach (var number in new[] { 12, 13, 14 })
+        {
+            (await reviews.StartAsync("acme", "shop", number, Head, OneFile, 1, 0, Green, CancellationToken.None)).Started.ShouldBeTrue();
+            await Until(() => asked.Contains(12));
+        }
+
+        release.SetResult();
+        await Until(() => PostAt(notifier, "Review of acme/shop#14 at ") >= 0);
+        await worker.StopAsync(CancellationToken.None);
+
+        notifier.Posts.Select(p => p.Text).Where(t => t.Contains(" waits for the review of ", StringComparison.Ordinal))
+            .ShouldBe([Waits(13, 12), Waits(14, 13)], "each review asked while others run waits for the one asked just before it");
+        asked.ToList().ShouldBe([.. asked.Order()], "every turn of a review is asked before any turn of the review asked after it");
+        asked.Distinct().ShouldBe([12, 13, 14], "the reviews run in the order they were asked");
+        (PostAt(notifier, "Review of acme/shop#12 at ") < PostAt(notifier, "Review of acme/shop#13 at "), PostAt(notifier, "Review of acme/shop#13 at ") < PostAt(notifier, "Review of acme/shop#14 at "))
+            .ShouldBe((true, true), "the cards arrive in the order the reviews were asked");
+    }
+
+    [Fact]
+    public async Task Q2_a_paused_review_continued_while_another_runs_waits_behind_it_and_behind_those_asked_before_the_continue()
+    {
+        var (store, reviews, worker, notifier, _, _) = Queue();
+        using var idle = worker;
+        var paused = await store.CreateJobAsync("acme", "shop", 12, Head, "local:session", [new("src", ["src/A.cs"], 10)], null, CancellationToken.None);
+        await store.PauseAsync(paused, RepositoryAudits.PausedByOwner, CancellationToken.None);
+        await store.CreateJobAsync("acme", "shop", 13, Head, "local:session", [new("src", ["src/A.cs"], 10)], null, CancellationToken.None);
+
+        var answer = await reviews.ControlAsync("acme", "shop", 12, RepositoryAudits.Continue, CancellationToken.None);
+        var order = (await store.RunningJobsAsync(CancellationToken.None)).Select(j => j.PullRequest).ToList();
+        var again = await reviews.ControlAsync("acme", "shop", 12, RepositoryAudits.Continue, CancellationToken.None);
+
+        answer.Applied.ShouldBeTrue(answer.Sentence);
+        order.ShouldBe([13, 12], "a continued review joins the queue when it is continued, behind the review that ran while it was paused");
+        notifier.Posts.Select(p => p.Text).ShouldBe([Waits(12, 13)], "a continued review that waits says so in place of the resume line");
+        again.Sentence.ShouldStartWith("The review of acme/shop#12 is already waiting for the review of acme/shop#13 to end.", Case.Sensitive, "a second continue says the review waits");
+    }
+
+    [Fact]
+    public async Task Q2_a_worker_restarted_with_one_review_running_and_one_waiting_runs_both_in_the_order_they_were_asked()
+    {
+        var (store, _, worker, notifier, asked, release) = Queue();
+        using var restarted = worker;
+        await store.CreateJobAsync("acme", "shop", 12, Head, "local:session", [new("src", ["src/A.cs"], 10)], null, CancellationToken.None);
+        await store.CreateJobAsync("acme", "shop", 13, Head, "local:session", [new("src", ["src/A.cs"], 10)], null, CancellationToken.None);
+        release.SetResult();
+
+        await worker.StartAsync(CancellationToken.None);
+        await Until(() => PostAt(notifier, "Review of acme/shop#13 at ") >= 0);
+        await worker.StopAsync(CancellationToken.None);
+
+        asked.Distinct().ShouldBe([12, 13], "after a restart the review that ran goes on first, and the waiting one runs after it");
+        asked.ToList().ShouldBe([.. asked.Order()], "no turn of the waiting review is asked before the first review ends");
+        var picked = PostAt(notifier, "Review of acme/shop#13: 0 of ");
+        (PostAt(notifier, "Review of acme/shop#12 at ") < picked, picked >= 0)
+            .ShouldBe((true, true), "the review that waited across the restart says it runs when the worker picks it, after the first review's card");
+    }
+
+    [Fact]
+    public async Task Q3_a_waiting_review_stopped_ends_while_the_review_ahead_still_runs_and_never_asks_the_model()
+    {
+        var (store, reviews, worker, notifier, asked, release) = Queue();
+        using var running = worker;
+        await worker.StartAsync(CancellationToken.None);
+        (await reviews.StartAsync("acme", "shop", 12, Head, OneFile, 1, 0, Green, CancellationToken.None)).Started.ShouldBeTrue();
+        await Until(() => asked.Contains(12));
+        (await reviews.StartAsync("acme", "shop", 13, Head, OneFile, 1, 0, Green, CancellationToken.None)).Started.ShouldBeTrue();
+
+        var stop = await reviews.ControlAsync("acme", "shop", 13, RepositoryAudits.Stop, CancellationToken.None);
+        var statusAfterStop = (await store.LatestJobAsync("acme", "shop", 13, CancellationToken.None))!.Status;
+        release.SetResult();
+        await Until(() => PostAt(notifier, "Review of acme/shop#12 at ") >= 0);
+        await worker.StopAsync(CancellationToken.None);
+
+        stop.Applied.ShouldBeTrue(stop.Sentence);
+        statusAfterStop.ShouldBe(AuditStatus.Stopped, "a waiting review can be stopped");
+        var ended = PostAt(notifier, "The review of acme/shop#13 ended at your request: nothing was read.");
+        (ended >= 0, ended < PostAt(notifier, "Review of acme/shop#12 at "))
+            .ShouldBe((true, true), "the stopped waiting review says it ended while the review ahead of it still runs, not after it");
+        asked.ShouldNotContain(13, "a review stopped while it waited never asks the model");
     }
 
     [Fact]

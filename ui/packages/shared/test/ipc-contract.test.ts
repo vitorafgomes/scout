@@ -344,6 +344,21 @@ describe('the controls a job entry offers', () => {
     ['a paused review job', 'reviewjob:acme/api#52', 'paused', undefined, 'continue stop'],
     ['a done review job', 'reviewjob:acme/api#52', 'done', undefined, ''],
     [
+      'a review job waiting for another review',
+      'reviewjob:acme/api#53',
+      'waiting',
+      undefined,
+      'stop',
+    ],
+    [
+      'a waiting review job while a stop waits for Scout',
+      'reviewjob:acme/api#53',
+      'waiting',
+      { action: 'stop', phase: 'waiting' },
+      '',
+    ],
+    ['a waiting entry of an audit', 'audit:acme/shop', 'waiting', undefined, ''],
+    [
       'a running review job while a stop waits for Scout',
       'reviewjob:acme/api#52',
       'running',

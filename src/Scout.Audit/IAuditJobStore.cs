@@ -57,7 +57,10 @@ internal interface IAuditJobStore
         string owner, string repo, int? pullRequest, string commit, string? origin, IReadOnlyList<AuditBatchPlan> batches, ReviewPreflight? preflight, CancellationToken ct,
         ReviewInputs? inputs = null);
 
-    /// <summary>The running jobs, oldest first.</summary>
+    /// <summary>
+    /// The running jobs in the order they joined the worker's queue: when each was created, or last continued after a
+    /// pause, the earlier first; the worker runs the first, so every other running review waits.
+    /// </summary>
     Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct);
 
     /// <summary>The job with <paramref name="id"/>, null when there is none.</summary>
@@ -150,11 +153,13 @@ internal interface IAuditJobStore
 /// The numbers of one model turn of a job: where it ran (the batch's order, null for the second reading; the reading; the
 /// second reading's group), its attempt and whether it was the extra request for findings Scout could not place, how long
 /// it took and how long its request was, how many times it called each function, what it presented, placed and left out,
-/// its failure, and for the second reading how many findings held, were refuted and stayed uncertain.
+/// its failure, for the second reading how many findings held, were refuted and stayed uncertain, and when its last
+/// function call ended, in milliseconds from its start (null when it called none), which tells a turn that waited on the
+/// model after its reads from one whose reads were slow.
 /// </summary>
 internal sealed record AuditTurn(
     int? Batch, string Reading, int? Group, int Attempt, bool Extra, long ElapsedMs, int RequestLength, IReadOnlyDictionary<string, int> Calls,
-    int Presented, int Placed, int LeftOut, string? Failure, int? Held = null, int? Refuted = null, int? Uncertain = null);
+    int Presented, int Placed, int LeftOut, string? Failure, int? Held = null, int? Refuted = null, int? Uncertain = null, long? LastCallMs = null);
 
 /// <summary>
 /// One reading's turns of a job, totalled: how many, how long in all, how many function calls, the findings presented,

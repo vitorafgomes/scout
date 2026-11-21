@@ -330,7 +330,8 @@ public sealed partial class DockerSandboxRunner
     /// <summary>
     /// Reads a <c>dotnet test</c> output piece by piece as it arrives, so no summary is lost however long the output: each
     /// test project from its summary line, the failed tests' blocks printed before it (from a <c>Failed</c> line to the next
-    /// one or to a summary line) deciding, each as it ends, whether the project's failures could not run. Keeps counts and
+    /// one or to a summary line) deciding, each as it ends, whether the project's failures could not run: they could when
+    /// every block names the missing Docker daemon, whatever the project's tests that passed, which stay passed. Keeps counts and
     /// flags, never the text: one line of at most <see cref="MaxLineLength"/> characters, and at most
     /// <see cref="MaxProjects"/> projects. A line is put together across pieces, a surrogate pair split between two pieces
     /// included. Not safe for concurrent callers: its owner serialises the pieces.
@@ -384,7 +385,7 @@ public sealed partial class DockerSandboxRunner
                 var (failed, passed) = (Count(1), Count(2));
                 if (_projects.Count < MaxProjects)
                 {
-                    _projects.Add(new SandboxTestProject(summary.Groups[4].Value, passed, failed, Count(3), failed > 0 && passed == 0 && _blocks > 0 && _allNoDocker));
+                    _projects.Add(new SandboxTestProject(summary.Groups[4].Value, passed, failed, Count(3), failed > 0 && _blocks > 0 && _allNoDocker));
                     _read.Add(_blocks);
                 }
                 else
@@ -454,7 +455,7 @@ public sealed partial class DockerSandboxRunner
         }
         else if (unrunnable.Count > 0)
         {
-            var ran = projects.Count(p => !p.Unrunnable);
+            var ran = projects.Count(p => p.Passed > 0);
             sentence = passed > 0
                 ? $"{N(passed)} {Tests(passed)} passed in {Projects(ran)}; {N(notRun)} in {Projects(unrunnable.Count)} {couldNot}"
                 : $"{N(notRun)} {Tests(notRun)} in {Projects(unrunnable.Count)} {couldNot}";

@@ -2036,10 +2036,11 @@ export interface UpdateSkipVersionRequest {
 }
 
 /**
- * What a notification is about: background work running, paused, done or failed, a GitHub thread, or a comment that
- * mentions the owner's Scout bot.
+ * What a notification is about: background work running, waiting for another to end, paused, done or failed, a GitHub
+ * thread, or a comment that mentions the owner's Scout bot.
  */
-export type NotificationKind = 'running' | 'done' | 'failed' | 'paused' | 'github' | 'mention';
+export type NotificationKind =
+  'running' | 'waiting' | 'done' | 'failed' | 'paused' | 'github' | 'mention';
 
 /**
  * A button an entry offers: `whisper-download-base` asks main to download the base Whisper model,
@@ -2157,7 +2158,7 @@ export interface AppNotification {
 
 /**
  * The controls a job's entry offers: Pause and Stop on a running audit or review job, Continue and Stop on a paused one,
- * Stop on a running test run; none while a click waits for the worker, and none on any other entry, the mention
+ * Stop on a review job that waits for another and on a running test run; none while a click waits for the worker, and none on any other entry, the mention
  * review's `review:` entries included.
  */
 export function jobControls(
@@ -2166,6 +2167,7 @@ export function jobControls(
   if (n.control?.phase === 'waiting') return [];
   if (n.id.startsWith('audit:') || n.id.startsWith('reviewjob:')) {
     if (n.kind === 'running') return ['pause', 'stop'];
+    if (n.kind === 'waiting') return n.id.startsWith('reviewjob:') ? ['stop'] : [];
     return n.kind === 'paused' ? ['continue', 'stop'] : [];
   }
   return n.id.startsWith('tests:') && n.kind === 'running' ? ['stop'] : [];

@@ -1,9 +1,9 @@
 ---
 title: "ADR 0062 - The review job runs to its end, in parallel, shown and controlled from the bell"
-version: "1.0"
+version: "1.1"
 date: 2026-11-19
-updated: 2026-11-19
-changes: "v1.0: the decision as first written"
+updated: 2026-11-21
+changes: "v1.1 (2026-11-21): amendment, the waves become a window (ADR 0074). v1.0: the decision as first written"
 page_type: adr
 status: accepted
 description: "A pull request review job reads every batch, code first, several batches at once, shows its progress in the bell of Scout Desktop and nothing of it in the chat until its one card, takes the owner's pause, continue and stop from the bell, and pauses to ask at 60 minutes of running time."
@@ -107,3 +107,8 @@ None new. The batch turns of ADR 0061 run up to `ReviewParallelBatches` at once.
 ## Amendments
 
 2026-11-20: amended by [[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]], every batch is also handed the inputs kept at the start.
+
+### 2026-11-21 - The waves become a window
+
+- **Replaces** the waves of batches with a window: at most the parallel count in flight, the next pending batch started as one ends, by [[pages/decisions/0074-a-review-runs-its-batches-through-a-window]]. The pause at 60 minutes, the owner's controls and the code-first order stay.
+- **How it is held:** `tests/Scout.Audit.Tests/AuditWorkerReviewTests.cs:832`.

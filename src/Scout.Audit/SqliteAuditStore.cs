@@ -81,7 +81,10 @@ internal sealed class SqliteAuditStore : IAuditJobStore
     /// <inheritdoc />
     public Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct) =>
         RunAsync<IReadOnlyList<AuditJob>>("read", async db =>
-            await Jobs(RunningJobs(db)).ToListAsync(ct).ConfigureAwait(false));
+        {
+            var rows = await RunningJobs(db).ToListAsync(ct).ConfigureAwait(false);
+            return [.. Jobs(rows.OrderBy(j => j.Resumed ?? j.Started).AsQueryable())];
+        });
 
     /// <inheritdoc />
     public Task<AuditJob?> JobAsync(string id, CancellationToken ct) =>
@@ -148,6 +151,7 @@ internal sealed class SqliteAuditStore : IAuditJobStore
                 Held = turn.Held,
                 Refuted = turn.Refuted,
                 Uncertain = turn.Uncertain,
+                LastCallMs = turn.LastCallMs,
             });
             return await db.SaveChangesAsync(ct).ConfigureAwait(false);
         });

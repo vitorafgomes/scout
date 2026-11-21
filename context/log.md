@@ -1,3 +1,9 @@
+## [2026-11-21] feat | A review asked while another runs says it waits
+[[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]: one sentence in its conversation and a waiting entry in the bell with Stop, running when the worker picks it; the queue runs reviews in the order they were created or continued, across a restart.
+
+## [2026-11-21] feat | A review runs its batches through a window; a mixed test project could not run
+[[pages/decisions/0074-a-review-runs-its-batches-through-a-window]]: a hung batch holds one place, a review batch turn has 3 minutes, each turn row keeps when its last call ended. A test project whose failures all need the Docker daemon could not run beside its tests that passed ([[pages/services/sandbox/test-summary-reader]]).
+
 ## [2026-11-21] lint | Full wiki pass
 Summary: 2 broken links, 0 orphans, 0 stale entries, connections not measured, 0 date-field errors, 0 stale pages, 23 schema errors, provenance and page_type not measured, assets not measured.
 Report: archive/lint-2026-11-21.md

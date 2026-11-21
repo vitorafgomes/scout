@@ -27,6 +27,9 @@ const REVIEW_PROGRESS = new RegExp(
   `^Review of ${PULL_REQUEST}: ${REVIEW_COUNTS}(?:, reading (.+))?\\.$`,
 );
 const REVIEW_RESUMED = new RegExp(`^Review of ${PULL_REQUEST} resumed: ${REVIEW_COUNTS}\\.$`);
+const REVIEW_WAITING = new RegExp(
+  `^The review of ${PULL_REQUEST} waits for the review of ${PULL_REQUEST} to end; it starts by itself\\.$`,
+);
 const REVIEW_PAUSED = new RegExp(`^The review of ${PULL_REQUEST} paused: (.+)$`, 's');
 const REVIEW_CARD = new RegExp(
   `^Review of ${PULL_REQUEST} at [0-9a-f]+(, stopped at your request)?:$`,
@@ -147,11 +150,22 @@ function cardCounts(text: string): { read: number; of: number; findings: number 
 }
 
 /**
- * The entry of a review job's line, one per pull request: its progress and resume as running with the batches, the
- * files read, the findings so far and the area being read; its pauses, its card at the end and its stop. Null for any
- * other line.
+ * The entry of a review job's line, one per pull request: its wait for another review, with the worker's sentence; its
+ * progress and resume as running with the batches, the files read, the findings so far and the area being read; its
+ * pauses, its card at the end and its stop. Null for any other line.
  */
 function reviewNotice(text: string, first: string): NotificationInput | null {
+  const waiting = REVIEW_WAITING.exec(first);
+  if (waiting !== null) {
+    const pullRequest = `${waiting[1]}#${waiting[2]}`;
+    return {
+      id: reviewJobId(pullRequest),
+      kind: 'waiting',
+      title: `Review of ${pullRequest} waiting`,
+      detail: first,
+      source: 'worker',
+    };
+  }
   const running = REVIEW_PROGRESS.exec(first) ?? REVIEW_RESUMED.exec(first);
   if (running !== null) {
     const [, repository, number, done, total, read, of, soFar, area] = running;

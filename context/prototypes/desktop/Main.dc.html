@@ -227,16 +227,19 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </div>
 <div role="group" aria-labelledby="pv-review-job" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
 <span id="pv-review-job">Review job</span>
-<sc-for list="{{rjStates}}" as="ps" hint-placeholder-count="11">
+<sc-for list="{{rjStates}}" as="ps" hint-placeholder-count="12">
 <button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
 </sc-for>
-<span>Built: a review of a pull request too large for one turn runs to its last batch, code before documentation. The bell shows it under In progress, with the batches done, the files read and how many findings there are so far, and Pause, Continue and Stop. The chat says once that it started and then nothing until the end, when one card brings every finding. Simulate a run plays it; Pause and Stop in the bell work while it plays.</span>
+<span>Built: a review of a pull request too large for one turn runs to its last batch, code before documentation. The bell shows it under In progress, with the batches done, the files read and how many findings there are so far, and Pause, Continue and Stop. The chat says once that it started and then nothing until the end, when one card brings every finding. Simulate a run plays it; Pause and Stop in the bell work while it plays. Waiting: a review asked while another runs says once in the chat that it waits and for which review, shows in the bell as waiting with the same sentence and Stop, and turns running by itself when the review ahead ends; the sentence is not said again.</span>
 </div>
 <sc-if value="{{rjOn}}" hint-placeholder-val="{{false}}">
 <div style="align-self: flex-end; max-width: 520px; background: {{t.accentStrong}}; color: #ffffff; padding: 10px 14px; border-radius: 14px 14px 4px 14px; line-height: 1.5">Review acme/api#52</div>
 <div style="display: flex; flex-direction: column; gap: 12px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px">
 <div style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 600">Scout</span><span style="font-size: 12px; color: {{t.muted}}">{{rjWhen}}</span></div>
 <p style="margin: 0; line-height: 1.5; color: {{t.fg2}}">{{rjStartText}}</p>
+<sc-if value="{{rjWaits}}" hint-placeholder-val="{{false}}">
+<p data-test="review-job-waits" style="margin: 0; line-height: 1.5; color: {{t.fg2}}">{{rjWaitText}}</p>
+</sc-if>
 </div>
 <sc-if value="{{rjHasCard}}" hint-placeholder-val="{{false}}">
 <div data-test="review-job-card" style="display: flex; flex-direction: column; gap: 12px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px">
@@ -1491,8 +1494,10 @@ class Component extends DCLogic {
     const stopPaused = { label: 'Stop the review of acme/api#52', path: stop, act: go('stopped') };
     const base = { id: 'r1', glyph: 'R', tone: 'accent', when: 'now', progress: null, action: '', buttons: [], controls: [], note: '' };
     const so = c.read + ' of ' + c.of + ' files read · ' + c.items + ' so far';
+    const WAITS = 'The review of acme/api#52 waits for the review of acme/api#44 to end; it starts by itself.';
     const running = { ...base, kind: 'running', title: 'Review of acme/api#52', detail: c.done + ' of ' + c.total + ' batches done · reading ' + c.area + ' · ' + so + ' · the findings arrive in the chat when the review ends', progress: Math.floor(c.done * 100 / c.total) };
     return [{
+      waiting: { ...base, kind: 'waiting', tone: 'muted', title: 'Review of acme/api#52 waiting', detail: WAITS, controls: [stopPaused] },
       running: { ...running, controls: [pauseIt, stopRunning] },
       stopping: { ...running, status: 'Stopping after this batch' },
       pausing: { ...running, status: 'Pausing after this batch' },
@@ -1521,10 +1526,12 @@ class Component extends DCLogic {
     const blocking = all.slice(0, c.count).some((i) => i.sev === 'Blocking');
     return {
       rjOn: mode !== 'off',
-      rjStates: [['off', 'Off'], ['sim', 'Simulate a run'], ['running', 'Running'], ['pausedByYou', 'Paused by you'], ['pausing', 'Pausing after this batch'], ['pausedAt60', 'Paused at 60 minutes'], ['pausedGitHub', 'Paused: GitHub could not be read'], ['pausedLimit', 'Paused: the AI Source limit'], ['stopping', 'Stopping after this batch'], ['stopped', 'Stopped'], ['done', 'Done']].map(([id, label]) => ({ label, pressed: picked === id ? 'true' : 'false', bg: picked === id ? t.surface2 : 'transparent', fg: picked === id ? t.fg : t.muted, pick: () => this.rjPick(id) })),
+      rjStates: [['off', 'Off'], ['sim', 'Simulate a run'], ['waiting', 'Waiting for another review'], ['running', 'Running'], ['pausedByYou', 'Paused by you'], ['pausing', 'Pausing after this batch'], ['pausedAt60', 'Paused at 60 minutes'], ['pausedGitHub', 'Paused: GitHub could not be read'], ['pausedLimit', 'Paused: the AI Source limit'], ['stopping', 'Stopping after this batch'], ['stopped', 'Stopped'], ['done', 'Done']].map(([id, label]) => ({ label, pressed: picked === id ? 'true' : 'false', bg: picked === id ? t.surface2 : 'transparent', fg: picked === id ? t.fg : t.muted, pick: () => this.rjPick(id) })),
       rjWhen: ended ? '4 min' : 'now',
       rjStartText: 'review started: 123 files in 17 batches, acme/api#52 at 4cf6972; code first, 4 batches at a time. Follow it in the bell of Scout Desktop; every finding arrives here once, when the review ends.',
       rjHasCard: ended,
+      rjWaits: mode === 'waiting',
+      rjWaitText: 'The review of acme/api#52 waits for the review of acme/api#44 to end; it starts by itself.',
       rjCardText: mode === 'done' ? 'Review of acme/api#52 at 4cf6972: ' + c.items + '.' : 'Review of acme/api#52 at 4cf6972, stopped at your request: ' + c.items + ' in the part that was read.',
       rjCardRead: c.read + ' of ' + c.of + ' files read',
       rjCardStopped: mode === 'stopped',
@@ -1541,7 +1548,7 @@ class Component extends DCLogic {
     const all = bell === 'empty' ? [] : [...added, ...this.bellItems().map((n) => this.mentionBell(this.bellPreview(this.bellLive(n))))];
     const unread = all.filter((n) => !read[n.id]).length;
     const tone = (n) => n.tone === 'ok' ? [t.okBg, t.ok] : n.tone === 'warn' ? [t.warnBg, t.warn] : n.tone === 'err' ? [t.errBg, t.err] : n.tone === 'muted' ? [t.surface2, t.fg2] : [t.surface2, t.accent];
-    const shownBy = { running: ['running', 'paused'], github: ['github', 'mention'], done: ['done', 'failed'] };
+    const shownBy = { running: ['running', 'waiting', 'paused'], github: ['github', 'mention'], done: ['done', 'failed'] };
     const shown = all.filter((n) => tab === 'all' || shownBy[tab].includes(n.kind)).map((n) => ({
       ...n,
       iconBg: tone(n)[0],

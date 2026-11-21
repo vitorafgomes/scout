@@ -103,6 +103,7 @@ async function click(fixture: ComponentFixture<NotificationBellComponent>, test:
 
 const KINDS: readonly NotificationKind[] = [
   'running',
+  'waiting',
   'paused',
   'done',
   'failed',
@@ -112,7 +113,7 @@ const KINDS: readonly NotificationKind[] = [
 const FILTERS: readonly NotificationFilter[] = ['all', 'running', 'github', 'done'];
 const SHOWN_UNDER: Readonly<Record<NotificationFilter, readonly NotificationKind[]>> = {
   all: KINDS,
-  running: ['running', 'paused'],
+  running: ['running', 'waiting', 'paused'],
   github: ['github', 'mention'],
   done: ['done', 'failed'],
 };
@@ -136,8 +137,8 @@ describe('NotificationBellComponent matrix: panel state x filter x entry kind x 
     document.body.innerHTML = '';
   });
 
-  it('covers 2 panel states x 4 filters x 6 kinds x 2 read states', () => {
-    expect(MATRIX.length).toBe(96);
+  it('covers 2 panel states x 4 filters x 7 kinds x 2 read states', () => {
+    expect(MATRIX.length).toBe(112);
   });
 
   it.each(MATRIX)('$panel panel, filter $filter, a $kind entry, read $read', async (row) => {
@@ -647,9 +648,15 @@ describe('NotificationBellComponent: the actions an entry offers', () => {
     },
   );
 
-  it('a review job is under In progress while running and paused, and under Done once stopped or done', async () => {
+  it('a review job is under In progress while waiting, running and paused, and under Done once stopped or done', async () => {
     const fixture = await render(
       makeBridge([
+        note('reviewjob:acme/api#5', {
+          kind: 'waiting',
+          title: 'Review of acme/api#5 waiting',
+          detail:
+            'The review of acme/api#5 waits for the review of acme/api#1 to end; it starts by itself.',
+        }),
         note('reviewjob:acme/api#1', { kind: 'running', title: 'Review of acme/api#1' }),
         note('reviewjob:acme/api#2', {
           kind: 'paused',
@@ -667,7 +674,11 @@ describe('NotificationBellComponent: the actions an entry offers', () => {
     await click(fixture, 'filter-done');
     const ended = all(fixture, 'entry').map((e) => drawn(e).title);
 
-    expect(running).toEqual(['Review of acme/api#1', 'Review of acme/api#2 paused']);
+    expect(running).toEqual([
+      'Review of acme/api#5 waiting',
+      'Review of acme/api#1',
+      'Review of acme/api#2 paused',
+    ]);
     expect(ended).toEqual(['Review of acme/api#3 stopped', 'Review of acme/api#4 is done']);
   });
 

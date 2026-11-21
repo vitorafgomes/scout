@@ -291,6 +291,10 @@ namespace Scout.Audit.Storage.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("job_id");
 
+                    b.Property<long?>("LastCallMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_call_ms");
+
                     b.Property<int>("LeftOut")
                         .HasColumnType("INTEGER")
                         .HasColumnName("left_out");

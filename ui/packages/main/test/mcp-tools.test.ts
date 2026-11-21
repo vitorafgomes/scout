@@ -454,6 +454,7 @@ describe('get_review', () => {
       tests: { ran: true, command: 'dotnet test', exitCode: 0, durationSeconds: 41 },
       checks: [],
       running: true,
+      waiting: false,
     });
     expect(
       JSON.stringify(card),
@@ -477,8 +478,9 @@ describe('get_review', () => {
     });
     const notPr = await tools.call('get_review', { pull_request: 'https://example.com/x' });
 
-    expect([card['offer'], card['running']]).toEqual([
+    expect([card['offer'], card['running'], card['waiting']]).toEqual([
       { verdict: 'comment', reason: OLD_CARD_REASON, commentInstead: false },
+      false,
       false,
     ]);
     expect([none.isError, text(none)]).toEqual([
@@ -486,6 +488,41 @@ describe('get_review', () => {
       'No review card of that pull request is held.',
     ]);
     expect(notPr.isError).toBe(true);
+  });
+});
+
+describe('a review that waits for another', () => {
+  const WAITS =
+    'The review of acme/shop#12 waits for the review of acme/web#44 to end; it starts by itself.';
+  const waiting = entry({
+    id: 'reviewjob:acme/shop#12',
+    kind: 'waiting',
+    title: 'Review of acme/shop#12 waiting',
+    detail: WAITS,
+  });
+
+  it('list_reviews shows it with the waiting state and its sentence', async () => {
+    const { tools } = harness({ entries: [waiting] });
+
+    const jobs = JSON.parse(text(await tools.call('list_reviews', {}))) as unknown[];
+
+    expect(jobs, 'the waiting review, as the bell keeps it').toEqual([
+      {
+        title: 'Review of acme/shop#12 waiting',
+        state: 'waiting',
+        progress: null,
+        detail: WAITS,
+        at: 5,
+      },
+    ]);
+  });
+
+  it('get_review says the review of the pull request waits, and that none runs', async () => {
+    const { tools } = harness({ turns: [cardTurn('t', CARD)], entries: [waiting] });
+
+    const card = json(await tools.call('get_review', { pull_request: URL }));
+
+    expect([card['running'], card['waiting']], 'waiting beside running').toEqual([false, true]);
   });
 });
 

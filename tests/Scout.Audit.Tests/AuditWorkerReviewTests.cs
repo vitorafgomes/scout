@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -828,14 +829,60 @@ public sealed class AuditWorkerReviewTests : IDisposable
     }
 
     [Fact]
+    public async Task W1_a_batch_that_hangs_does_not_stop_the_other_batches_from_starting_and_ending_in_the_plan_s_order()
+    {
+        var store = Store();
+        var job = await ReviewAsync(store, 5);
+        var hung = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var order = new ConcurrentQueue<int>();
+        var chat = new ScriptedChat(async (history, kernel, turn) =>
+        {
+            var batch = BatchOf(history);
+            order.Enqueue(batch);
+            if (batch == 1)
+            {
+                await hung.Task;
+            }
+
+            await Task.Delay(20);
+            await Kernels.PresentingAnEmptyReview(history, kernel, turn);
+        });
+
+        var run = Worker(store, chat, new RecordingNotifier(), new FakePullRequests(() => At(Head, 5)), parallel: 2).RunReviewAsync(job, CancellationToken.None);
+        var others = Stopwatch.StartNew();
+        while ((await store.BatchesAsync(job.Id, CancellationToken.None)).Count(b => b.Status == AuditStatus.Done) < 4 && others.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            await Task.Delay(20);
+        }
+
+        var whileHung = (await store.BatchesAsync(job.Id, CancellationToken.None)).Select(b => b.Status).ToArray();
+        hung.SetResult();
+        await run;
+
+        whileHung.ShouldBe(
+            [AuditStatus.Pending, AuditStatus.Done, AuditStatus.Done, AuditStatus.Done, AuditStatus.Done],
+            "while one batch hangs, every other batch is started and ends in the other place of the window");
+        order.Take(5).ShouldBe([1, 2, 3, 4, 5], "the batches start in the plan's order");
+        (await store.JobAsync(job.Id, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done, "the hung batch ends the review when it answers");
+    }
+
+    [Fact]
     public async Task A_stop_during_a_wave_lets_it_end_and_starts_no_other()
     {
         var store = Store();
         var job = await ReviewAsync(store, 6);
         var stopped = 0;
+        var three = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var chat = new ScriptedChat(async (history, kernel, turn) =>
         {
-            if (Interlocked.Increment(ref stopped) == 1)
+            var at = Interlocked.Increment(ref stopped);
+            if (at == 3)
+            {
+                three.SetResult();
+            }
+
+            await three.Task;
+            if (at == 1)
             {
                 await store.StopAsync("acme", "shop", 12, CancellationToken.None);
             }
@@ -908,8 +955,16 @@ public sealed class AuditWorkerReviewTests : IDisposable
     {
         var store = Store();
         var job = await ReviewAsync(store, 6);
+        var begun = 0;
+        var three = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var chat = new ScriptedChat(async (history, kernel, turn) =>
         {
+            if (Interlocked.Increment(ref begun) == 3)
+            {
+                three.SetResult();
+            }
+
+            await three.Task;
             if (BatchOf(history) == 2)
             {
                 throw new LlmQuotaExceededException("usage_limit_reached");
@@ -1817,7 +1872,8 @@ public sealed class AuditWorkerReviewTests : IDisposable
         rows[0].ShouldSatisfyAllConditions(
             "the first turn's numbers",
             r => ((long)r["presented"]!, (long)r["placed"]!, (long)r["left_out"]!).ShouldBe((1L, 0L, 1L)),
-            r => ((string)r["calls"]!).ShouldBe("{\"GitHub.get_file_contents\":1}"));
+            r => ((string)r["calls"]!).ShouldBe("{\"GitHub.get_file_contents\":1}"),
+            r => r["last_call_ms"].ShouldNotBeNull("the time the turn's last call ended is kept, to tell a wait on the model from slow reads"));
         rows[3].ShouldSatisfyAllConditions(
             "the second reading's counts",
             r => ((long?)r["held"], (long?)r["refuted"], (long?)r["uncertain"]).ShouldBe((1L, 0L, 0L)));

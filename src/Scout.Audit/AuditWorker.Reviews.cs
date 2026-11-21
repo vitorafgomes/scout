@@ -215,7 +215,7 @@ internal sealed partial class AuditWorker
     };
 
     /// <summary>
-    /// Runs a pull request review in waves of up to <see cref="AuditOptions.ReviewParallelBatches"/> pending batches, until
+    /// Runs a pull request review through a window of up to <see cref="AuditOptions.ReviewParallelBatches"/> batches in flight (<see cref="RunWindowAsync"/>), until
     /// no batch is pending or the job is no longer running. Before each wave: at
     /// <see cref="RepositoryAudits.MaxReviewMinutes"/> minutes of its batches' running time since it last resumed, a paused
     /// time never counted, the job pauses with <see cref="RanForTheBound"/> and one notice, nothing marked not read, and a
@@ -234,6 +234,12 @@ internal sealed partial class AuditWorker
     internal async Task RunReviewAsync(AuditJob job, CancellationToken ct)
     {
         await StampAsync(job, ct).ConfigureAwait(false);
+        if (signal.TookWaiting(job.Id))
+        {
+            var items = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false)).Count;
+            await PostAllAsync(job.Id, [ProgressLine(job, ReviewCounts(await store.BatchesAsync(job.Id, ct).ConfigureAwait(false)), items)], ct, localOnly: true).ConfigureAwait(false);
+        }
+
         StartTests(job, ct);
         var instructions = await runner.ReviewInstructionsAsync(job, ct).ConfigureAwait(false);
         var inputs = await store.InputsAsync(job.Id, ct).ConfigureAwait(false);
@@ -292,7 +298,7 @@ internal sealed partial class AuditWorker
                         continue;
                     }
 
-                    if (!await RunWaveAsync(current, instructions, inputs, constant, wave, read!, ct).ConfigureAwait(false))
+                    if (!await RunWindowAsync(current, instructions, inputs, constant, read!, ct).ConfigureAwait(false))
                     {
                         return;
                     }
@@ -313,80 +319,62 @@ internal sealed partial class AuditWorker
     }
 
     /// <summary>
-    /// One wave: every batch begun, then their turns run together, each saved as it ends under one lock with its progress
-    /// line; false when a batch asked to pause and the job's pause took, its one notice posted after the others were saved.
-    /// Each batch is handed the <paramref name="inputs"/> kept at the review's start, with their <paramref name="constant"/> block built once per run.
+    /// The review's batches through a window of at most <see cref="AuditOptions.ReviewParallelBatches"/> in flight: when one
+    /// ends, the next pending batch in the plan's order starts, so a batch that hangs holds one place, never the others.
+    /// Before each start: the job must still be running, its running time under <see cref="RepositoryAudits.MaxReviewMinutes"/>,
+    /// and, every time as many batches as the window holds have started, its head still the commit reviewed; otherwise no
+    /// batch starts and the ones in flight end, for the run to say why. Each batch is begun, handed its own files' patches
+    /// and the titles of the findings saved when it starts, and saved as it ends under one lock with its progress line. A
+    /// provider limit stops starting batches; the job pauses once, with one notice, after the ones in flight are saved, and
+    /// false is answered. Each batch is handed the <paramref name="inputs"/> kept at the review's start, with their
+    /// <paramref name="constant"/> block built once per run.
     /// </summary>
-    private async Task<bool> RunWaveAsync(
-        AuditJob job, string instructions, ReviewInputs? inputs, string? constant, IReadOnlyList<AuditBatch> wave, ReviewPullRequest read, CancellationToken ct)
+    private async Task<bool> RunWindowAsync(
+        AuditJob job, string instructions, ReviewInputs? inputs, string? constant, ReviewPullRequest read, CancellationToken ct)
     {
         var count = (await store.BatchesAsync(job.Id, ct).ConfigureAwait(false)).Count;
-        var titles = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false))
-            .Select(f => f.Title)
-            .Reverse()
-            .Take(MaxEarlierTitles)
-            .ToList();
-        foreach (var batch in wave)
-        {
-            await store.BeginBatchAsync(job.Id, batch.Order, ct).ConfigureAwait(false);
-        }
-
         using var saves = new SemaphoreSlim(1, 1);
         string? pause = null;
-        await Task.WhenAll(wave.Select(async batch =>
+        var started = new HashSet<int>();
+        var all = new List<Task>();
+        var inFlight = new List<Task>();
+        var sinceHead = 0;
+        var starting = true;
+        while (true)
         {
-            var patches = read.Files.Where(f => batch.Files.Contains(f.Path, StringComparer.Ordinal)).ToList();
-            if (RepositoryAudits.PartOf(batch.Area) is { } part)
+            inFlight.RemoveAll(t => t.IsCompleted);
+            await OthersLeftAsync(job.Id, ct).ConfigureAwait(false);
+            if (starting && pause is null && inFlight.Count < _parallel)
             {
-                var file = patches.FirstOrDefault(f => f.Path == part.Path);
-                var parts = file?.Patch is null ? null : RepositoryAudits.PartsOf(part.Path, file.Patch, RepositoryAudits.Room(_batchCharacters, inputs));
-                if (file is null || parts is null || parts.Count != part.Of || parts[part.Part - 1].Patch is not { } partPatch)
+                var next = await NextBatchAsync(job, started, inFlight.Count + 1, sinceHead, ct).ConfigureAwait(false);
+                if (next is { Batch: { } batch })
                 {
-                    await saves.WaitAsync(ct).ConfigureAwait(false);
-                    try
-                    {
-                        await store.NotCoveredAsync(job.Id, batch.Order, [], RepositoryAudits.PartChanged, ct).ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        saves.Release();
-                    }
-
-                    return;
+                    sinceHead = next.Value.SinceHead + 1;
+                    started.Add(batch.Order);
+                    await store.BeginBatchAsync(job.Id, batch.Order, ct).ConfigureAwait(false);
+                    var titles = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false))
+                        .Select(f => f.Title)
+                        .Reverse()
+                        .Take(MaxEarlierTitles)
+                        .ToList();
+                    var task = RunWindowBatchAsync(job, instructions, inputs, constant, read, batch, count, titles, saves, reason => pause ??= reason, ct);
+                    all.Add(task);
+                    inFlight.Add(task);
+                    continue;
                 }
 
-                patches = [file with { Patch = partPatch }];
+                starting = false;
             }
 
-            var outcome = await runner.RunReviewAsync(job, instructions, batch, count, titles, patches, ct, inputs, constant).ConfigureAwait(false);
-            await saves.WaitAsync(ct).ConfigureAwait(false);
-            try
+            if (inFlight.Count == 0)
             {
-                if (outcome.Pause)
-                {
-                    pause ??= outcome.Failure;
-                    return;
-                }
-
-                if (outcome.Failure is { } reason)
-                {
-                    await store.NotCoveredAsync(job.Id, batch.Order, outcome.FilesRead, reason, ct).ConfigureAwait(false);
-                }
-                else
-                {
-                    await store.CompleteBatchAsync(job.Id, batch.Order, outcome.FilesRead, outcome.Findings, outcome.LeftOut, ct).ConfigureAwait(false);
-                }
-
-                var batches = await store.BatchesAsync(job.Id, ct).ConfigureAwait(false);
-                var items = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false)).Count;
-                await PostAllAsync(job.Id, [TestsLine(job) is { } tests ? $"{ProgressLine(job, ReviewCounts(batches), items)}\n{tests}" : ProgressLine(job, ReviewCounts(batches), items)], ct, localOnly: true).ConfigureAwait(false);
+                break;
             }
-            finally
-            {
-                saves.Release();
-            }
-        })).ConfigureAwait(false);
 
+            await Task.WhenAny(inFlight).ConfigureAwait(false);
+        }
+
+        await Task.WhenAll(all).ConfigureAwait(false);
         if (pause is not null && await store.PauseAsync(job.Id, pause, ct).ConfigureAwait(false))
         {
             await PostAllAsync(job.Id, [ReviewPausedNotice(job, pause)], ct).ConfigureAwait(false);
@@ -394,6 +382,96 @@ internal sealed partial class AuditWorker
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The next pending batch of <paramref name="job"/> not yet started in this run, in the plan's order, with the count of
+    /// batches started since the head was last read; null when no batch may start now: the job is no longer running, its
+    /// running time reached the bound, its head could not be read or moved, or no pending batch is left to start.
+    /// </summary>
+    private async Task<(AuditBatch? Batch, int SinceHead)?> NextBatchAsync(AuditJob job, HashSet<int> started, int look, int sinceHead, CancellationToken ct)
+    {
+        if (await store.JobAsync(job.Id, ct).ConfigureAwait(false) is not { Status: AuditStatus.Running }
+            || await store.RunningTimeAsync(job.Id, ct).ConfigureAwait(false) >= TimeSpan.FromMinutes(RepositoryAudits.MaxReviewMinutes))
+        {
+            return null;
+        }
+
+        var pending = await store.PendingBatchesAsync(job.Id, started.Count + look, ct).ConfigureAwait(false);
+        if (pending.FirstOrDefault(b => !started.Contains(b.Order)) is not { } next)
+        {
+            return null;
+        }
+
+        if (sinceHead >= _parallel)
+        {
+            if (await HeadAsync(job, ct).ConfigureAwait(false) is not { } head || !IsJobCommit(job, head)
+                || await store.JobAsync(job.Id, ct).ConfigureAwait(false) is not { Status: AuditStatus.Running })
+            {
+                return null;
+            }
+
+            sinceHead = 0;
+        }
+
+        return (next, sinceHead);
+    }
+
+    /// <summary>One batch of the window: its turn, then its save and progress line under <paramref name="saves"/>; a provider limit is handed to <paramref name="paused"/>.</summary>
+    private async Task RunWindowBatchAsync(
+        AuditJob job, string instructions, ReviewInputs? inputs, string? constant, ReviewPullRequest read, AuditBatch batch, int count, List<string> titles,
+        SemaphoreSlim saves, Action<string?> paused, CancellationToken ct)
+    {
+        var patches = read.Files.Where(f => batch.Files.Contains(f.Path, StringComparer.Ordinal)).ToList();
+        if (RepositoryAudits.PartOf(batch.Area) is { } part)
+        {
+            var file = patches.FirstOrDefault(f => f.Path == part.Path);
+            var parts = file?.Patch is null ? null : RepositoryAudits.PartsOf(part.Path, file.Patch, RepositoryAudits.Room(_batchCharacters, inputs));
+            if (file is null || parts is null || parts.Count != part.Of || parts[part.Part - 1].Patch is not { } partPatch)
+            {
+                await saves.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await store.NotCoveredAsync(job.Id, batch.Order, [], RepositoryAudits.PartChanged, ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    saves.Release();
+                }
+
+                return;
+            }
+
+            patches = [file with { Patch = partPatch }];
+        }
+
+        var outcome = await runner.RunReviewAsync(job, instructions, batch, count, titles, patches, ct, inputs, constant).ConfigureAwait(false);
+        await saves.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (outcome.Pause)
+            {
+                paused(outcome.Failure);
+                return;
+            }
+
+            if (outcome.Failure is { } reason)
+            {
+                await store.NotCoveredAsync(job.Id, batch.Order, outcome.FilesRead, reason, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await store.CompleteBatchAsync(job.Id, batch.Order, outcome.FilesRead, outcome.Findings, outcome.LeftOut, ct).ConfigureAwait(false);
+            }
+
+            var batches = await store.BatchesAsync(job.Id, ct).ConfigureAwait(false);
+            var items = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false)).Count;
+            await PostAllAsync(job.Id, [TestsLine(job) is { } tests ? $"{ProgressLine(job, ReviewCounts(batches), items)}\n{tests}" : ProgressLine(job, ReviewCounts(batches), items)], ct, localOnly: true).ConfigureAwait(false);
+        }
+        finally
+        {
+            saves.Release();
+        }
     }
 
     /// <summary>
@@ -412,6 +490,22 @@ internal sealed partial class AuditWorker
             await PostAllAsync(job.Id, [read == 0 ? StoppedEmptyNotice(job) : await ReviewCardAsync(job, ct, stopped: true).ConfigureAwait(false)], ct).ConfigureAwait(false);
             _stoppedCards[job.Id] = true;
             ForgetTests(job.Id);
+        }
+    }
+
+    /// <summary>
+    /// The stopped cards of the reviews the owner stopped while <paramref name="runningId"/> runs, a waiting one or a paused
+    /// one, posted as a batch of the running review ends rather than after it; the running review's own stop is its run's to say.
+    /// </summary>
+    private async Task OthersLeftAsync(string runningId, CancellationToken ct)
+    {
+        while (signal.TryTakeStopped(out var stopped))
+        {
+            if (stopped != runningId
+                && await store.JobAsync(stopped, ct).ConfigureAwait(false) is { Kind: AuditKind.Review, Status: AuditStatus.Stopped } review)
+            {
+                await ReviewLeftAsync(review, ct).ConfigureAwait(false);
+            }
         }
     }
 

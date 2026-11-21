@@ -46,7 +46,7 @@ Each area lists its own pages. Open the area you need.
 |---|---|
 | [[pages/architecture/index\|Architecture]] | 41 |
 | [[pages/conventions/index\|Conventions]] | 4 |
-| [[pages/decisions/index\|Decisions]] | 73 |
+| [[pages/decisions/index\|Decisions]] | 75 |
 | [[pages/domain/index\|Domain]] | 3 |
 | [[pages/history/index\|History]] | 32 |
 | [[pages/invariants/index\|Invariants]] | 6 |

@@ -1060,6 +1060,19 @@ public sealed class AuditBatchRunnerTests
         answer.ShouldBe("The tests could not be run in Scout (KernelFunctionCanceledException).", "a cancellation that is not the review's own is a failure like any other, never an escape");
     }
 
+    [Fact]
+    public async Task W2_a_review_batch_turn_that_does_not_answer_within_its_own_bound_is_retried_once_then_reported()
+    {
+        var chat = new ScriptedChat((_, _, _) => Task.Delay(Timeout.Infinite));
+        var runner = new AuditBatchRunner(Kernels.Audit(), chat, null, TimeSpan.FromMinutes(10), NullLogger<AuditBatchRunner>.Instance, reviewTurnTimeout: TimeSpan.FromMilliseconds(200));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        var outcome = await runner.RunReviewAsync(Review, "instructions", Billing, 3, [], DiffPatches, CancellationToken.None);
+
+        (outcome.Failure, General(chat).Count).ShouldBe(("the AI model did not answer in time", 2), "a review batch turn that does not answer is retried once and then reported");
+        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5), "within the review turn's own bound, never the audit's ten minutes");
+    }
+
     public static TheoryData<string, bool> ExtraTurnEnds => new() { { "throws", true }, { "times out", false } };
 
     [Theory]

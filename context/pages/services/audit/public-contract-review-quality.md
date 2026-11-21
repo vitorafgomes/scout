@@ -1,9 +1,9 @@
 ---
 title: "Audit: Public contract, review quality"
-version: "1.0"
+version: "1.1"
 date: 2026-11-21
 updated: 2026-11-21
-changes: "v1.0: the page as first written, split from the public contract"
+changes: "v1.1 (2026-11-21): the window and the review turn bound (ADR 0074). v1.0: the page as first written, split from the public contract"
 page_type: service
 status: active
 description: "Read when a change touches a review finding's evidence, the parts of a large file, the focused readings, the second reading or the turn table."
@@ -21,3 +21,5 @@ reliability: high
 - **The second reading** reads at the head with `get_file_contents`, `search_code` and `list_repository_files` held to the job's repository (`:759`, `:771`), tries to refute, holds only with a scenario and sets the severity by rule; each group has the batch turn's timeout inside 30 minutes for the whole reading (`src/Scout.Audit/AuditWorker.Reviews.cs:610`). [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]
 - **The turn table.** `IAuditJobStore.AddTurnAsync` keeps one row of numbers per model turn in `audit_turn`, `TurnTotalsAsync` totals them per reading (`src/Scout.Audit/SqliteAuditStore.cs:129`, `:156`) and `StampRunAsync` writes the Scout version and the `provider/model` names on the job row (`:173`); the card's "Scout asked the model N times for this review." and its focused note are read from the totals (`AuditWorker.Reviews.cs:476`). [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]
 - **The review's own tests** run through `run_pull_request_tests` on the shared kernel, so the write gate's "Local container" grant applies; a cancellation that is not the review's own answers that the tests could not be run.
+
+- **The window and the turn's bound.** A review keeps at most `Scout:Audit:ReviewParallelBatches` batches in flight and starts the next pending one as one ends (`src/Scout.Audit/AuditWorker.Reviews.cs:326`); a review batch turn has `Scout:Audit:ReviewTurnTimeout`, 3 minutes (`src/Scout.Audit/AuditOptions.cs:40`), while audits and the second reading keep `TurnTimeout`; each turn row keeps `last_call_ms`. [[pages/decisions/0074-a-review-runs-its-batches-through-a-window]]

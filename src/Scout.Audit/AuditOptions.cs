@@ -33,6 +33,13 @@ public sealed class AuditOptions
     public TimeSpan TurnTimeout { get; set; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
+    /// The time one review batch turn may take, shorter than <see cref="TurnTimeout"/>, which audits and the second
+    /// reading's groups keep: review batch turns measured on real pull requests took 8 to 90 seconds, so 3 minutes is twice
+    /// the slowest with room, and a turn that hangs is retried once and reported within minutes, not twenty.
+    /// </summary>
+    public TimeSpan ReviewTurnTimeout { get; set; } = TimeSpan.FromMinutes(3);
+
+    /// <summary>
     /// How many batches of a pull request review run at once, 1 to 8; 4 unless configured, and 1 when the configured AI
     /// provider is the local Ollama and the key is not set, so a local model is not sent several turns together.
     /// </summary>
