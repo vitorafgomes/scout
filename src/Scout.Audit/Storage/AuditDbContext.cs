@@ -39,6 +39,7 @@ internal sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) :
             job.Property(j => j.Inputs).HasColumnName("inputs");
             job.Property(j => j.ScoutVersion).HasColumnName("scout_version");
             job.Property(j => j.ChatModel).HasColumnName("chat_model");
+            job.Property(j => j.Earlier).HasColumnName("earlier");
         });
 
         modelBuilder.Entity<AuditTurnRow>(turn =>
@@ -157,6 +158,12 @@ internal sealed class AuditJobRow
 
     /// <summary>The provider and chat model names, <c>provider/model</c>, that last ran the job; names only, never a key.</summary>
     public string? ChatModel { get; set; }
+
+    /// <summary>
+    /// What became of Scout's findings from earlier reviews of the pull request, as JSON, written once by the review's
+    /// card; null for an audit, before the check ran, and for a job kept before it existed.
+    /// </summary>
+    public string? Earlier { get; set; }
 }
 
 /// <summary>

@@ -122,7 +122,8 @@ internal static class FindingsBlock
     /// since the block's own reading strips both from every title it is given.
     /// </summary>
     public static string? Complete(
-        string block, int read, int of, IReadOnlyList<string> notes, string testsReason, Offer? offer = null, IReadOnlySet<string>? unconfirmed = null, IReadOnlySet<string>? noted = null)
+        string block, int read, int of, IReadOnlyList<string> notes, string testsReason, Offer? offer = null, IReadOnlySet<string>? unconfirmed = null, IReadOnlySet<string>? noted = null,
+        JsonObject? earlier = null)
     {
         var start = block.IndexOf('\n', StringComparison.Ordinal);
         var end = block.LastIndexOf("```", StringComparison.Ordinal);
@@ -158,6 +159,11 @@ internal static class FindingsBlock
                         : title;
                 }
             }
+        }
+
+        if (earlier is not null)
+        {
+            payload["earlier"] = earlier.DeepClone();
         }
 
         if (offer is not null)

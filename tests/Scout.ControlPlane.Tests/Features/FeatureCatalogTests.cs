@@ -59,6 +59,7 @@ public sealed class FeatureCatalogTests
             "Read the comments on a pull request",
             "Read which account Scout signs in as, so it never approves a pull request that account opened",
             "Read the check runs and commit statuses of a pull request's head commit, and the reviews already given on it",
+            "Read the review comments on a pull request and the replies under them when a review job checks the findings Scout posted on earlier reviews; nothing is written",
         ]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Issues").Actions.ShouldBe(["List open issues", "Read one issue"]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Notifications").Actions.ShouldBe([

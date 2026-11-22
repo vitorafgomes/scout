@@ -1612,7 +1612,8 @@ public sealed class AuditWorkerReviewTests : IDisposable
     /// </summary>
     private async Task<(RecordingNotifier Notifier, ScriptedChat Chat, SqliteAuditStore Store, AuditJob Job)> ContestedAsync(
         Func<string, Task<string>>? contest, int findings = 3, TimeSpan? contestTime = null, Func<SqliteAuditStore, AuditJob, Task>? before = null,
-        ReviewInputs? inputs = null, string why = "The compiler cannot infer Refuse never returns.", TimeSpan? contestGroupTime = null)
+        ReviewInputs? inputs = null, string why = "The compiler cannot infer Refuse never returns.", TimeSpan? contestGroupTime = null,
+        EarlierConversations? earlier = null, Func<Exception>? earlierFail = null, Func<string, Task<string>>? earlierAnswer = null)
     {
         var root = Path.Combine(_folder.Path, "snapshot");
         Directory.CreateDirectory(Path.Combine(root, "src", "M1"));
@@ -1644,8 +1645,14 @@ public sealed class AuditWorkerReviewTests : IDisposable
             chat.Contest = contest;
         }
 
+        if (earlierAnswer is not null)
+        {
+            chat.Earlier = earlierAnswer;
+        }
+
         var notifier = new RecordingNotifier();
-        await Worker(store, chat, notifier, new FakePullRequests(() => pullRequest), kernel, snapshots: snapshots, contestTime: contestTime, contestGroupTime: contestGroupTime).RunReviewAsync(job, CancellationToken.None);
+        var pullRequests = new FakePullRequests(() => pullRequest) { Earlier = earlier ?? new EarlierConversations([], false), EarlierFail = earlierFail };
+        await Worker(store, chat, notifier, pullRequests, kernel, snapshots: snapshots, contestTime: contestTime, contestGroupTime: contestGroupTime).RunReviewAsync(job, CancellationToken.None);
         return (notifier, chat, store, job);
     }
 
@@ -1716,6 +1723,93 @@ public sealed class AuditWorkerReviewTests : IDisposable
         card.GetProperty("verdict").GetString().ShouldBe(AuditWorker.NoBlockingInFilesRead, "an unconfirmed finding never blocks the verdict");
         card.GetProperty("offer").GetProperty("verdict").GetString().ShouldBe(ReviewOffers.Comment, "V2 an unconfirmed finding offers a comment, never approval");
         Notes(card).ShouldContain("1 finding could not be confirmed by Scout's second reading; it is kept as unconfirmed and does not block.");
+    }
+
+    private static EarlierFinding Old(string id, string title, int line, string severity = "fix") =>
+        new(id, new CommentedFinding(severity, title, "W.", null, "F.", null), "src/M1/F.cs", line, line, "0123456", "https://example.invalid/" + id, [new EarlierReply("alice", "It is intended.", DateTimeOffset.UnixEpoch)]);
+
+    private static string Decided(params (string Id, string Status)[] entries) =>
+        JsonSerializer.Serialize(entries.Select(e => new { id = e.Id, status = e.Status, reason = $"src/M1/F.cs:2 decides {e.Id}.", repeats = Array.Empty<string>() }));
+
+    private static List<(string Title, string Outcome, string? Url)> EarlierOf(JsonElement card) =>
+        [.. card.GetProperty("earlier").GetProperty("items").EnumerateArray().Select(i => (i.GetProperty("title").GetString()!, i.GetProperty("outcome").GetString()!, i.GetProperty("url").GetString()))];
+
+    [Fact]
+    public async Task E1_E4_a_review_of_a_pull_request_already_reviewed_decides_each_earlier_finding_at_the_new_head_and_the_card_shows_them()
+    {
+        var earlier = new EarlierConversations([Old("e1", "Old one A", 20), Old("e2", "Old one B", 21), Old("e3", "Old one C", 22)], false);
+
+        var (notifier, chat, store, job) = await ContestedAsync(null, findings: 1, earlier: earlier, earlierAnswer: _ => Task.FromResult(Decided(("e1", "fixed"), ("e2", "open"), ("e3", "answered"))));
+
+        var card = Card(notifier.Posts.Last().Text);
+        EarlierOf(card).ShouldBe(
+            [("Old one A", "fixed", "https://example.invalid/e1"), ("Old one B", "open", "https://example.invalid/e2"), ("Old one C", "answered", "https://example.invalid/e3")],
+            "each earlier finding is on the card with the outcome its check decided at the new head and the link to its conversation");
+        Notes(card).ShouldContain("Earlier findings: 1 fixed, 1 still open, 1 answered by the author, 0 could not be decided.", "the card counts the earlier findings by outcome");
+        var request = chat.EarlierChecks.ShouldHaveSingleItem("the earlier findings are checked once, in one group");
+        request.ShouldSatisfyAllConditions(
+            "the check is handed each earlier finding with its conversation, and the new findings on its files",
+            r => r.ShouldContain("Finding e1\nseverity: fix\ntitle: Old one A\npath: src/M1/F.cs\nline: 20\n", Case.Sensitive),
+            r => r.ShouldContain("- alice, 1970-01-01: It is intended.", Case.Sensitive),
+            r => r.ShouldContain("- r1: src/M1/F.cs:2, block, Null lookup 1 dereferenced", Case.Sensitive));
+        (await store.TurnTotalsAsync(job.Id, CancellationToken.None)).ShouldContain(t => t.Reading == "earlier", "the check's turn is counted in the turn table under its own reading");
+    }
+
+    [Fact]
+    public async Task E2_a_new_finding_that_repeats_an_open_earlier_conversation_is_not_reported_as_new()
+    {
+        var earlier = new EarlierConversations([Old("e1", "Null lookup 1 dereferenced", 2, "block")], false);
+
+        var (notifier, _, _, _) = await ContestedAsync(null, findings: 2, earlier: earlier, earlierAnswer: _ => Task.FromResult(Decided(("e1", "fixed"))));
+
+        var card = Card(notifier.Posts.Last().Text);
+        Ids(card).ShouldBe(["r2"], "a new finding on the earlier one's file and line with its title is the earlier one again, not a new finding");
+        EarlierOf(card).ShouldHaveSingleItem().Outcome.ShouldBe("open", "an earlier finding this review found again is still open");
+    }
+
+    [Theory]
+    [InlineData("open", "request_changes")]
+    [InlineData("fixed", "comment")]
+    [InlineData("answered", "comment")]
+    [InlineData("unknown", "comment")]
+    public async Task E3_an_earlier_finding_still_open_counts_for_the_verdict_and_a_fixed_answered_or_undecided_one_does_not(string outcome, string verdict)
+    {
+        var earlier = new EarlierConversations([Old("e1", "Old one", 20)], false);
+
+        var (notifier, _, _, _) = await ContestedAsync(
+            _ => Task.FromResult(Answer(("r1", "refuted"))), findings: 1, earlier: earlier, earlierAnswer: _ => Task.FromResult(Decided(("e1", outcome))));
+
+        var offer = Card(notifier.Posts.Last().Text).GetProperty("offer");
+        offer.GetProperty("verdict").GetString().ShouldBe(verdict, $"an earlier finding {outcome} at the new head decides the offer when the new findings were all refuted");
+        if (outcome == "open")
+        {
+            offer.GetProperty("reason").GetString().ShouldBe("Request changes: 1 earlier finding is still open.", "the offer says the earlier finding is why");
+        }
+    }
+
+    [Fact]
+    public async Task E5_when_the_conversations_cannot_be_read_the_card_says_the_earlier_findings_were_not_checked_and_none_is_fixed()
+    {
+        var (notifier, chat, _, _) = await ContestedAsync(null, findings: 1, earlierFail: () => new HttpRequestException("502"));
+
+        var card = Card(notifier.Posts.Last().Text);
+        Notes(card).ShouldContain(AuditWorker.EarlierNotChecked(AuditWorker.EarlierUnreadable), "a read that fails says the earlier findings were not checked");
+        card.GetProperty("earlier").GetProperty("checked").GetBoolean().ShouldBeFalse("the section says it was not checked");
+        chat.EarlierChecks.ShouldBeEmpty("nothing is asked about conversations that could not be read");
+        card.GetProperty("offer").GetProperty("verdict").GetString().ShouldNotBeNull("the review still ends in a card with its offer");
+    }
+
+    [Fact]
+    public async Task E5_a_check_that_fails_leaves_every_earlier_finding_undecided_never_fixed_and_a_full_page_says_not_every_conversation_was_read()
+    {
+        var earlier = new EarlierConversations([Old("e1", "Old one A", 20), Old("e2", "Old one B", 21)], true);
+
+        var (notifier, _, _, _) = await ContestedAsync(null, findings: 1, earlier: earlier, earlierAnswer: _ => throw new HttpRequestException("reset"));
+
+        var card = Card(notifier.Posts.Last().Text);
+        EarlierOf(card).Select(e => e.Outcome).ShouldBe(["unknown", "unknown"], "a check whose call fails decides nothing: each earlier finding is undecided, never fixed");
+        Notes(card).ShouldContain("Earlier findings: 0 fixed, 0 still open, 0 answered by the author, 2 could not be decided.");
+        Notes(card).ShouldContain(AuditWorker.EarlierMore, "a full page of comments says not every conversation was read");
     }
 
     private static string Cited(string id, string status, string reason) =>

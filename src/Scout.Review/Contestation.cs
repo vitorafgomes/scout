@@ -121,26 +121,15 @@ public static partial class Contestation
     /// </summary>
     public static IReadOnlyDictionary<string, ContestOutcome>? Read(string? answer, IReadOnlyList<string> ids)
     {
-        JsonElement array;
-        try
-        {
-            using var parsed = JsonDocument.Parse(Unfenced(answer ?? string.Empty));
-            array = parsed.RootElement.Clone();
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-
-        if (array.ValueKind != JsonValueKind.Array)
+        if (Entries(answer) is not { } array)
         {
             return null;
         }
 
         var entries = new Dictionary<string, List<ContestOutcome?>>(StringComparer.Ordinal);
-        foreach (var entry in array.EnumerateArray())
+        foreach (var entry in array)
         {
-            if (entry.ValueKind == JsonValueKind.Object && Text(entry, "id") is { } id)
+            if (Text(entry, "id") is { } id)
             {
                 var status = Text(entry, "status");
                 var reason = Bounded(Text(entry, "reason")?.Trim());
@@ -158,16 +147,36 @@ public static partial class Contestation
             id => id,
             id => entries.TryGetValue(id, out var list) && list is [{ } only] ? only : new ContestOutcome(ContestStatus.Uncertain, NoValidEntry),
             StringComparer.Ordinal);
-
-        static string? Text(JsonElement entry, string name) =>
-            entry.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
     }
+
+    /// <summary>
+    /// The objects of <paramref name="answer"/> when it is one JSON array, a code fence around it allowed; null otherwise.
+    /// Shared by every reading whose answer is an array of entries.
+    /// </summary>
+    internal static IReadOnlyList<JsonElement>? Entries(string? answer)
+    {
+        try
+        {
+            using var parsed = JsonDocument.Parse(Unfenced(answer ?? string.Empty));
+            return parsed.RootElement.ValueKind == JsonValueKind.Array
+                ? [.. parsed.RootElement.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.Object).Select(e => e.Clone())]
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The text of <paramref name="name"/> in <paramref name="entry"/>, null when it is not text.</summary>
+    internal static string? Text(JsonElement entry, string name) =>
+        entry.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     /// <summary>
     /// <paramref name="text"/> within <see cref="MaxReasonLength"/>: a longer text is cut at the last word boundary that
     /// leaves room for <c>...</c>, and ends with it.
     /// </summary>
-    private static string? Bounded(string? text)
+    internal static string? Bounded(string? text)
     {
         if (text is not { Length: > MaxReasonLength })
         {

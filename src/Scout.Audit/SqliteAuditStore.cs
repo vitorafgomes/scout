@@ -79,6 +79,14 @@ internal sealed class SqliteAuditStore : IAuditJobStore
         });
 
     /// <inheritdoc />
+    public Task<string?> EarlierAsync(string jobId, CancellationToken ct) =>
+        RunAsync("read", db => db.Jobs.Where(j => j.Id == jobId).Select(j => j.Earlier).SingleOrDefaultAsync(ct));
+
+    /// <inheritdoc />
+    public Task SaveEarlierAsync(string jobId, string json, CancellationToken ct) =>
+        RunAsync("save", db => db.Jobs.Where(j => j.Id == jobId).ExecuteUpdateAsync(set => set.SetProperty(j => j.Earlier, json), ct));
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct) =>
         RunAsync<IReadOnlyList<AuditJob>>("read", async db =>
         {

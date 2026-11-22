@@ -18,9 +18,10 @@ public sealed record OfferChecks(int Passed, int Failed, int Running, bool Compl
 /// <param name="Mergeable">False when the pull request conflicts with its base branch; null when GitHub has not said.</param>
 /// <param name="HeadMoved">True when the pull request moved past the commit reviewed.</param>
 /// <param name="ReadCountKnown">False when the files read and changed are not known as numbers, so the offer never approves.</param>
+/// <param name="EarlierOpen">The severities of Scout's findings from earlier reviews that are still open at this head; a fixed, answered or undecided one is not here.</param>
 public sealed record OfferInput(
     IReadOnlyList<OfferFinding> Findings, int FilesRead, int FilesChanged, TestRunFacts? Tests, OfferChecks? Checks,
-    bool ReviewerIsAuthor = false, bool? Mergeable = true, bool HeadMoved = false, bool ReadCountKnown = true);
+    bool ReviewerIsAuthor = false, bool? Mergeable = true, bool HeadMoved = false, bool ReadCountKnown = true, IReadOnlyList<string>? EarlierOpen = null);
 
 /// <summary>The verdict a review offers, why in one sentence, and whether sending its findings as a comment instead is allowed.</summary>
 /// <param name="Verdict">One of <see cref="ReviewOffers.Approve"/>, <see cref="ReviewOffers.RequestChanges"/>, <see cref="ReviewOffers.Comment"/>, <see cref="ReviewOffers.Wait"/> or <see cref="ReviewOffers.None"/>.</param>
@@ -66,15 +67,21 @@ public static class ReviewOffers
         }
 
         var needFixing = input.Findings.Count(f => !f.Unconfirmed && (f.Severity is Severities.Block or Severities.Fix));
+        var earlierOpen = input.EarlierOpen?.Count(s => s is Severities.Block or Severities.Fix) ?? 0;
         var testsFailed = input.Tests is { Ran: true, ExitCode: not 0 } run
             && !(run.Projects.Any(p => p.CouldNotRun) && !run.Projects.Any(p => p.Failed > 0 && !p.CouldNotRun));
         var checksFailed = input.Checks?.Failed ?? 0;
-        if (needFixing > 0 || testsFailed || checksFailed > 0)
+        if (needFixing > 0 || earlierOpen > 0 || testsFailed || checksFailed > 0)
         {
             List<string> why = [];
             if (needFixing > 0)
             {
                 why.Add($"{Count(needFixing, "finding")} {(needFixing == 1 ? "needs" : "need")} fixing");
+            }
+
+            if (earlierOpen > 0)
+            {
+                why.Add($"{Count(earlierOpen, "earlier finding")} {(earlierOpen == 1 ? "is" : "are")} still open");
             }
 
             if (testsFailed)

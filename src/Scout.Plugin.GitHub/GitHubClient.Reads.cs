@@ -192,6 +192,22 @@ internal sealed partial class GitHubClient
             .ToList();
     }
 
+    /// <summary>The review comments one read takes: one page.</summary>
+    internal const int ReviewCommentsPage = 100;
+
+    public async Task<PullRequestReviewComments?> ListReviewCommentsAsync(string owner, string repo, int number, CancellationToken ct)
+    {
+        var page = await TryGetAsync<List<ReviewThreadCommentDto>>(
+            $"repos/{owner}/{repo}/pulls/{number}/comments?per_page={ReviewCommentsPage}", ct).ConfigureAwait(false);
+        return page is null
+            ? null
+            : new PullRequestReviewComments(
+                [.. page.Select(c => new PullRequestReviewComment(
+                    c.Id, c.InReplyToId, Login(c.User), c.Body ?? string.Empty, c.Path, c.Line, c.OriginalLine, c.CommitId, c.OriginalCommitId, c.CreatedAt, c.HtmlUrl))
+                    .OrderBy(c => c.CreatedAt)],
+                page.Count >= ReviewCommentsPage);
+    }
+
     public async Task<IssueDetails?> GetIssueAsync(
         string owner, string repo, int number, CancellationToken ct)
     {
@@ -418,6 +434,19 @@ internal sealed partial class GitHubClient
         [property: JsonPropertyName("line")] int? Line,
         [property: JsonPropertyName("original_line")] int? OriginalLine,
         [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt);
+
+    private sealed record ReviewThreadCommentDto(
+        [property: JsonPropertyName("id")] long Id,
+        [property: JsonPropertyName("in_reply_to_id")] long? InReplyToId,
+        [property: JsonPropertyName("user")] UserDto? User,
+        [property: JsonPropertyName("body")] string? Body,
+        [property: JsonPropertyName("path")] string? Path,
+        [property: JsonPropertyName("line")] int? Line,
+        [property: JsonPropertyName("original_line")] int? OriginalLine,
+        [property: JsonPropertyName("commit_id")] string? CommitId,
+        [property: JsonPropertyName("original_commit_id")] string? OriginalCommitId,
+        [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt,
+        [property: JsonPropertyName("html_url")] string? HtmlUrl);
 
     private sealed record ConversationCommentDto(
         [property: JsonPropertyName("user")] UserDto? User,

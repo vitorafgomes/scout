@@ -560,17 +560,22 @@ internal sealed partial class AuditWorker
         LastCardTests = facts;
         var batches = await store.BatchesAsync(job.Id, ct).ConfigureAwait(false);
         var inputs = await store.InputsAsync(job.Id, ct).ConfigureAwait(false);
-        var (findings, secondReading, unconfirmed, noted) = await SecondReadingAsync(job, await store.FindingsAsync(job.Id, ct).ConfigureAwait(false), facts, batches, stopped, inputs?.Purpose, pullRequest, ct).ConfigureAwait(false);
+        var stored = await store.FindingsAsync(job.Id, ct).ConfigureAwait(false);
+        var earlier = await EarlierAsync(job, stored, stopped, pullRequest, ct).ConfigureAwait(false);
+        var (findings, secondReading, unconfirmed, noted) = await SecondReadingAsync(
+            job, [.. stored.Where(f => !earlier.Repeats.Contains(f.Id))], facts, batches, stopped, inputs?.Purpose, pullRequest, ct).ConfigureAwait(false);
         var preflight = await store.PreflightAsync(job.Id, ct).ConfigureAwait(false);
         var read = FilesRead(batches);
         var of = FilesChanged(batches);
         var offer = ReviewOffers.Decide(new OfferInput(
-            [.. findings.Select(f => new OfferFinding(f.Severity, unconfirmed.Contains(f.Id)))], read, of, facts, await ChecksAsync(job, ct).ConfigureAwait(false)));
+            [.. findings.Select(f => new OfferFinding(f.Severity, unconfirmed.Contains(f.Id)))], read, of, facts, await ChecksAsync(job, ct).ConfigureAwait(false),
+            EarlierOpen: earlier.OpenSeverities));
         var verdict = VerdictOf(offer);
         var totals = await store.TurnTotalsAsync(job.Id, ct).ConfigureAwait(false);
         List<string> notes =
         [
             .. preflight?.Checks.Where(c => c.Outcome == PreflightOutcome.Warning).Select(c => c.Sentence) ?? [],
+            .. earlier.Notes,
             .. secondReading,
             .. inputs?.Notes() ?? [],
             .. NotRead(batches, stopped),
@@ -598,7 +603,7 @@ internal sealed partial class AuditWorker
         }
 
         var review = string.Create(CultureInfo.InvariantCulture, $"{job.Owner}/{job.Repo}#{job.PullRequest} at {Short(job.Commit)}");
-        return block is not null && FindingsBlock.Complete(block, read, of, ReviewNotes.Fit(notes), testsReason, offer, unconfirmed, noted) is { } card
+        return block is not null && FindingsBlock.Complete(block, read, of, ReviewNotes.Fit(notes), testsReason, offer, unconfirmed, noted, earlier.Card) is { } card
             ? $"Review of {review}{(stopped ? ", stopped at your request" : string.Empty)}:\n\n{card}"
             : string.Create(CultureInfo.InvariantCulture, $"The review of {review} is done: {verdict}, {read} of {of} files read, {findings.Count} findings kept.");
     }
@@ -613,6 +618,161 @@ internal sealed partial class AuditWorker
 
     /// <summary>The reading name the second reading's turns are kept under.</summary>
     internal const string Contest = "contest";
+
+    /// <summary>The reading name of a check of earlier findings, in the turn table.</summary>
+    internal const string EarlierReading = "earlier";
+
+    /// <summary>The time the check of a review's earlier findings may take in all, before the second reading; past it, the rest are unknown.</summary>
+    internal TimeSpan EarlierTime { get; init; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>Why the earlier findings were not checked when their conversations could not be read.</summary>
+    internal const string EarlierUnreadable = "the conversations of the earlier reviews could not be read";
+
+    /// <summary>The note of a card whose earlier findings were not checked.</summary>
+    internal static string EarlierNotChecked(string why) => $"Scout's earlier findings were not checked: {why}; none is called fixed.";
+
+    /// <summary>The note of a card when not every earlier conversation was read.</summary>
+    internal const string EarlierMore = "Not every earlier conversation was read: the pull request has more review comments than one read takes; the ones read were checked.";
+
+    /// <summary>The card section, the new findings that repeat an earlier one, the severities of those still open, and the notes.</summary>
+    private sealed record EarlierResult(System.Text.Json.Nodes.JsonObject? Card, IReadOnlySet<string> Repeats, IReadOnlyList<string> OpenSeverities, IReadOnlyList<string> Notes);
+
+    private static readonly EarlierResult NoEarlier = new(null, new HashSet<string>(), [], []);
+
+    /// <summary>
+    /// What became of Scout's findings from earlier reviews of the pull request, checked once per review and kept with the
+    /// job: the conversations read (<see cref="IReviewPullRequests.EarlierAsync"/>), grouped as the second reading groups,
+    /// each group one turn with <see cref="EarlierCheck.Instructions"/> and the second reading's reads, within
+    /// <see cref="EarlierTime"/> in all; the answers read by <see cref="EarlierCheck.Read"/> and folded with the repeats code
+    /// finds (<see cref="EarlierCheck.Folded"/>). A read that fails, a stopped review, a turn that fails or runs out of time
+    /// leave the findings concerned unknown, never fixed.
+    /// </summary>
+    private async Task<EarlierResult> EarlierAsync(AuditJob job, IReadOnlyList<Finding> stored, bool stopped, ReviewPullRequest? pullRequest, CancellationToken ct)
+    {
+        if (job.PullRequest is not { } number)
+        {
+            return NoEarlier;
+        }
+
+        if (await store.EarlierAsync(job.Id, ct).ConfigureAwait(false) is { } kept)
+        {
+            return Kept(kept);
+        }
+
+        EarlierConversations? conversations;
+        try
+        {
+            conversations = await pullRequests.EarlierAsync(job.Owner, job.Repo, number, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Review {JobId}: the conversations of the earlier reviews could not be read ({ExceptionType}).", job.Id, ex.GetType().Name);
+            return await KeepAsync(new EarlierConversations([], false), new Dictionary<string, EarlierOutcome>(), new HashSet<string>(), EarlierUnreadable);
+        }
+
+        if (conversations is not { Findings.Count: > 0 } || conversations.Findings is not { } earlier)
+        {
+            return conversations is { More: true } ? await KeepAsync(conversations, new Dictionary<string, EarlierOutcome>(), new HashSet<string>(), null) : NoEarlier;
+        }
+
+        var outcomes = new Dictionary<string, EarlierOutcome>(StringComparer.Ordinal);
+        if (stopped)
+        {
+            return await KeepAsync(conversations, outcomes, new HashSet<string>(), ContestStopped.TrimEnd('.'));
+        }
+
+        var root = snapshots?.Find(job.Owner, job.Repo, job.Commit)?.Root;
+        pullRequest ??= await ReadAsync(job, ct).ConfigureAwait(false);
+        var patches = pullRequest is not null && string.Equals(pullRequest.HeadSha, job.Commit, StringComparison.OrdinalIgnoreCase)
+            ? pullRequest.Files.GroupBy(f => f.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Patch, StringComparer.Ordinal)
+            : [];
+        var room = Math.Max(0, _contestCharacters - 2_000);
+        var materials = earlier.ToDictionary(
+            e => e.Id,
+            e => EarlierCheck.Material(e, CodeAround(root, EarlierCheck.AsFinding(e)), DiffLines.HunkHolding(patches.GetValueOrDefault(e.Path), e.Line ?? e.OriginalLine ?? 1, null), room),
+            StringComparer.Ordinal);
+        var groups = Contestation.Groups([.. earlier.Select(EarlierCheck.AsFinding)], f => materials[f.Id].Length, room);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var left = EarlierTime - System.Diagnostics.Stopwatch.GetElapsedTime(started);
+            if (left <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            var paths = groups[i].Select(f => f.Path).ToHashSet(StringComparer.Ordinal);
+            var news = stored.Where(f => paths.Contains(f.Path)).ToList();
+            var request = ContestRequest.ReadAt(job.Owner, job.Repo, job.Commit) + "\n" + string.Join("\n\n", groups[i].Select(f => materials[f.Id])) + "\n\n" + EarlierCheck.NewFindings(news);
+            var history = new Microsoft.SemanticKernel.ChatCompletion.ChatHistory();
+            var turnStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            var (answer, failure) = await ContestGroupAsync(job, request, history, left, ct, EarlierCheck.Instructions).ConfigureAwait(false);
+            var read = failure is null ? EarlierCheck.Read(answer, [.. groups[i].Select(f => f.Id)], [.. news.Select(f => f.Id)]) : null;
+            await runner.CountAsync(job, new AuditTurn(
+                null, EarlierReading, i + 1, 1, false, (long)System.Diagnostics.Stopwatch.GetElapsedTime(turnStarted).TotalMilliseconds, request.Length,
+                AuditBatchRunner.CallCounts(history), groups[i].Count, 0, 0, failure ?? (read is null ? ContestUnreadable : null), null, null, null)).ConfigureAwait(false);
+            foreach (var (id, outcome) in read ?? new Dictionary<string, EarlierOutcome>())
+            {
+                outcomes[id] = outcome;
+            }
+        }
+
+        var (folded, repeats) = EarlierCheck.Folded(earlier, outcomes, stored);
+        return await KeepAsync(conversations, folded, repeats, null);
+
+        async Task<EarlierResult> KeepAsync(EarlierConversations read, IReadOnlyDictionary<string, EarlierOutcome> decided, IReadOnlySet<string> repeated, string? notChecked)
+        {
+            var items = new System.Text.Json.Nodes.JsonArray([.. read.Findings.Select(e => (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject
+            {
+                ["title"] = e.Finding.Title,
+                ["severity"] = e.Finding.Severity,
+                ["path"] = e.Path,
+                ["line"] = e.Line ?? e.OriginalLine,
+                ["outcome"] = (decided.GetValueOrDefault(e.Id) ?? new EarlierOutcome(EarlierStatus.Unknown, EarlierCheck.NotChecked, [])).Status,
+                ["reason"] = (decided.GetValueOrDefault(e.Id) ?? new EarlierOutcome(EarlierStatus.Unknown, EarlierCheck.NotChecked, [])).Reason,
+                ["url"] = e.Url,
+            })]);
+            var card = new System.Text.Json.Nodes.JsonObject { ["checked"] = notChecked is null, ["more"] = read.More, ["items"] = items };
+            if (notChecked is not null)
+            {
+                card["why"] = notChecked;
+            }
+
+            var json = new System.Text.Json.Nodes.JsonObject { ["card"] = card, ["repeats"] = new System.Text.Json.Nodes.JsonArray([.. repeated.Select(r => (System.Text.Json.Nodes.JsonNode?)r)]) };
+            await store.SaveEarlierAsync(job.Id, json.ToJsonString(), ct).ConfigureAwait(false);
+            return Kept(json.ToJsonString());
+        }
+    }
+
+    /// <summary>The kept check of earlier findings as the card and the offer use it.</summary>
+    private static EarlierResult Kept(string json)
+    {
+        var node = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+        var card = node["card"]!.AsObject();
+        var items = card["items"]!.AsArray().Select(i => i!.AsObject()).ToList();
+        int Count(string outcome) => items.Count(i => i["outcome"]?.GetValue<string>() == outcome);
+        List<string> notes = [];
+        if (items.Count > 0)
+        {
+            notes.Add(string.Create(CultureInfo.InvariantCulture, $"Earlier findings: {Count(EarlierStatus.Fixed)} fixed, {Count(EarlierStatus.Open)} still open, {Count(EarlierStatus.Answered)} answered by the author, {Count(EarlierStatus.Unknown)} could not be decided."));
+        }
+
+        if (card["checked"]?.GetValue<bool>() == false)
+        {
+            notes.Add(EarlierNotChecked(card["why"]?.GetValue<string>() ?? EarlierUnreadable));
+        }
+
+        if (card["more"]?.GetValue<bool>() == true)
+        {
+            notes.Add(EarlierMore);
+        }
+
+        return new EarlierResult(
+            (System.Text.Json.Nodes.JsonObject)card.DeepClone(),
+            node["repeats"]!.AsArray().Select(r => r!.GetValue<string>()).ToHashSet(StringComparer.Ordinal),
+            [.. items.Where(i => i["outcome"]?.GetValue<string>() == EarlierStatus.Open).Select(i => i["severity"]!.GetValue<string>())],
+            notes);
+    }
 
     /// <summary>Writes the Scout version and the chat model that run <paramref name="job"/> now; a write that fails is logged and the job goes on.</summary>
     private async Task StampAsync(AuditJob job, CancellationToken ct)
@@ -773,13 +933,13 @@ internal sealed partial class AuditWorker
     }
 
     private async Task<(string? Answer, string? Failure)> ContestGroupAsync(
-        AuditJob job, string request, Microsoft.SemanticKernel.ChatCompletion.ChatHistory history, TimeSpan left, CancellationToken ct)
+        AuditJob job, string request, Microsoft.SemanticKernel.ChatCompletion.ChatHistory history, TimeSpan left, CancellationToken ct, string? instructions = null)
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
         limit.CancelAfter(left);
         try
         {
-            return (await runner.ContestAsync(job, request, history, limit.Token).ConfigureAwait(false), null);
+            return (await runner.ReadAgainAsync(job, instructions ?? ContestRequest.Instructions, request, history, limit.Token).ConfigureAwait(false), null);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {

@@ -769,11 +769,18 @@ internal sealed class AuditBatchRunner(
     /// same model as the batch turns, offered <see cref="ContestOffered"/> only; its messages and calls land in
     /// <paramref name="history"/>, and the answer's text is returned.
     /// </summary>
-    internal async Task<string?> ContestAsync(AuditJob job, string request, ChatHistory history, CancellationToken ct)
+    internal Task<string?> ContestAsync(AuditJob job, string request, ChatHistory history, CancellationToken ct) =>
+        ReadAgainAsync(job, ContestRequest.Instructions, request, history, ct);
+
+    /// <summary>
+    /// A turn that reads the head again with <paramref name="instructions"/>: the second reading's, or the check of earlier
+    /// findings' (<see cref="EarlierCheck.Instructions"/>); offered <see cref="ContestOffered"/> only, held to the job's repository.
+    /// </summary>
+    internal async Task<string?> ReadAgainAsync(AuditJob job, string instructions, string request, ChatHistory history, CancellationToken ct)
     {
         var turn = KernelScope.Only(kernel, [.. ContestOffered.Select(o => $"{o.Plugin}.{o.Function}")]);
         turn.FunctionInvocationFilters.Add(new HeldToJobRepository(job));
-        history.AddSystemMessage(ContestRequest.Instructions);
+        history.AddSystemMessage(instructions);
         history.AddUserMessage(request);
         var settings = new PromptExecutionSettings { FunctionChoiceBehavior = turn.Plugins.Count > 0 ? FunctionChoiceBehavior.Auto() : null };
         var reply = await chat.GetChatMessageContentAsync(history, settings, turn, ct).ConfigureAwait(false);

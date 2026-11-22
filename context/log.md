@@ -1,3 +1,6 @@
+## [2026-11-22] feat | A review checks the findings Scout posted on earlier reviews
+[[pages/decisions/0076-a-review-checks-the-findings-scout-posted-on-earlier-reviews]]: Scout's own earlier conversations read and decided at the new head, no repeat reported as new, open ones counted for the verdict, a card section and note; nothing written. The desktop section is a follow-up ([[pages/roadmap/followups]]).
+
 ## [2026-11-22] docs | The code review drawn from the code
 [[pages/architecture/code-review-flow]] redrawn with its entry points and the one action, and the inside of a review job drawn on five topic pages under pages/architecture/code-review/: the queue and what is kept, the start and the batches, what a reading evaluates, the tests in Docker, the second reading and the verdict.
 

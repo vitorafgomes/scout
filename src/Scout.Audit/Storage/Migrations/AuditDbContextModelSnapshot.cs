@@ -181,6 +181,10 @@ namespace Scout.Audit.Storage.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("chat_model");
 
+                    b.Property<string>("Earlier")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("earlier");
+
                     b.Property<string>("Inputs")
                         .HasColumnType("TEXT")
                         .HasColumnName("inputs");

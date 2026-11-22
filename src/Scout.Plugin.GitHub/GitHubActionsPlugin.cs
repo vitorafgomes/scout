@@ -362,7 +362,7 @@ internal sealed partial class GitHubActionsPlugin(
         }
 
         var comments = requested
-            .Select(f => (f.Id, Comment: new ReviewComment(f.Path, f.Line, ReviewNote.Comment(f))))
+            .Select(f => (f.Id, Comment: new ReviewComment(f.Path, f.Line, FindingComment.Write(f))))
             .Where(c => kept.Contains(c.Comment))
             .ToList();
         var offer = OfferFor(requested, extras, testRuns?.Find(owner, repo, (commit ?? string.Empty).Trim()), checks);
@@ -605,7 +605,7 @@ internal sealed partial class GitHubActionsPlugin(
         string owner, string repo, int number, string verdict, IReadOnlyList<Finding> findings, PullRequestHead head, string commit,
         NoteExtras? extras, IReadOnlyList<PullRequestCheck>? checksRead, string? signer, bool signedByBot, CancellationToken ct)
     {
-        var requested = findings.Select(f => new ReviewComment(f.Path, f.Line, ReviewNote.Comment(f))).ToList();
+        var requested = findings.Select(f => new ReviewComment(f.Path, f.Line, FindingComment.Write(f))).ToList();
         if (requested.Any(c => c.Body.Length > ReviewNote.MaxCommentLength))
         {
             throw Refused(NoteCommentTooLong);

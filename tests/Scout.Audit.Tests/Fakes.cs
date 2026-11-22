@@ -61,12 +61,24 @@ internal sealed partial class ScriptedChat(Func<ChatHistory, Kernel, int, Task> 
 
     public ConcurrentQueue<PromptExecutionSettings?> Settings { get; } = new();
 
+    /// <summary>The checks of earlier findings asked, by their request.</summary>
+    public ConcurrentQueue<string> EarlierChecks { get; } = new();
+
+    /// <summary>The answer to a check of earlier findings, given its request; by default an empty array, so each is unknown.</summary>
+    public Func<string, Task<string>> Earlier { get; set; } = _ => Task.FromResult("[]");
+
     public IReadOnlyDictionary<string, object?> Attributes { get; init; } = new Dictionary<string, object?>();
 
     public async Task<IReadOnlyList<ChatMessageContent>> GetChatMessageContentsAsync(
         ChatHistory chatHistory, PromptExecutionSettings? executionSettings = null, Kernel? kernel = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (chatHistory[0].Content == EarlierCheck.Instructions)
+        {
+            EarlierChecks.Enqueue(chatHistory[1].Content ?? string.Empty);
+            return [new ChatMessageContent(AuthorRole.Assistant, await Earlier(chatHistory[1].Content ?? string.Empty).WaitAsync(cancellationToken).ConfigureAwait(false))];
+        }
+
         if (chatHistory[0].Content == ContestRequest.Instructions)
         {
             Contests.Enqueue((chatHistory[1].Content ?? string.Empty, executionSettings, kernel!));
@@ -147,6 +159,10 @@ internal sealed class RacingStore(SqliteAuditStore store) : IAuditJobStore
 
         return await store.CreateJobAsync(owner, repo, pullRequest, commit, origin, batches, preflight, ct, inputs);
     }
+
+    public Task<string?> EarlierAsync(string jobId, CancellationToken ct) => store.EarlierAsync(jobId, ct);
+
+    public Task SaveEarlierAsync(string jobId, string json, CancellationToken ct) => store.SaveEarlierAsync(jobId, json, ct);
 
     public async Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct)
     {
@@ -500,6 +516,15 @@ internal sealed class FakePullRequests(params Func<ReviewPullRequest?>[] answers
 
     public Task<OfferChecks?> ChecksAsync(string owner, string repo, string sha, CancellationToken ct) =>
         ChecksFail is null ? Task.FromResult(Checks) : Task.FromException<OfferChecks?>(ChecksFail());
+
+    /// <summary>Scout's earlier findings on the pull request; by default none.</summary>
+    public EarlierConversations? Earlier { get; init; } = new([], false);
+
+    /// <summary>How the read of the earlier findings fails, when it does: it throws what this gives.</summary>
+    public Func<Exception>? EarlierFail { get; init; }
+
+    public Task<EarlierConversations?> EarlierAsync(string owner, string repo, int number, CancellationToken ct) =>
+        EarlierFail is null ? Task.FromResult(Earlier) : Task.FromException<EarlierConversations?>(EarlierFail());
 
     public int Reads { get; private set; }
 

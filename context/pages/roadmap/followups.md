@@ -23,6 +23,12 @@ reliability: medium
 
 ## Entries
 
+### Earlier findings: the desktop section, MCP, and the resolved state (2026-11-22)
+
+- **Gap:** the card block carries an `earlier` section and its note ([[pages/decisions/0076-a-review-checks-the-findings-scout-posted-on-earlier-reviews]]), but the desktop does not draw the section yet: the artboard state, the shared parser and the card's section are to come, and MCP `get_review` passes it once the parser reads it. Whether a conversation is resolved is not read.
+- **Blocker:** the screen change needs the artboard first; the resolved state needs GraphQL, a POST, which part 2 brings with the writes under its own decision record.
+- **Unblocks with:** the artboard's "Earlier findings" states, then the parser, the card and MCP; part 2's decision record.
+
 ### The turn table does not count noted answers (2026-11-21)
 
 - **Gap:** each second reading turn's row counts the findings that held, were refuted and were uncertain, but not the ones noted ([[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]], amended 2026-11-21).

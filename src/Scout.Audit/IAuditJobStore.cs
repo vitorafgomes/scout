@@ -63,6 +63,12 @@ internal interface IAuditJobStore
     /// </summary>
     Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct);
 
+    /// <summary>The JSON of what became of Scout's earlier findings for the review <paramref name="jobId"/>; null before the check ran.</summary>
+    Task<string?> EarlierAsync(string jobId, CancellationToken ct);
+
+    /// <summary>Keep <paramref name="json"/>, what became of Scout's earlier findings, with the review <paramref name="jobId"/>.</summary>
+    Task SaveEarlierAsync(string jobId, string json, CancellationToken ct);
+
     /// <summary>The job with <paramref name="id"/>, null when there is none.</summary>
     Task<AuditJob?> JobAsync(string id, CancellationToken ct);
 
