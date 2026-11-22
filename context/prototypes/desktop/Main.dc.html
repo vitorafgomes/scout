@@ -197,6 +197,13 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <span>The worker decides the one action of a review card and says why; the card shows it and decides nothing.</span>
 <span>The worker does not give the Approve or the Approve when the checks pass offer today; the card still draws them when given one.</span>
 </div>
+<div role="group" aria-labelledby="pv-earlier" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-earlier">Earlier findings</span>
+<sc-for list="{{earlierStates}}" as="ps" hint-placeholder-count="6">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>The findings Scout posted on earlier reviews of this pull request, as the worker decided them at the new head; read-only, above the new findings, since the author reads what happened to the earlier ones first. An open one already counts in the offer. The counts, the sentence when they were not checked and the one when not every conversation was read are the worker's notes, among the card's other notes; the outcome chips use the card's check tones: Fixed the passed tone, Still open the pending tone, the other two the not-run tone.</span>
+</div>
 <div role="group" aria-labelledby="pv-dictation" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
 <span id="pv-dictation">Hold to talk and alerts</span>
 <sc-for list="{{dictationStates}}" as="ps" hint-placeholder-count="5">
@@ -278,6 +285,25 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <sc-if value="{{awHasCheckLine}}" hint-placeholder-val="{{false}}">
 <p style="margin: 0; font-size: 12px; color: {{t.fg2}}">{{awCheckLine}}</p>
 </sc-if>
+</sc-if>
+<sc-if value="{{earlierOn}}" hint-placeholder-val="{{false}}">
+<section data-test="earlier-findings" aria-label="Earlier findings" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid {{t.line}}; border-radius: 12px">
+<h4 style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.fg}}">Earlier findings</h4>
+<sc-for list="{{earlierItems}}" as="ef" hint-placeholder-count="2">
+<div data-test="earlier-finding" style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{ef.sevBg}}; color: {{ef.sevFg}}">{{ef.severity}}</span><span style="font-size: 13px; font-weight: 600; color: {{t.fg}}">{{ef.title}}</span><span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; background: {{ef.outBg}}; color: {{ef.outFg}}">{{ef.outcome}}</span></div>
+<p style="margin: 0; font-size: 12px; color: {{t.fg2}}">{{ef.reason}}</p>
+<a href="#" style="align-self: flex-start; font-size: 12px; color: {{t.accent}}">Open the conversation on GitHub</a>
+</div>
+</sc-for>
+</section>
+</sc-if>
+<sc-if value="{{earlierHasNotes}}" hint-placeholder-val="{{false}}">
+<ul data-test="earlier-notes" style="margin: 0; padding-left: 18px; font-size: 12px; color: {{t.fg2}}">
+<sc-for list="{{earlierNotes}}" as="en" hint-placeholder-count="2">
+<li>{{en}}</li>
+</sc-for>
+</ul>
 </sc-if>
 <sc-for list="{{chatFindings}}" as="cf" hint-placeholder-count="2">
 <article aria-label="{{cf.aria}}" style="border: 1px solid {{t.line}}; border-radius: 12px; background: {{t.surface}}; padding: 12px; display: flex; flex-direction: column; gap: 8px">
@@ -1053,6 +1079,7 @@ class Component extends DCLogic {
         label: lbl, pressed: offerId === id ? 'true' : 'false', bg: offerId === id ? t.surface2 : 'transparent', fg: offerId === id ? t.fg : t.muted,
         pick: () => this.setState({ offer: id }),
       })),
+      ...this.earlierVals(t),
       cardHasApprovalLine: n > 0,
       cardApprovalLine: audit ? 'This sends them now. Nothing else to approve.' : 'This posts the review now. Nothing else to approve.',
       cardPreviewOpen: previewOpen ? 'true' : 'false',
@@ -1479,6 +1506,39 @@ class Component extends DCLogic {
     const next = plan[Math.min(done, plan.length - 1)];
     const items = last.items + ' finding' + (last.items === 1 ? '' : 's');
     return { total: plan.length, done, read: last.read, of: plan[plan.length - 1].read, items, count: last.items, area: next.area };
+  }
+  earlierVals(t) {
+    const mode = this.state.earlier || 'none';
+    const sevTone = { Blocking: [t.errBg, t.err], Fix: [t.warnBg, t.warn], Suggestion: [t.surface2, t.fg2] };
+    const outTone = { 'Fixed': [t.okBg, t.ok], 'Still open': [t.warnBg, t.warn], 'Answered by the author': [t.surface2, t.fg2], 'Could not be decided': [t.surface2, t.fg2] };
+    const item = (severity, title, outcome, reason) => ({ severity, title, outcome, reason, sevBg: sevTone[severity][0], sevFg: sevTone[severity][1], outBg: outTone[outcome][0], outFg: outTone[outcome][1] });
+    const fixedOpen = [
+      item('Blocking', 'A refund is sent twice when the gateway times out', 'Fixed', 'src/payments/Refunds.cs:61 now sends the idempotency key on the retry.'),
+      item('Fix', 'Order sync retries without a limit', 'Still open', 'src/sync/OrderSync.cs:142 still retries a 5xx answer forever.'),
+    ];
+    const items = {
+      none: [],
+      fixedOpen,
+      answered: [...fixedOpen, item('Suggestion', 'Name the magic number 0.2', 'Answered by the author', 'The reply is right: src/orders/Discounts.cs:17 names it in the constant above.')],
+      undecided: [fixedOpen[0], item('Fix', 'The basket shows a total the server has not confirmed', 'Could not be decided', 'Scout could not check this earlier finding at the new head.')],
+      notRead: [],
+      more: fixedOpen,
+    }[mode];
+    const count = (o) => items.filter((i) => i.outcome === o).length;
+    return {
+      earlierStates: [['none', 'None'], ['fixedOpen', 'Some fixed, some open'], ['answered', 'One answered by the author'], ['undecided', 'Some could not be decided'], ['notRead', 'Conversations not read'], ['more', 'More than one read takes']].map(([id, label]) => ({
+        label, pressed: mode === id ? 'true' : 'false', bg: mode === id ? t.surface2 : 'transparent', fg: mode === id ? t.fg : t.muted,
+        pick: () => this.setState({ earlier: id }),
+      })),
+      earlierOn: items.length > 0,
+      earlierItems: items,
+      earlierHasNotes: mode !== 'none',
+      earlierNotes: [
+        ...(items.length > 0 ? ['Earlier findings: ' + count('Fixed') + ' fixed, ' + count('Still open') + ' still open, ' + count('Answered by the author') + ' answered by the author, ' + count('Could not be decided') + ' could not be decided.'] : []),
+        ...(mode === 'notRead' ? ["Scout's earlier findings were not checked: the conversations of the earlier reviews could not be read; none is called fixed."] : []),
+        ...(mode === 'more' ? ['Not every earlier conversation was read: the pull request has more review comments than one read takes; the ones read were checked.'] : []),
+      ],
+    };
   }
   rjBell() {
     const { mode, sim } = this.rjNow();

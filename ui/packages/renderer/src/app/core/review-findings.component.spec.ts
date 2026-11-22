@@ -2929,3 +2929,121 @@ describe('review findings cards: the one action the worker offers', () => {
     expect(bridge.githubGiveVerdict.mock.calls[0]?.[0].verdict).toBe('request_changes');
   });
 });
+
+describe('ReviewFindingsComponent: the earlier findings section', () => {
+  const base = {
+    title: 'Order sync retries without a limit',
+    severity: 'fix' as const,
+    path: 'src/sync/OrderSync.cs',
+    line: 142,
+    reason: 'src/sync/OrderSync.cs:142 still retries forever.',
+    url: 'https://github.com/acme/shop/pull/5#discussion_r7',
+  };
+  const earlier: NonNullable<ReviewFindings['earlier']> = {
+    checked: true,
+    more: false,
+    unreadable: 0,
+    items: [
+      { ...base, title: 'A refund is sent twice', severity: 'block', outcome: 'fixed' },
+      { ...base, outcome: 'open' },
+      { ...base, title: 'Name the magic number', severity: 'nit', outcome: 'answered', url: null },
+      { ...base, title: 'The basket total', outcome: 'unknown' },
+    ],
+  };
+
+  it('E4 each earlier finding shows its severity, title, outcome in words and tone, reason and a link to its conversation, above the new findings', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, earlier });
+
+    const section = el(fixture, 'earlier-findings');
+    const items = all(fixture, 'earlier-finding').map((item) => ({
+      severity: text(el(fixture, 'earlier-severity', item)),
+      title: text(el(fixture, 'earlier-title', item)),
+      outcome: text(el(fixture, 'earlier-outcome', item)),
+      tone: el(fixture, 'earlier-outcome', item)?.className,
+      reason: text(el(fixture, 'earlier-reason', item)),
+      link: el(fixture, 'earlier-link', item) !== null,
+    }));
+    await click(fixture, el(fixture, 'earlier-link'));
+
+    expect(items, 'each earlier finding as the worker decided it').toEqual([
+      {
+        severity: 'Blocking',
+        title: 'A refund is sent twice',
+        outcome: 'Fixed',
+        tone: 'chip passed',
+        reason: base.reason,
+        link: true,
+      },
+      {
+        severity: 'Fix',
+        title: base.title,
+        outcome: 'Still open',
+        tone: 'chip pending',
+        reason: base.reason,
+        link: true,
+      },
+      {
+        severity: 'Suggestion',
+        title: 'Name the magic number',
+        outcome: 'Answered by the author',
+        tone: 'chip notrun',
+        reason: base.reason,
+        link: false,
+      },
+      {
+        severity: 'Fix',
+        title: 'The basket total',
+        outcome: 'Could not be decided',
+        tone: 'chip notrun',
+        reason: base.reason,
+        link: true,
+      },
+    ]);
+    expect(
+      section!.compareDocumentPosition(el(fixture, 'finding')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      'the section comes before the new findings',
+    ).toBeTruthy();
+    expect(
+      bridge.appOpenExternal,
+      'the link opens the conversation the way the card opens its other links',
+    ).toHaveBeenCalledExactlyOnceWith({ url: base.url });
+    expect(section!.querySelectorAll('button, input').length, 'the section is read-only').toBe(0);
+  });
+
+  it('no section is drawn for a card without earlier findings, from before the section or with none read', async () => {
+    const before = await render(makeBridge(), reviewed);
+    const none = el(before, 'earlier-findings');
+    TestBed.resetTestingModule();
+    const empty = await render(makeBridge(), {
+      ...reviewed,
+      earlier: { checked: false, more: false, unreadable: 0, items: [] },
+    });
+
+    expect([none, el(empty, 'earlier-findings')], 'nothing to draw, no section').toEqual([
+      null,
+      null,
+    ]);
+  });
+
+  it('the earlier findings are not part of the selection the owner sends', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, earlier });
+    await click(fixture, el(fixture, 'yes-all'));
+    fixture.componentInstance.giveVerdict('request_changes');
+    await settle(fixture);
+
+    const sent = bridge.githubGiveVerdict.mock.calls.at(-1)?.[0];
+    const previewed = bridge.githubPreviewVerdict.mock.calls.at(-1)?.[0];
+
+    expect(
+      sent?.findings.map((f) => f.id),
+      'the verdict carries the new findings only',
+    ).toEqual(['total', 'lock', 'naming']);
+    expect(Object.keys(sent ?? {}), 'nothing of the section is sent').not.toContain('earlier');
+    expect(
+      previewed === undefined || !Object.keys(previewed).includes('earlier'),
+      'nor in a preview',
+    ).toBe(true);
+  });
+});

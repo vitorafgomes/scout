@@ -1,3 +1,6 @@
+## [2026-11-22] feat | The review card shows the earlier findings
+The artboard's Earlier findings states first, then the shared parser, the card's read-only section above the new findings and MCP get_review ([[pages/services/desktop-github/verdict-from-the-review-card]]); the follow-up keeps only the resolved state.
+
 ## [2026-11-22] feat | A review checks the findings Scout posted on earlier reviews
 [[pages/decisions/0076-a-review-checks-the-findings-scout-posted-on-earlier-reviews]]: Scout's own earlier conversations read and decided at the new head, no repeat reported as new, open ones counted for the verdict, a card section and note; nothing written. The desktop section is a follow-up ([[pages/roadmap/followups]]).
 

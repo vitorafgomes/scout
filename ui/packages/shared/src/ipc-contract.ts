@@ -1699,6 +1699,37 @@ export interface ReviewFindings {
   readonly notes?: readonly string[];
   /** What the worker offers for the review, decided by its code; absent on a card from before Scout decided it. */
   readonly offer?: ReviewOffer;
+  /** On a review job's card, what became of the findings Scout posted on earlier reviews, as the worker decided it. */
+  readonly earlier?: ReviewEarlier;
+}
+
+/** What the worker decided at the new head about one finding Scout posted on an earlier review. */
+export type EarlierOutcome = 'fixed' | 'open' | 'answered' | 'unknown';
+
+/** One finding Scout posted on an earlier review, with what became of it; shown read-only. */
+export interface ReviewEarlierFinding {
+  readonly title: string;
+  readonly severity: 'block' | 'fix' | 'nit';
+  readonly path: string;
+  readonly line: number | null;
+  readonly outcome: EarlierOutcome;
+  /** One sentence, shown as text. */
+  readonly reason: string;
+  /** The conversation on GitHub, an https address on github.com, or null when the worker had none. */
+  readonly url: string | null;
+}
+
+/** The card's section on Scout's earlier findings. */
+export interface ReviewEarlier {
+  /** False when the conversations could not be read or the review was stopped before the check. */
+  readonly checked: boolean;
+  /** True when the pull request had more review comments than one read takes. */
+  readonly more: boolean;
+  /** Why they were not checked, when they were not. */
+  readonly why?: string;
+  readonly items: readonly ReviewEarlierFinding[];
+  /** How many items of the section could not be read and are not shown. */
+  readonly unreadable: number;
 }
 
 /** The one action a review card shows, as the worker decided it: the verdict, why, and whether a comment may go instead. */

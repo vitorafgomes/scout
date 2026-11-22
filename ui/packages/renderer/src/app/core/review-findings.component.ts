@@ -20,6 +20,8 @@ import {
   signerInWords,
   verdictRequest,
   type GitHubVerdictRequest,
+  type EarlierOutcome,
+  type ReviewEarlierFinding,
   type ReviewFinding,
   type ReviewFindings,
   type ReviewOffer,
@@ -44,6 +46,18 @@ const SEVERITY_LABELS: Readonly<Record<ReviewFinding['severity'], string>> = {
   nit: 'Suggestion',
 };
 const MAX_COMMENT_CHARS = 4000;
+const EARLIER_WORDS: Readonly<Record<EarlierOutcome, string>> = {
+  fixed: 'Fixed',
+  open: 'Still open',
+  answered: 'Answered by the author',
+  unknown: 'Could not be decided',
+};
+const EARLIER_TONES: Readonly<Record<EarlierOutcome, string>> = {
+  fixed: 'passed',
+  open: 'pending',
+  answered: 'notrun',
+  unknown: 'notrun',
+};
 const SHIELD = 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5';
 const ALERT = 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5';
 /** `reply | reviewFindings`: the reply's findings block and the text around it, parsed once per reply. */
@@ -126,6 +140,34 @@ export class ReviewFindingsPipe implements PipeTransform {
               <pre>{{ tests.output }}</pre>
             </details>
           }
+        }
+      </section>
+    }
+    @if (review().earlier?.items?.length) {
+      <section class="earlier" data-test="earlier-findings" aria-label="Earlier findings">
+        <h4>Earlier findings</h4>
+        @for (item of review().earlier!.items; track $index) {
+          <div class="earlier-item" data-test="earlier-finding">
+            <div class="earlier-head">
+              <span [class]="'pill ' + item.severity" data-test="earlier-severity">{{
+                earlierSeverity(item)
+              }}</span>
+              <span class="earlier-title" data-test="earlier-title">{{ item.title }}</span>
+              <span [class]="'chip ' + earlierTone(item)" data-test="earlier-outcome">{{
+                earlierWord(item)
+              }}</span>
+            </div>
+            <p class="check-line" data-test="earlier-reason">{{ item.reason }}</p>
+            @if (item.url; as url) {
+              <a
+                href="#"
+                class="path"
+                data-test="earlier-link"
+                (click)="$event.preventDefault(); open(url)"
+                >Open the conversation on GitHub</a
+              >
+            }
+          </div>
         }
       </section>
     }
@@ -824,6 +866,34 @@ export class ReviewFindingsPipe implements PipeTransform {
       font-size: 12px;
       color: var(--sc-fg-2);
     }
+    .earlier {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--sc-line);
+      border-radius: 12px;
+    }
+    .earlier h4 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .earlier-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .earlier-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .earlier-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
     .waiting-line {
       margin: 0 auto 0 0;
       display: flex;
@@ -1518,6 +1588,21 @@ export class ReviewFindingsComponent {
 
   severityLabel(finding: ReviewFinding): string {
     return SEVERITY_LABELS[finding.severity];
+  }
+
+  /** An earlier finding's severity, in the words of a new finding's. */
+  earlierSeverity(item: ReviewEarlierFinding): string {
+    return SEVERITY_LABELS[item.severity];
+  }
+
+  /** What became of an earlier finding, as the worker decided it, in words. */
+  earlierWord(item: ReviewEarlierFinding): string {
+    return EARLIER_WORDS[item.outcome];
+  }
+
+  /** The chip tone of an earlier finding's outcome: the card's own check tones. */
+  earlierTone(item: ReviewEarlierFinding): string {
+    return EARLIER_TONES[item.outcome];
   }
 
   pathUrl(finding: ReviewFinding): string {

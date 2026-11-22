@@ -5,6 +5,8 @@ import type {
   ReviewCoverage,
   ReviewFinding,
   ReviewFindings,
+  ReviewEarlier,
+  ReviewEarlierFinding,
   ReviewOffer,
   ReviewTests,
 } from './ipc-contract.js';
@@ -20,6 +22,9 @@ const MAX_NOTE_CHARS = 300;
 const MAX_CHECKS = 100;
 const MAX_OUTPUT_CHARS = 4000;
 const HTTPS_URL = /^https:\/\/[^\s]+$/;
+const GITHUB_URL = /^https:\/\/github\.com\/[^\s]+$/;
+const OUTCOMES: ReadonlySet<unknown> = new Set(['fixed', 'open', 'answered', 'unknown']);
+const MAX_EARLIER = 30;
 const PASSING_CONCLUSIONS: ReadonlySet<string | null> = new Set(['success', 'neutral', 'skipped']);
 
 /** A finding the owner chose to post, with the comment or issue body it goes with. */
@@ -157,7 +162,7 @@ export function latestReviewCard(
 function toReview(data: unknown, notice: boolean): ReviewFindings | null {
   if (!isRecord(data)) return null;
   const { kind, repository, number, commit, verdict, read, known, findings } = data;
-  const { checks, tests, selfAuthored, coverage, notes, offer } = data;
+  const { checks, tests, selfAuthored, coverage, notes, offer, earlier } = data;
   const audit = kind === 'audit';
   if (
     (kind !== undefined && kind !== 'review' && !audit) ||
@@ -193,6 +198,59 @@ function toReview(data: unknown, notice: boolean): ReviewFindings | null {
     ...(typeof selfAuthored === 'boolean' ? { selfAuthored } : {}),
     ...(audit || !notice ? {} : toCoverage(coverage, notes)),
     ...(audit || toOffer(offer) === undefined ? {} : { offer: toOffer(offer) as ReviewOffer }),
+    ...(audit || !notice ? {} : toEarlier(earlier)),
+  };
+}
+
+/**
+ * A review job's section on Scout's earlier findings, kept only from a worker notice like the coverage: its checked and
+ * more flags, why it was not checked, and each item read strictly; an item with an unknown outcome or severity, a title
+ * or reason that is not text, or an address that is not an https address on github.com is not shown and is counted as
+ * unreadable. No section when the block has none or it is not an object.
+ */
+function toEarlier(raw: unknown): { earlier?: ReviewEarlier } {
+  if (!isRecord(raw) || typeof raw['checked'] !== 'boolean' || !Array.isArray(raw['items']))
+    return {};
+  const read = (raw['items'] as unknown[]).slice(0, MAX_EARLIER).map(toEarlierFinding);
+  const items = read.filter((i): i is ReviewEarlierFinding => i !== null);
+  const why = raw['why'];
+  return {
+    earlier: {
+      checked: raw['checked'],
+      more: raw['more'] === true,
+      ...(typeof why === 'string' && isNote(why) ? { why } : {}),
+      items,
+      unreadable: read.length - items.length,
+    },
+  };
+}
+
+function toEarlierFinding(raw: unknown): ReviewEarlierFinding | null {
+  if (!isRecord(raw)) return null;
+  const { title, severity, path, line, outcome, reason, url } = raw;
+  if (
+    typeof title !== 'string' ||
+    title.trim().length === 0 ||
+    title.length > MAX_TITLE_CHARS ||
+    !SEVERITIES.has(severity) ||
+    typeof path !== 'string' ||
+    path.length === 0 ||
+    (line !== null && line !== undefined && (!Number.isInteger(line) || (line as number) < 1)) ||
+    !OUTCOMES.has(outcome) ||
+    typeof reason !== 'string' ||
+    !isNote(reason) ||
+    (url !== null && url !== undefined && (typeof url !== 'string' || !GITHUB_URL.test(url)))
+  ) {
+    return null;
+  }
+  return {
+    title,
+    severity: severity as ReviewEarlierFinding['severity'],
+    path,
+    line: typeof line === 'number' ? line : null,
+    outcome: outcome as ReviewEarlierFinding['outcome'],
+    reason,
+    url: typeof url === 'string' ? url : null,
   };
 }
 

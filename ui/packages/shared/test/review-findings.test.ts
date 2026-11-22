@@ -465,6 +465,112 @@ describe('review findings', () => {
     expect([none?.review.coverage, none?.review.notes]).toEqual([undefined, undefined]);
   });
 
+  describe('the earlier findings section', () => {
+    const item = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+      title: 'Order sync retries without a limit',
+      severity: 'fix',
+      path: 'src/sync/OrderSync.cs',
+      line: 142,
+      outcome: 'open',
+      reason: 'src/sync/OrderSync.cs:142 still retries forever.',
+      url: 'https://github.com/acme/api/pull/52#discussion_r7',
+      ...over,
+    });
+
+    it('E4 a worker notice keeps each earlier finding with its outcome, its reason and its conversation', () => {
+      const parsed = parseReviewFindings(
+        fence({
+          ...JOB,
+          earlier: {
+            checked: true,
+            more: true,
+            items: [item(), item({ outcome: 'fixed', url: null, line: null })],
+          },
+        }),
+        true,
+      );
+
+      expect(parsed?.review.earlier, 'the section as the worker wrote it').toEqual({
+        checked: true,
+        more: true,
+        items: [
+          {
+            title: 'Order sync retries without a limit',
+            severity: 'fix',
+            path: 'src/sync/OrderSync.cs',
+            line: 142,
+            outcome: 'open',
+            reason: 'src/sync/OrderSync.cs:142 still retries forever.',
+            url: 'https://github.com/acme/api/pull/52#discussion_r7',
+          },
+          {
+            title: 'Order sync retries without a limit',
+            severity: 'fix',
+            path: 'src/sync/OrderSync.cs',
+            line: null,
+            outcome: 'fixed',
+            reason: 'src/sync/OrderSync.cs:142 still retries forever.',
+            url: null,
+          },
+        ],
+        unreadable: 0,
+      });
+    });
+
+    it.each([
+      ['an unknown outcome', { outcome: 'closed' }],
+      ['an address that is not on GitHub', { url: 'https://example.com/x' }],
+      ['an address that is not https', { url: 'http://github.com/acme/api/pull/52' }],
+      ['a severity that is not known', { severity: 'major' }],
+      ['a reason that is not text', { reason: 42 }],
+      ['a blank title', { title: ' ' }],
+    ])(
+      'an item with %s is not shown and is counted as unreadable, never guessed',
+      (_name, over) => {
+        const parsed = parseReviewFindings(
+          fence({ ...JOB, earlier: { checked: true, items: [item(), item(over)] } }),
+          true,
+        );
+
+        expect([parsed?.review.earlier?.items.length, parsed?.review.earlier?.unreadable]).toEqual([
+          1, 1,
+        ]);
+      },
+    );
+
+    it('an older block has no section, a reply drops it, and a section that was not checked keeps why', () => {
+      const notChecked = parseReviewFindings(
+        fence({
+          ...JOB,
+          earlier: {
+            checked: false,
+            more: false,
+            why: 'the conversations of the earlier reviews could not be read',
+            items: [],
+          },
+        }),
+        true,
+      );
+
+      expect(
+        parseReviewFindings(fence(JOB), true)?.review.earlier,
+        'a card from before the section',
+      ).toBeUndefined();
+      expect(
+        parseReviewFindings(fence({ ...JOB, earlier: { checked: true, items: [item()] } }))?.review
+          .earlier,
+        'a reply cannot write it',
+      ).toBeUndefined();
+      expect(notChecked?.review.earlier).toEqual({
+        checked: false,
+        more: false,
+        why: 'the conversations of the earlier reviews could not be read',
+        items: [],
+        unreadable: 0,
+      });
+    });
+  });
+
   it('coverage and notes are kept from a worker notice and dropped from a reply', () => {
     const block = fence({ ...JOB, coverage: { read: 50, of: 50 }, notes: ['A note.'] });
 

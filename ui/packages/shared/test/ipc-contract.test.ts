@@ -1101,6 +1101,7 @@ describe('the verdict on a pull request', () => {
       coverage: true,
       notes: true,
       offer: true,
+      earlier: true,
     };
     const coverageFields: Record<keyof ReviewCoverage, true> = { read: true, of: true };
     const checkFields: Record<keyof ReviewCheck, true> = {
@@ -1121,13 +1122,14 @@ describe('the verdict on a pull request', () => {
     };
     const bare: ReviewFindings = { repository: 'acme/shop', number: 5, verdict: 'v', findings: [] };
 
-    expect(Object.keys(reviewFields).slice(-6)).toEqual([
+    expect(Object.keys(reviewFields).slice(-7)).toEqual([
       'checks',
       'tests',
       'selfAuthored',
       'coverage',
       'notes',
       'offer',
+      'earlier',
     ]);
     expect(Object.keys(coverageFields)).toEqual(['read', 'of']);
     const job: ReviewFindings = {

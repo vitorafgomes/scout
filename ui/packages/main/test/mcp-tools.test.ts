@@ -453,6 +453,7 @@ describe('get_review', () => {
       notes: [],
       tests: { ran: true, command: 'dotnet test', exitCode: 0, durationSeconds: 41 },
       checks: [],
+      earlier: null,
       running: true,
       waiting: false,
     });
@@ -488,6 +489,38 @@ describe('get_review', () => {
       'No review card of that pull request is held.',
     ]);
     expect(notPr.isError).toBe(true);
+  });
+});
+
+describe('get_review and the earlier findings', () => {
+  it('E4 answers the earlier findings of the worker card as the shared parser read them', async () => {
+    const earlier = {
+      checked: true,
+      more: false,
+      items: [
+        {
+          title: 'Order sync retries without a limit',
+          severity: 'fix',
+          path: 'src/sync/OrderSync.cs',
+          line: 142,
+          outcome: 'open',
+          reason: 'src/sync/OrderSync.cs:142 still retries forever.',
+          url: 'https://github.com/acme/shop/pull/12#discussion_r7',
+        },
+      ],
+    };
+    const { tools } = harness({
+      turns: [{ ...cardTurn('t', { ...CARD, earlier }), notice: true }],
+    });
+
+    const card = json(await tools.call('get_review', { pull_request: URL }));
+
+    expect(card['earlier'], 'the section as parsed, with how many items could not be read').toEqual(
+      { ...earlier, unreadable: 0 },
+    );
+    expect(tools.list().find((t) => t.name === 'get_review')!.description).toContain(
+      'what became of the findings Scout posted on earlier reviews of it',
+    );
   });
 });
 

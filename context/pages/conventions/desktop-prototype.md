@@ -1,9 +1,9 @@
 ---
 title: "Desktop prototype"
-version: "1.28"
+version: "1.29"
 date: 2026-11-07
-updated: 2026-11-21
-changes: "v1.28 (2026-11-21): the MCP server group is built (ADR 0072). v1.27 (2026-11-21): the review card shows the one action the worker offers, with its reason. v1.26 (2026-11-20): Settings becomes a button at the right of the bell, and Settings draws an MCP server group, both for the owner, not built. v1.25 (2026-11-20): the second verdict and note preview states are built. v1.24 (2026-11-20): the closed pull request state of a waiting approval is drawn. v1.23 (2026-11-20): the stopped tests sentence takes the app's words in every artboard. v1.22 (2026-11-19): the review card draws the states of a second verdict at the same commit and the note preview, for the owner, not built. v1.21 (2026-11-19): the Main artboard draws the review job's pauses and the review card's editor, rule line, known list and last output as the app shows them. v1.20 (2026-11-19): two states of the Approve when checks pass group, Tests could not run and Not approved for a conflict. v1.19 (2026-11-19): the Review job group is built."
+updated: 2026-11-22
+changes: "v1.29 (2026-11-22): the review card group draws the earlier findings, with their states (ADR 0076). v1.28 (2026-11-21): the MCP server group is built (ADR 0072). v1.27 (2026-11-21): the review card shows the one action the worker offers, with its reason. v1.26 (2026-11-20): Settings becomes a button at the right of the bell, and Settings draws an MCP server group, both for the owner, not built. v1.25 (2026-11-20): the second verdict and note preview states are built. v1.24 (2026-11-20): the closed pull request state of a waiting approval is drawn. v1.23 (2026-11-20): the stopped tests sentence takes the app's words in every artboard. v1.22 (2026-11-19): the review card draws the states of a second verdict at the same commit and the note preview, for the owner, not built. v1.21 (2026-11-19): the Main artboard draws the review job's pauses and the review card's editor, rule line, known list and last output as the app shows them. v1.20 (2026-11-19): two states of the Approve when checks pass group, Tests could not run and Not approved for a conflict. v1.19 (2026-11-19): the Review job group is built."
 page_type: convention
 status: active
 description: "The clickable prototype of Scout Desktop is kept in context/prototypes/desktop, one artboard per screen; every change to a screen, and every new screen, updates or adds its artboard in the same branch, before the code."

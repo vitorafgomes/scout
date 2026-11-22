@@ -1,9 +1,9 @@
 ---
 title: "Desktop GitHub card: Verdict from the review card"
-version: "1.7"
+version: "1.8"
 date: 2026-11-13
-updated: 2026-11-21
-changes: "v1.7 (2026-11-21): the card's one action from the worker's offer (ADR 0070). v1.6 (2026-11-20): a card that leaves the view sends no waiting preview. v1.5 (2026-11-20): a burst of preview changes is sent as one request. v1.4 (2026-11-20): the card sends findings, stays open after a verdict and previews the worker's note (ADR 0063). v1.3 (2026-11-19): a waiting approval ends on a conflict and is given only when GitHub says the pull request can be merged; citations re-pointed. v1.2 (2026-11-15): Approve when the checks pass. v1.1 (2026-11-14): citations re-pointed."
+updated: 2026-11-22
+changes: "v1.8 (2026-11-22): the card shows the earlier findings (ADR 0076). v1.7 (2026-11-21): the card's one action from the worker's offer (ADR 0070). v1.6 (2026-11-20): a card that leaves the view sends no waiting preview. v1.5 (2026-11-20): a burst of preview changes is sent as one request. v1.4 (2026-11-20): the card sends findings, stays open after a verdict and previews the worker's note (ADR 0063). v1.3 (2026-11-19): a waiting approval ends on a conflict and is given only when GitHub says the pull request can be merged; citations re-pointed. v1.2 (2026-11-15): Approve when the checks pass. v1.1 (2026-11-14): citations re-pointed."
 page_type: service
 status: active
 description: "Read when a change touches: Verdict from the review card."
@@ -29,3 +29,12 @@ ADR 0043 v1.1: the card's Approve or Request changes click is the owner's approv
 - **Send as a comment instead** shows only beside a request for changes, when the offer allows it (`:465`).
 - **No Post button** on a review card: the one action replaces Approve, Request changes and Post.
 - **A changed selection is asked about.** When the owner changes the chosen findings, the card asks the worker what it offers for that selection; while it asks, the button reads "Waiting for Scout's offer", disabled, and the reason "Asking Scout what it offers for this selection." (`:476`, `:1350`).
+
+## Earlier findings (2026-11-22)
+
+[[pages/decisions/0076-a-review-checks-the-findings-scout-posted-on-earlier-reviews]]; the Main artboard's "Earlier findings" states, drawn first.
+
+- **The section.** Above the new findings, what became of each finding Scout posted before (`ui/packages/renderer/src/app/core/review-findings.component.ts:146`): its severity mark, its title, its outcome (Fixed, Still open, Answered by the author, Could not be decided) on the check tones (passed, pending, not run; `:49`, `:55`), its reason, and a link to its conversation opened as the card's other links. Read-only, not part of the selection sent; the worker's offer already counts the open ones. Nothing to list, no section; the counts and the not-checked and not-every-conversation sentences are the worker's notes.
+- **The parser** (`ui/packages/shared/src/review-findings.ts:211`, `:228`) keeps it only from a worker notice; an item with an unknown outcome or severity, a reason that is not text, or an address that is not an https address on github.com (`:25`) is not shown and is counted as unreadable.
+- **MCP.** `get_review` answers the section as parsed (`ui/packages/main/src/mcp/mcp-tools.ts:264`).
+
