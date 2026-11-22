@@ -111,9 +111,6 @@ public static partial class Contestation
     /// <summary>What the scenario starts with when it is added to a finding's why.</summary>
     public const string ScenarioPrefix = "Scenario: ";
 
-    /// <summary>The notes on groups that refuted findings a card shows before it counts the rest.</summary>
-    public const int MaxRefutedNotes = 3;
-
     /// <summary>
     /// The outcome of each of <paramref name="ids"/> in <paramref name="answer"/>, which must be one JSON array (a code fence
     /// around it is allowed) of objects with <c>id</c>, <c>status</c> and <c>reason</c>. An id with exactly one entry whose
@@ -276,22 +273,20 @@ public static partial class Contestation
     }
 
     /// <summary>
-    /// The card's notes on the second reading: one line per group that refuted findings, naming the first one's title and
-    /// reason, at most <see cref="MaxRefutedNotes"/> and then one line counting the others; one line on the findings that
-    /// could not be confirmed; one line on the findings kept as notes; one line per reason the second reading did not run for
-    /// some findings, naming their titles after the reason, within the note's bound.
+    /// The card's notes on the second reading, each one note counted over the whole review: the findings refuted, with as
+    /// many of their titles and reasons as fit the note's bound (<see cref="RefutedNote"/>); the findings that could not be
+    /// confirmed; the findings kept as notes; the severities changed; and one line per reason the second reading did not
+    /// run for some findings, naming their titles after the reason, within the note's bound.
     /// </summary>
     public static IReadOnlyList<string> Notes(
-        IReadOnlyList<(int Refuted, string Title, string Reason)> refutedGroups, int uncertain, IReadOnlyList<(int Findings, string Reason, IReadOnlyList<string> Titles)> notContested, int severitiesChanged = 0, int noted = 0)
+        IReadOnlyList<(string Title, string Reason)> refuted, int uncertain, IReadOnlyList<(int Findings, string Reason, IReadOnlyList<string> Titles)> notContested, int severitiesChanged = 0, int noted = 0)
     {
-        var refuted = ReviewNotes.Capped(
-            [.. refutedGroups.Where(g => g.Refuted > 0).Select(g => ReviewNotes.Cut(string.Create(
-                CultureInfo.InvariantCulture, $"{Findings(g.Refuted)} refuted by Scout's second reading: {g.Title}: {g.Reason}")))],
-            MaxRefutedNotes,
-            more => more == 1
-                ? "1 more group of findings had findings refuted by Scout's second reading."
-                : string.Create(CultureInfo.InvariantCulture, $"{more} more groups of findings had findings refuted by Scout's second reading."));
-        var notes = new List<string>(refuted);
+        var notes = new List<string>();
+        if (RefutedNote(refuted) is { } refutedNote)
+        {
+            notes.Add(refutedNote);
+        }
+
         if (uncertain > 0)
         {
             notes.Add(uncertain == 1
@@ -316,6 +311,34 @@ public static partial class Contestation
         notes.AddRange(notContested.Where(n => n.Findings > 0).Select(n => ReviewNotes.Cut(string.Create(
             CultureInfo.InvariantCulture, $"Scout's second reading did not run for {Findings(n.Findings)}: {n.Reason}{(n.Titles.Count == 0 ? string.Empty : $" Kept as the first reading gave {(n.Titles.Count == 1 ? "it" : "them")}: {string.Join("; ", n.Titles)}.")}"))));
         return notes;
+    }
+
+    /// <summary>
+    /// The one note on every finding the second reading refuted: their count, then each one's title and reason in the order
+    /// given, as many as fit <see cref="FindingLimits.MaxNoteLength"/>, and "and N more" for the rest; the first is cut to fit
+    /// when it alone does not. Null when none was refuted.
+    /// </summary>
+    public static string? RefutedNote(IReadOnlyList<(string Title, string Reason)> refuted)
+    {
+        if (refuted.Count == 0)
+        {
+            return null;
+        }
+
+        var head = string.Create(CultureInfo.InvariantCulture, $"{Findings(refuted.Count)} refuted by Scout's second reading: ");
+        var pairs = refuted.Select(r => $"{r.Title}: {r.Reason.Trim().TrimEnd('.')}").ToList();
+        string Tail(int shown) => shown < pairs.Count ? string.Create(CultureInfo.InvariantCulture, $"; and {pairs.Count - shown} more.") : ".";
+        for (var shown = pairs.Count; shown > 1; shown--)
+        {
+            var text = head + string.Join("; ", pairs.Take(shown)) + Tail(shown);
+            if (text.Length <= FindingLimits.MaxNoteLength)
+            {
+                return text;
+            }
+        }
+
+        var room = FindingLimits.MaxNoteLength - head.Length - Tail(1).Length;
+        return head + (pairs[0].Length <= room ? pairs[0] : string.Concat(pairs[0].AsSpan(0, Math.Max(0, room - 3)), "...")) + Tail(1);
     }
 
     /// <summary><paramref name="title"/> marked as not confirmed by the second reading, once, within its bound.</summary>

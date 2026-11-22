@@ -1,3 +1,6 @@
+## [2026-11-22] fix | One note for the findings the second reading refuted
+The card says once how many findings the second reading refuted over the whole review, with the titles and reasons that fit, instead of one note per group ([[pages/services/audit/public-contract-review-quality]]).
+
 ## [2026-11-21] fix | A cited name is resolved to one file before the second reading's citation is judged
 [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] amended again: a name alone is resolved to the finding's file or the one changed file it ends; a name that cannot be resolved stands; the card names the findings the second reading did not read again.
 

@@ -176,25 +176,44 @@ public sealed class ContestationTests
     }
 
     [Fact]
-    public void The_notes_name_each_refuting_group_s_first_finding_and_reason_count_the_rest_and_say_what_was_not_confirmed_or_not_contested()
+    public void N1_six_findings_refuted_in_three_groups_of_two_are_one_note_that_counts_six_and_the_other_notes_are_counted_once()
     {
+        (string, string)[] refuted = [("T1", "R1."), ("T2", "R2."), ("T3", "R3."), ("T4", "R4."), ("T5", "R5."), ("T6", "R6.")];
+
         var notes = Contestation.Notes(
-            [(3, "Null lookup dereferenced", "Refuse is marked as never returning."), (0, "x", "y"), (1, "T2", "R2"), (1, "T3", "R3"), (2, "T4", "R4"), (1, "T5", "R5")],
+            refuted,
             2,
-            [(5, "the review reached its 15 groups.", []), (4, "the answer could not be read.", ["Lock held across an await", "Name the constant"])]);
+            [(5, "the review reached its 15 groups.", []), (4, "the answer could not be read.", ["Lock held across an await", "Name the constant"])],
+            3,
+            1);
 
         notes.ShouldBe(
             [
-                "3 findings refuted by Scout's second reading: Null lookup dereferenced: Refuse is marked as never returning.",
-                "1 finding refuted by Scout's second reading: T2: R2",
-                "1 finding refuted by Scout's second reading: T3: R3",
-                "2 more groups of findings had findings refuted by Scout's second reading.",
+                "6 findings refuted by Scout's second reading: T1: R1; T2: R2; T3: R3; T4: R4; T5: R5; T6: R6.",
                 "2 findings could not be confirmed by Scout's second reading; they are kept as unconfirmed and do not block.",
+                "1 finding is true and already recorded by the project as later work; it is kept as a note.",
+                "3 findings' severities were changed by Scout's second reading.",
                 "Scout's second reading did not run for 5 findings: the review reached its 15 groups.",
                 "Scout's second reading did not run for 4 findings: the answer could not be read. Kept as the first reading gave them: Lock held across an await; Name the constant.",
             ],
-            "one line per refuting group up to three, a closing count, the unconfirmed count and each reason it did not run");
+            "one note for every refuted finding of the review, its count over the review, then each other note once, and one per reason the reading did not run");
         Contestation.Notes([], 0, []).ShouldBeEmpty("a second reading that changed nothing adds no note");
+    }
+
+    [Fact]
+    public void N1_the_refuted_note_names_as_many_findings_as_its_bound_holds_and_counts_the_rest()
+    {
+        var many = Enumerable.Range(1, 20).Select(i => ($"Title {i:D2} of a refuted finding", $"Reason {i:D2}, which the code at the head shows is false.")).ToList();
+
+        var note = Contestation.RefutedNote(many).ShouldNotBeNull();
+        var single = Contestation.RefutedNote([(new string('t', 200), new string('r', 200))]).ShouldNotBeNull();
+
+        note.Length.ShouldBeLessThanOrEqualTo(FindingLimits.MaxNoteLength, "the note keeps its bound");
+        note.ShouldStartWith("20 findings refuted by Scout's second reading: Title 01 of a refuted finding: Reason 01, which the code at the head shows is false; Title 02", Case.Sensitive, "the count is over every refuted finding, then the first ones in order");
+        var shown = note.Split(" of a refuted finding: ").Length - 1;
+        note.ShouldEndWith($"; and {20 - shown} more.", Case.Sensitive, "the findings past the bound are counted");
+        (single.Length <= FindingLimits.MaxNoteLength, single.StartsWith("1 finding refuted by Scout's second reading: ttt", StringComparison.Ordinal), single.EndsWith("....", StringComparison.Ordinal))
+            .ShouldBe((true, true, true), "one refuted finding too long for the bound is cut to fit");
     }
 
     [Fact]

@@ -1661,7 +1661,7 @@ public sealed class AuditWorkerReviewTests : IDisposable
 
         var card = Card(notifier.Posts.Last().Text);
         Ids(card).ShouldBeEmpty("a finding the second reading refutes is not on the card");
-        Notes(card).ShouldContain("3 findings refuted by Scout's second reading: Null lookup 1 dereferenced: Guard.Refuse is marked as never returning, so r1 cannot be null after it.", "the card says how many were refuted, with the first one's title and reason");
+        Notes(card).ShouldContain("3 findings refuted by Scout's second reading: Null lookup 1 dereferenced: Guard.Refuse is marked as never returning, so r1 cannot be null after it; Null lookup 2 dereferenced: Guard.Refuse is marked as never returning, so r2 cannot be null after it; and 1 more.", "the card says how many were refuted, with the titles and reasons that fit");
         card.GetProperty("verdict").GetString().ShouldBe(AuditWorker.NoBlockingInFilesRead, "the verdict follows what is kept: nothing blocks, and Scout does not approve on its own");
         var (request, settings, kernel) = chat.Contests.ShouldHaveSingleItem();
         request.ShouldSatisfyAllConditions(
@@ -1678,6 +1678,19 @@ public sealed class AuditWorkerReviewTests : IDisposable
         kernel.FunctionInvocationFilters.Select(f => f.GetType().Name).ShouldBe(["HeldToJobRepository"], "the reads are held to the job's repository, as a batch's are");
         request.ShouldStartWith(ContestRequest.ReadAt("acme", "shop", Head), Case.Sensitive, "the request says where to read");
         notifier.Posts.Select(p => p.Text).ShouldContain(t => t.EndsWith("\n" + AuditWorker.SecondReadingLine(3), StringComparison.Ordinal), "the progress says the second reading runs, on its own line");
+    }
+
+    [Fact]
+    public async Task N1_six_findings_refuted_across_three_groups_are_one_note_on_the_card_that_counts_six()
+    {
+        var refuted = new[] { "r1", "r2", "r5", "r6", "r9", "r10" };
+        var (notifier, chat, _, _) = await ContestedAsync(
+            _ => Task.FromResult(Answer([.. Enumerable.Range(1, 12).Select(i => ($"r{i}", refuted.Contains($"r{i}") ? "refuted" : "holds"))])), findings: 12);
+
+        var notes = Notes(Card(notifier.Posts.Last().Text)).Where(n => n.Contains("refuted by Scout's second reading", StringComparison.Ordinal)).ToList();
+
+        chat.Contests.Count.ShouldBe(3, "twelve findings are read again in three groups of four");
+        notes.ShouldHaveSingleItem("the card carries one note for the findings refuted in every group").ShouldStartWith("6 findings refuted by Scout's second reading: ", Case.Sensitive, "the note counts the refuted findings over the whole review");
     }
 
     [Fact]

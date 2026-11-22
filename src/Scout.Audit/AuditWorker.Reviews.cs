@@ -665,12 +665,6 @@ internal sealed partial class AuditWorker
                 s => s.Key,
                 s => new ContestOutcome(ContestStatus.StatusOf(s.Value.State)!, s.Value.Reason ?? string.Empty, stored.FirstOrDefault(f => f.Id == s.Key)?.Severity),
                 StringComparer.Ordinal);
-        var refutedGroups = new List<(int Refuted, string Title, string Reason)>();
-        if (stored.FirstOrDefault(f => outcomes.TryGetValue(f.Id, out var o) && o.Status == ContestStatus.Refuted) is { } earlier)
-        {
-            refutedGroups.Add((outcomes.Count(o => o.Value.Status == ContestStatus.Refuted), earlier.Title, outcomes[earlier.Id].Reason));
-        }
-
         var notContested = new List<(int Findings, string Reason, IReadOnlyList<string> Titles)>();
         if (open.Count > 0 && stopped)
         {
@@ -746,11 +740,6 @@ internal sealed partial class AuditWorker
                 {
                     outcomes[id] = outcome;
                 }
-
-                if (group.FirstOrDefault(f => read[f.Id].Status == ContestStatus.Refuted) is { } first)
-                {
-                    refutedGroups.Add((read.Count(r => r.Value.Status == ContestStatus.Refuted), first.Title, read[first.Id].Reason));
-                }
             }
         }
 
@@ -758,7 +747,8 @@ internal sealed partial class AuditWorker
         var uncertain = stored.Where(f => outcomes.GetValueOrDefault(f.Id)?.Status == ContestStatus.Uncertain).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
         var noted = stored.Where(f => outcomes.GetValueOrDefault(f.Id)?.Status == ContestStatus.Noted).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
         var changed = stored.Count(f => outcomes.GetValueOrDefault(f.Id) is { Status: ContestStatus.Holds, Severity: { } severity } && severity != f.Severity);
-        return (kept, Contestation.Notes(refutedGroups, uncertain.Count, [.. notContested.GroupBy(n => n.Reason).Select(g => (g.Sum(n => n.Findings), g.Key, (IReadOnlyList<string>)[.. g.SelectMany(n => n.Titles)]))], changed, noted.Count), uncertain, noted);
+        var refuted = stored.Where(f => outcomes.GetValueOrDefault(f.Id)?.Status == ContestStatus.Refuted).Select(f => (f.Title, outcomes[f.Id].Reason)).ToList();
+        return (kept, Contestation.Notes(refuted, uncertain.Count, [.. notContested.GroupBy(n => n.Reason).Select(g => (g.Sum(n => n.Findings), g.Key, (IReadOnlyList<string>)[.. g.SelectMany(n => n.Titles)]))], changed, noted.Count), uncertain, noted);
     }
 
     /// <summary>

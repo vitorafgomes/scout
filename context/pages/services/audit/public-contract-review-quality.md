@@ -1,9 +1,9 @@
 ---
 title: "Audit: Public contract, review quality"
-version: "1.3"
+version: "1.4"
 date: 2026-11-21
 updated: 2026-11-21
-changes: "v1.3 (2026-11-21): a cited name resolved before it is judged. v1.2 (2026-11-21): the noted outcome and the check of a cited place (ADR 0069 amended). v1.1 (2026-11-21): the window and the review turn bound (ADR 0074). v1.0: the page as first written, split from the public contract"
+changes: "v1.4 (2026-11-22): the second reading's notes, one each, counted over the review. v1.3 (2026-11-21): a cited name resolved before it is judged. v1.2 (2026-11-21): the noted outcome and the check of a cited place (ADR 0069 amended). v1.1 (2026-11-21): the window and the review turn bound (ADR 0074). v1.0: the page as first written, split from the public contract"
 page_type: service
 status: active
 description: "Read when a change touches a review finding's evidence, the parts of a large file, the focused readings, the second reading or the turn table."
@@ -20,6 +20,7 @@ reliability: high
 - **Focused readings.** The removed and requests readings run only on batches with code or test files, and their findings join the general reading's (`AuditBatchRunner.cs:158`). [[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]]
 - **The second reading** reads at the head with `get_file_contents`, `search_code` and `list_repository_files` held to the job's repository (`:759`, `:771`), tries to refute, holds only with a scenario and sets the severity by rule; each group has the batch turn's timeout inside 30 minutes for the whole reading (`src/Scout.Audit/AuditWorker.Reviews.cs:610`). [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]
 - **Noted, and the cited place.** A finding true in the code and recorded by the project as later work is answered `noted`: kept as a nit titled "Noted: ", its why ending with "Recorded by the project: " and the record, counted in one card note, never a reason to request changes; refuted stays for a false claim or the documented design. A refutation or a note whose cited name resolves to one file (its path from the root, the finding's own file, or the one changed file it ends) is uncertain when that file has fewer lines than the line cited; a name that resolves to no file or to two stands (`src/Scout.Review/Contestation.cs:357`, [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]], amended 2026-11-21).
+- **The card's notes on the second reading** (`Contestation.Notes`, `src/Scout.Review/Contestation.cs:281`), each one note counted over the whole review, from the outcomes the review holds at the end (`src/Scout.Audit/AuditWorker.Reviews.cs:750`), never one per group: the findings refuted, "N findings refuted by Scout's second reading: " then each one's title and reason in the card's order, as many as fit the note's 300 characters, and "and N more" for the rest (`RefutedNote`, `:321`); the findings not confirmed; the findings kept as notes; the severities changed; and one note per reason the reading did not run, with the titles of those findings.
 - **The turn table.** `IAuditJobStore.AddTurnAsync` keeps one row of numbers per model turn in `audit_turn`, `TurnTotalsAsync` totals them per reading (`src/Scout.Audit/SqliteAuditStore.cs:129`, `:156`) and `StampRunAsync` writes the Scout version and the `provider/model` names on the job row (`:173`); the card's "Scout asked the model N times for this review." and its focused note are read from the totals (`AuditWorker.Reviews.cs:476`). [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]
 - **The review's own tests** run through `run_pull_request_tests` on the shared kernel, so the write gate's "Local container" grant applies; a cancellation that is not the review's own answers that the tests could not be run.
 
