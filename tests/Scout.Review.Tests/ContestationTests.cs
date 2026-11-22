@@ -203,7 +203,7 @@ public sealed class ContestationTests
     [Fact]
     public void N1_the_refuted_note_names_as_many_findings_as_its_bound_holds_and_counts_the_rest()
     {
-        var many = Enumerable.Range(1, 20).Select(i => ($"Title {i:D2} of a refuted finding", $"Reason {i:D2}, which the code at the head shows is false.")).ToList();
+        var many = Enumerable.Range(1, 20).Select(i => (string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Title {i:D2} of a refuted finding"), string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Reason {i:D2}, which the code at the head shows is false."))).ToList();
 
         var note = Contestation.RefutedNote(many).ShouldNotBeNull();
         var single = Contestation.RefutedNote([(new string('t', 200), new string('r', 200))]).ShouldNotBeNull();
