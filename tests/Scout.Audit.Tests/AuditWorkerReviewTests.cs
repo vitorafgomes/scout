@@ -1538,6 +1538,37 @@ public sealed class AuditWorkerReviewTests : IDisposable
     }
 
     [Fact]
+    public async Task A_review_stopped_while_its_tests_run_posts_its_card_even_when_the_run_throws_something_that_is_not_a_cancellation()
+    {
+        var store = Store();
+        var job = await ReviewAsync(store, 2);
+        var (kernel, _) = Testing(async ct =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new InvalidOperationException("the container was gone");
+            }
+
+            return Passed;
+        });
+        var notifier = new RecordingNotifier();
+        var chat = new ScriptedChat(async (_, k, turn) =>
+        {
+            await Kernels.PresentingAnEmptyReview(default!, k, turn);
+            await store.StopAsync("acme", "shop", 12, CancellationToken.None);
+        });
+
+        await Worker(store, chat, notifier, new FakePullRequests(() => At(Head, 2)), kernel).RunReviewAsync(job, CancellationToken.None);
+
+        Tests(Card(notifier.Posts.Last().Text)).GetProperty("reason").GetString().ShouldBe(
+            AuditWorker.TestsStoppedWithReview, "a run that throws once the review was stopped still lets the stopped review post its card, saying the run was stopped with it");
+    }
+
+    [Fact]
     public async Task A_review_stopped_while_its_tests_run_cuts_the_run_and_its_card_says_so()
     {
         var store = Store();

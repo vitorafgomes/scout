@@ -23,6 +23,12 @@ reliability: medium
 
 ## Entries
 
+### A project that failed to build beside one that needs Docker cannot be told apart (2026-11-22)
+
+- **Gap:** the run's facts count each test project that printed its summary; a project that failed to build prints none, so beside a project whose failures all need a Docker daemon the run reads as could not run, and the offer sets the exit code aside ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]). The exemption already stands aside when the list of projects is partial.
+- **Blocker:** the sandbox reads summaries, not build errors.
+- **Unblocks with:** the summary reader counting a build that failed as a project that failed.
+
 ### Earlier findings: the resolved state is not read (2026-11-22)
 
 - **Gap:** whether a conversation of an earlier review is resolved is not read, so every one of Scout's earlier conversations is checked ([[pages/decisions/0076-a-review-checks-the-findings-scout-posted-on-earlier-reviews]]).

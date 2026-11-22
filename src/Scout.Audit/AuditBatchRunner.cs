@@ -672,7 +672,8 @@ internal sealed class AuditBatchRunner(
     /// <summary>
     /// Runs the tests of <paramref name="job"/>'s pull request at its head through <see cref="RunPullRequestTests"/>, the
     /// function the model may call, so the write gate checks the owner's grant and the run is kept for the card as any
-    /// other: answers the function's answer, the gate's refusal, or why the run could not be asked; never throws.
+    /// other: answers the function's answer, the gate's refusal, or why the run could not be asked; never throws: whatever
+    /// a run throws once the review was stopped answers <see cref="AuditWorker.TestsStoppedWithReview"/>.
     /// </summary>
     internal async Task<string> RunTestsAsync(AuditJob job, CancellationToken ct)
     {
@@ -686,12 +687,13 @@ internal sealed class AuditBatchRunner(
             var arguments = new KernelArguments { ["owner"] = job.Owner, ["repo"] = job.Repo, ["number"] = job.PullRequest };
             return (await kernel.InvokeAsync(function, arguments, ct).ConfigureAwait(false)).GetValue<string>() ?? AuditWorker.TestsNotKept;
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (Exception ex)
         {
-            return AuditWorker.TestsStoppedWithReview;
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
+            if (ct.IsCancellationRequested)
+            {
+                return AuditWorker.TestsStoppedWithReview;
+            }
+
             logger.LogWarning("Audit {JobId} could not run the pull request's tests ({ExceptionType}).", job.Id, ex.GetType().Name);
             return string.Create(CultureInfo.InvariantCulture, $"The tests could not be run in Scout ({ex.GetType().Name}).");
         }

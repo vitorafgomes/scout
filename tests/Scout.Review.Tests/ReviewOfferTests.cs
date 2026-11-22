@@ -27,6 +27,11 @@ public sealed class ReviewOfferTests
             new(ReviewOffers.RequestChanges, "Request changes: 2 findings need fixing.", true)
         },
         {
+            "V1 tests whose only listed failures could not run, from a partial list of projects, offer request changes: an uncounted project may have failed",
+            Clean() with { Tests = CouldNotRun with { Partial = true } },
+            new(ReviewOffers.RequestChanges, "Request changes: the pull request's tests failed.", true)
+        },
+        {
             "V1 tests that really failed offer request changes",
             Clean() with { Tests = ReallyFailed },
             new(ReviewOffers.RequestChanges, "Request changes: the pull request's tests failed.", true)

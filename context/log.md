@@ -1,3 +1,6 @@
+## [2026-11-22] fix | Three small fixes from an independent check of a review
+A test run that throws once the review was stopped no longer keeps the stopped card from posting; the could-not-run exemption of the exit code applies only to a whole list of projects; a definition the reader cut says (cut) to the second reading. One follow-up added to [[pages/roadmap/followups]].
+
 ## [2026-11-22] feat | The review card shows the earlier findings
 The artboard's Earlier findings states first, then the shared parser, the card's read-only section above the new findings and MCP get_review ([[pages/services/desktop-github/verdict-from-the-review-card]]); the follow-up keeps only the resolved state.
 

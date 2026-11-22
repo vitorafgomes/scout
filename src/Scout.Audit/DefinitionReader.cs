@@ -28,7 +28,13 @@ internal sealed record FoundDefinitions(IReadOnlyList<NameDefinitions> Names, bo
 {
     internal const string NotRead = "The repository's files could not be read, so no definition was looked up.";
 
-    /// <summary>The definitions as text: each candidate under its path and line, then what was not shown and what was not found.</summary>
+    /// <summary>What the text says when the finding's bound left a candidate out or cut one.</summary>
+    internal const string CutByBound = "(cut) Definitions past this finding's bound were left out or cut.";
+
+    /// <summary>
+    /// The definitions as text: each candidate under its path and line, marked <c>(cut)</c> when its text was cut, then what
+    /// was not shown and what was not found, and <see cref="CutByBound"/> when the finding's bound cut the definitions.
+    /// </summary>
     public string Text()
     {
         if (Unreadable)
@@ -41,7 +47,7 @@ internal sealed record FoundDefinitions(IReadOnlyList<NameDefinitions> Names, bo
         {
             foreach (var candidate in name.Candidates)
             {
-                text.Append(CultureInfo.InvariantCulture, $"--- {candidate.Path}:{candidate.Line}\n{candidate.Text}\n");
+                text.Append(CultureInfo.InvariantCulture, $"--- {candidate.Path}:{candidate.Line}{(candidate.Cut ? " (cut)" : string.Empty)}\n{candidate.Text}\n");
             }
 
             if (name.NotShown > 0)
@@ -53,6 +59,11 @@ internal sealed record FoundDefinitions(IReadOnlyList<NameDefinitions> Names, bo
             {
                 text.Append(CultureInfo.InvariantCulture, $"Definition not found for {name.Name}.\n");
             }
+        }
+
+        if (Cut)
+        {
+            text.Append(CutByBound).Append('\n');
         }
 
         return text.ToString();

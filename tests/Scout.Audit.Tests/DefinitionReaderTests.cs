@@ -157,4 +157,18 @@ public sealed class DefinitionReaderTests : IDisposable
         DefinitionReader.TestsFor(_folder.Path, "src/Shop/Guard.cs", ["Refuse"])
             .ShouldBe(FoundDefinitions.NotRead, "a test file the lookup cannot read is said, never left silent");
     }
+
+    [Fact]
+    public void A_definition_the_reader_cut_says_so_and_so_does_a_bound_that_left_definitions_out()
+    {
+        var found = new FoundDefinitions(
+            [new NameDefinitions("Refuse", [new DefinitionCandidate("src/Guard.cs", 6, "public static void Refuse(", Cut: true), new DefinitionCandidate("src/Other.cs", 2, "void Refuse()", Cut: false)], 0)],
+            Unreadable: false,
+            Cut: true);
+
+        found.Text().ShouldBe(
+            "--- src/Guard.cs:6 (cut)\npublic static void Refuse(\n--- src/Other.cs:2\nvoid Refuse()\n" + FoundDefinitions.CutByBound + "\n",
+            "a cut candidate is marked where it is, and a bound that left definitions out is said, so the second reading knows it was not shown everything");
+        (found with { Cut = false }).Text().ShouldNotContain(FoundDefinitions.CutByBound, Case.Sensitive, "nothing is said when the bound cut nothing");
+    }
 }

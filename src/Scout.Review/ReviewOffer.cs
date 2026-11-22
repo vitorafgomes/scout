@@ -69,7 +69,7 @@ public static class ReviewOffers
         var needFixing = input.Findings.Count(f => !f.Unconfirmed && (f.Severity is Severities.Block or Severities.Fix));
         var earlierOpen = input.EarlierOpen?.Count(s => s is Severities.Block or Severities.Fix) ?? 0;
         var testsFailed = input.Tests is { Ran: true, ExitCode: not 0 } run
-            && !(run.Projects.Any(p => p.CouldNotRun) && !run.Projects.Any(p => p.Failed > 0 && !p.CouldNotRun));
+            && !(!run.Partial && run.Projects.Any(p => p.CouldNotRun) && !run.Projects.Any(p => p.Failed > 0 && !p.CouldNotRun));
         var checksFailed = input.Checks?.Failed ?? 0;
         if (needFixing > 0 || earlierOpen > 0 || testsFailed || checksFailed > 0)
         {
