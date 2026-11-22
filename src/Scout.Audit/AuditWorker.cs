@@ -266,7 +266,8 @@ internal sealed partial class AuditWorker(
     /// commit, verdict and read line and its share of the findings, the verdict <see cref="Incomplete"/> whatever the model
     /// said when the batch's outcome names a file it did not read, every post under <see cref="MaxPostLength"/> characters
     /// heading included, because the chat cuts a longer message and an unclosed fence shows as raw text; the heading names
-    /// the job's <paramref name="findings"/> so far.
+    /// the job's <paramref name="findings"/> so far. The sentence on the findings left out is written on the first post only,
+    /// and takes room from that post only.
     /// </summary>
     internal static IReadOnlyList<string> FindingsPosts(AuditJob job, AuditBatch batch, int batchCount, BatchOutcome outcome, IReadOnlyList<Finding> added, int findings)
     {
@@ -274,11 +275,11 @@ internal sealed partial class AuditWorker(
         var verdict = outcome.Unread.Count > 0 ? Incomplete : outcome.Verdict ?? Verdict(added);
         var heading = Heading(job, batch, batchCount, findings);
         var leftOut = outcome.LeftOut is { } sentence ? sentence + "\n\n" : string.Empty;
-        var budget = MaxPostLength - heading.Length - PartLabelRoom - leftOut.Length;
+        var room = MaxPostLength - heading.Length - PartLabelRoom;
         var shares = new List<List<Finding>>();
         foreach (var finding in added)
         {
-            if (shares.Count > 0 && FindingsBlock.Write(job.Owner, job.Repo, job.Commit, verdict, read, [.. shares[^1], finding]).Length <= budget)
+            if (shares.Count > 0 && FindingsBlock.Write(job.Owner, job.Repo, job.Commit, verdict, read, [.. shares[^1], finding]).Length <= room - (shares.Count == 1 ? leftOut.Length : 0))
             {
                 shares[^1].Add(finding);
             }

@@ -1076,4 +1076,24 @@ public sealed class AuditWorkerTests : IDisposable
 
         posts.ShouldHaveSingleItem().ShouldContain("\n\n1 finding left out: it needs a fix.\n\n```scout-findings", Case.Sensitive, "the batch's post says what it left out before its findings");
     }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(5, 3)]
+    public void P1_a_long_left_out_sentence_takes_room_from_the_first_post_only_and_every_post_stays_within_the_limit(int count, int expectedPosts)
+    {
+        var job = new AuditJob("j", "acme", "shop", "abc1234def", "local:session", AuditStatus.Running);
+        var batch = new AuditBatch(1, "src/Orders", ["src/Orders/Checkout.cs"], AuditStatus.Done, ["src/Orders/Checkout.cs"], null);
+        var findings = Enumerable.Range(1, count)
+            .Select(i => new Finding(string.Create(CultureInfo.InvariantCulture, $"f{i}"), "fix", "T", "src/Orders/Checkout.cs", i, new string('c', 4_000), new string('w', 4_000), new string('x', 4_000), null))
+            .ToList();
+        var sentence = "1 finding left out: it " + new string('s', 10_000);
+        var outcome = new BatchOutcome(["src/Orders/Checkout.cs"], [], "sound", findings, null, LeftOut: sentence);
+
+        var posts = AuditWorker.FindingsPosts(job, batch, 1, outcome, findings, count);
+
+        posts.ShouldAllBe(p => p.Length <= AuditWorker.MaxPostLength, "every post stays within the chat's limit");
+        posts.Select(p => p.Contains(sentence, StringComparison.Ordinal)).ShouldBe([true, .. Enumerable.Repeat(false, posts.Count - 1)], "the sentence is on the first post only");
+        posts.Count.ShouldBe(expectedPosts, "the posts after the first are not made smaller by a sentence they do not carry");
+    }
 }

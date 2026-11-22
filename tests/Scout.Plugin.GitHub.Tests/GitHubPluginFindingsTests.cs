@@ -178,9 +178,26 @@ public sealed partial class GitHubPluginFindingsTests
             { "octocat/hello", 5, "ok", With("line", "\"12\""), "Finding 1 needs a line that is a positive whole number." },
             { "octocat/hello", 5, "ok", With("line", "1.5"), "Finding 1 needs a line that is a positive whole number." },
             { "octocat/hello", 5, "ok", With("context", "7"), "Finding 1 has a context that is not text." },
+            { "octocat/hello", 5, "ok", With("evidence", "42"), "Finding 1 has evidence that is not text." },
+            { "octocat/hello", 5, "ok", With("evidence", "{}"), "Finding 1 has evidence that is not text." },
+            { "octocat/hello", 5, "ok", With("evidence", "[]"), "Finding 1 has evidence that is not text." },
             { "octocat/hello", 5, "ok", With("why", ""), "Finding 1 needs a why that says what is wrong." },
             { "octocat/hello", 5, "ok", With("fix", "\"\""), "Finding 1 needs a fix." },
         };
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"var q = Find(name);\"")]
+    public async Task Evidence_That_Is_Null_Or_Text_Is_No_Type_Problem(string evidence)
+    {
+        using var turn = TurnAttachments.Begin();
+        var finding = """{"id":"a","severity":"fix","title":"T","path":"src/a.cs","line":3,"why":"W","fix":"F","evidence":""" + evidence + "}";
+
+        var answer = await PresentAsync($"[{finding}]");
+
+        answer.ShouldNotContain("not text", Case.Sensitive, $"evidence {evidence} is null or text, so it is not refused for its type");
+        answer.ShouldStartWith("Findings recorded:", Case.Sensitive, $"a finding with evidence {evidence} is recorded");
     }
 
     [Theory]

@@ -212,12 +212,17 @@ internal sealed partial record ReviewFindings(
                 string.IsNullOrWhiteSpace(Text(element, "evidence")) ? null : Text(element, "evidence"))
             : null;
 
-    /// <summary>A context or a rule that is neither text nor null, which <see cref="Candidate"/> reads as none.</summary>
+    /// <summary>A context, a rule or evidence that is neither text nor null, which <see cref="Candidate"/> reads as none.</summary>
     private static string? TypeProblemOf(JsonElement element)
     {
         if (element.TryGetProperty("context", out var context) && context.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
         {
             return "has a context that is not text.";
+        }
+
+        if (element.TryGetProperty("evidence", out var evidence) && evidence.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+        {
+            return "has evidence that is not text.";
         }
 
         return element.TryGetProperty("rule", out var rule) && rule.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)

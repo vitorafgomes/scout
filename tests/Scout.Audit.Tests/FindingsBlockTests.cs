@@ -76,6 +76,22 @@ public sealed class FindingsBlockTests
     }
 
     [Fact]
+    public void P1_the_left_out_sentence_is_bounded_well_under_a_post_for_every_problem_the_reader_can_name()
+    {
+        string[] rows = ["id-with-space", "id-41", "severity-high", "title-blank", "title-201", "title-missing", "path-dotdot", "path-leading-slash", "path-1001",
+            "line-0", "why-blank", "fix-missing", "why-4001", "fix-4001", "context-4001", "rule-301"];
+
+        var longest = rows.Select(row =>
+        {
+            var block = "```scout-findings\n{\"repository\":\"acme/shop\",\"number\":12,\"commit\":\"" + Commit + "\",\"verdict\":\"comment\",\"findings\":" + PinnedFindings.Json(row) + "}\n```";
+            var left = FindingsBlock.Read([block], "acme", "shop", Commit, 12).LeftOut.ShouldNotBeNull(row);
+            return FindingsBlock.LeftOutSentence(int.MaxValue, left.First)!.Length;
+        }).Max();
+
+        longest.ShouldBeLessThanOrEqualTo(FindingLimits.MaxNoteLength, "the left-out sentence's longest form, with the largest count, fits a note, far under a post");
+    }
+
+    [Fact]
     public void T1_the_card_puts_back_the_noted_and_unconfirmed_prefixes_the_block_s_own_reading_strips_and_only_on_the_findings_named()
     {
         Finding One(string id) => new(id, "nit", "T", "src/A.cs", 3, null, "W", "F", null);
