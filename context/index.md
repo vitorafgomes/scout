@@ -44,7 +44,7 @@ Each area lists its own pages. Open the area you need.
 
 | Area | Pages |
 |---|---|
-| [[pages/architecture/index\|Architecture]] | 41 |
+| [[pages/architecture/index\|Architecture]] | 46 |
 | [[pages/conventions/index\|Conventions]] | 4 |
 | [[pages/decisions/index\|Decisions]] | 75 |
 | [[pages/domain/index\|Domain]] | 3 |

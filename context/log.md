@@ -1,3 +1,6 @@
+## [2026-11-22] docs | The code review drawn from the code
+[[pages/architecture/code-review-flow]] redrawn with its entry points and the one action, and the inside of a review job drawn on five topic pages under pages/architecture/code-review/: the queue and what is kept, the start and the batches, what a reading evaluates, the tests in Docker, the second reading and the verdict.
+
 ## [2026-11-22] fix | One note for the findings the second reading refuted
 The card says once how many findings the second reading refuted over the whole review, with the titles and reasons that fit, instead of one note per group ([[pages/services/audit/public-contract-review-quality]]).
 

@@ -1,12 +1,12 @@
 ---
 title: "Code review: the whole flow, step by step"
-version: "1.4"
+version: "1.5"
 date: 2026-11-10
-updated: 2026-11-21
-changes: "v1.4 (2026-11-21): the review job as it reads now: evidence and derived lines, parts, focused readings, the second reading, one offer. v1.3 (2026-11-19): the review job reads every batch, code first, several at once, shown in the bell, one card. v1.2 (2026-11-18): a pull request whose answer left a diff out becomes a review job"
+updated: 2026-11-22
+changes: "v1.5 (2026-11-22): the flow redrawn from the code, with its entry points and the one action; the inside of a review job drawn on five topic pages. v1.4 (2026-11-21): the review job as it reads now: evidence and derived lines, parts, focused readings, the second reading, one offer. v1.3 (2026-11-19): the review job reads every batch, code first, several at once, shown in the bell, one card. v1.2 (2026-11-18): a pull request whose answer left a diff out becomes a review job"
 page_type: longform
 status: active
-description: "The flow of a code review in Scout as one diagram and ten steps: choosing the process, reading, the checks of each dimension, the answer, the owner's decisions on the cards, the writes on the pull request and the follow-up; each step as the skill carries it since 2026-11-10."
+description: "The flow of a code review in Scout as one diagram, ten steps and five topic pages of drawings: choosing the process, reading, the checks of each dimension, the answer, the owner's decisions on the cards, the writes on the pull request and the follow-up; each step as the skill carries it since 2026-11-10."
 source:
   - chat
   - src/Scout.Skills/skills/code-review.md
@@ -27,54 +27,34 @@ Each step below says what the skill does; `src/Scout.Skills/skills/code-review.m
 
 ## The flow
 
+A review is asked in a chat, by a mention of the Scout bot on GitHub, or through the local MCP server; the last two ask the desktop's chat the same question. A pull request whose diffs all fit is reviewed in one turn; one whose answer left a diff out becomes a review job. Either way the chat gets a card with the one action the review offers, and nothing is written on GitHub until the owner chooses it and approves that write.
+
 ```mermaid
 flowchart TD
-    A[The owner asks for a code review in chat] --> B{Does the message name a pull request?}
-    B -- "yes, or a review with no whole-repository words" --> C[Process: code review. Only the review's functions are offered]
-    B -- "asks for the whole repository in so many words" --> AUD[Process: audit. Another flow, it may open issues]
-    C --> D{Is the pull request known?}
-    D -- no --> D1[Ask which one, or list the open pull requests] --> D
-    D -- yes --> S1
-
-    subgraph READ [Read]
-      S1[1. Context: title, description, linked issue] --> S2[2. Overview: size, files, one subject or several]
-      S2 --> S3[3. Pipeline: the checks at the head commit]
-      S3 --> T{Does a check run the tests?}
-      T -- no, or the owner asks --> T1[Run the tests in a disposable container]
-      T -- yes --> R1
-      T1 --> R1[Existing comments, the diffs left out, the code around the hunks, the language guides]
-    end
-
-    R1 --> BIG{Did get_pull_request leave a diff out?}
-    BIG -- yes --> JOB[Start a review job and end the turn]
-    JOB --> JB[Every batch, code first, several at once, each a closed read-only turn; progress in the bell]
-    JB --> JC[One card: verdict and files read computed by code] --> O
-    BIG -- "yes, and writes are not allowed" --> BIG1[Review file by file and say which files were read] --> J
-    BIG -- no --> J
-
-    subgraph JUDGE [Judge, only what the diff shows]
-      J[4. Functional correctness] --> J5[5. Design and architecture]
-      J5 --> J6[6. Readability and maintenance]
-      J6 --> J7[7. Tests]
-      J7 --> J8[8. Security and performance]
-    end
-
-    J8 --> F[9. Findings: at most ten, each on a file and line, with why and the smallest fix; blocking, should fix, nit]
-    F --> ANS[Answer in chat: summary, what is done well, verdict, the findings as cards]
-    ANS --> O{The owner decides on the cards}
-    O -- "Yes, No or Edit per finding, then Post" --> W1[A review with the chosen comments]
-    O -- "Approve or Request changes" --> W2[10. The verdict]
-    O -- nothing --> END1[Nothing is written]
-    W1 --> AP{Approved by the owner in the desktop?}
-    W2 --> AP
-    AP -- no --> END1
-    AP -- yes --> GH[Written on the pull request, once, and logged]
-    GH --> FU[Follow-up: a new commit arrives]
-    FU --> RR[Review again: each earlier finding against the new commit, reply on its thread]
-    RR --> ANS
-
-    C -. never .-> ISS[Opening an issue]
+    A1[In a chat: Discord, Slack, Teams or the desktop] --> P
+    A2[A mention of the bot on a pull request] --> ASK[The desktop asks its chat the Review it question]
+    A3[MCP start_review, after the owner's Start or in free mode] --> ASK
+    ASK --> P{Process: code review, only the review's functions}
+    P --> READ[Steps 1 to 3: context, overview, the checks]
+    READ --> BIG{Did get_pull_request leave a diff out?}
+    BIG -- no --> ONE[Steps 4 to 9 in this turn: present_review_findings]
+    BIG -- yes --> JOB[start_pull_request_review: a review job,<br/>queued, read in batches, read again, tests run]
+    ONE --> CARD[The card: findings, notes, and the one action decided by code]
+    JOB --> CARD
+    CARD --> O{The owner's choice on the card}
+    O -- "nothing" --> NONE[Nothing is written]
+    O -- "Yes, No or Edit per finding, then the offered action:<br/>request changes, or post as a comment" --> Q[The verdict is queued in the control plane,<br/>pinned to the commit; refused while GitHub writes are off]
+    Q --> AP{The owner approves that write?}
+    AP -- no --> NONE
+    AP -- yes --> GH[The worker sends it once: the review with its comments<br/>on the pull request; the run is logged]
+    GH --> FU[A new commit: review again, each earlier finding against it]
+    P -. never .-> ISS[Opening an issue, or an approval Scout offers on its own]
 ```
+
+- The entry points: the skill's process (`src/Scout.Skills/skills/code-review.md:19`); a mention asks the chat (`ui/packages/main/src/notifications/mention-review.ts:108`); MCP `start_review` asks the same question (`ui/packages/main/src/mcp/mcp-tools.ts:174`).
+- The job's start: `src/Scout.Plugin.GitHub/GitHubActionsPlugin.Reviews.cs:17`, `src/Scout.Audit/RepositoryAudits.Reviews.cs:146`. The one action: `ReviewOffers.Decide`, `src/Scout.Review/ReviewOffer.cs:61`.
+- The owner's click: `toVerdictRequest`, `ui/packages/main/src/ipc/github-verdict.ts:126`, sent by `giveVerdict` (`ui/packages/main/src/control-plane/client.ts:1054`) and queued by `PullRequestVerdictService.GiveAsync` (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:162`); the approval: `ActionDecisionService.ApproveAsync` (`src/Scout.ControlPlane/WriteGate/ActionDecisionService.cs:361`); the write: `GitHubWriteRunner` (`src/Scout.Plugin.GitHub/GitHubWriteRunner.cs:21`).
+- Simplified: a model in the chat may also ask for a verdict or a review; it goes to the same write gate and waits for the same approval.
 
 ## The ten steps
 
@@ -83,7 +63,7 @@ flowchart TD
    - When the description or the branch names an issue or a story, `get_issue` reads it and the summary says whether the change solves what it claims, not only whether the code is tidy.
 2. **Overview.** The size, the files touched, the structure.
    - The file list and the diffs that fit the budget, the snapshot, the files left out and the language skills. A pull request whose diffs all fit is reviewed in this turn.
-   - When `get_pull_request` says any diff was left out, the skill starts a review job with `start_pull_request_review` and ends the turn: Scout reads every changed file in batches, code first, several batches at once; the progress, with the findings so far and the owner's Pause, Continue and Stop, is in the bell of Scout Desktop, and the chat gets one card at the end, with the verdict and the files read computed by code; at 60 minutes of running time the review pauses and asks ([[pages/services/audit/how-it-works-review-job]], [[pages/decisions/0061-the-pull-request-review-job-as-built]], [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]). When writes are not allowed, it reviews file by file in the turn and says which files were read.
+   - When `get_pull_request` says any diff was left out, the skill starts a review job with `start_pull_request_review` and ends the turn; the job is drawn under "Inside a review job" below ([[pages/services/audit/how-it-works-review-job]], [[pages/decisions/0061-the-pull-request-review-job-as-built]]). When writes are not allowed, it reviews file by file in the turn and says which files were read.
    - When the pull request is too large to review well or mixes a refactor, a feature and a fix, the summary says so once and suggests how to split it.
 3. **The pipeline.** Build, tests, linters and static analysis, before any human-style judgement.
    - `get_pull_request_checks` at the head commit; when no check runs the tests, or the owner asks, the tests run in a disposable container the owner enabled.
@@ -110,15 +90,15 @@ flowchart TD
 
 ## Inside a review job
 
-A review job reads each batch in turns that each end in one findings block; how each part works is its own record.
+Each part of a review job is drawn on its own page, from the code as it is:
 
-- **Evidence.** Every finding quotes its file's patch, and Scout derives the line from the quote; a finding it cannot place is asked for once more, then left out and named. [[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]]
-- **Parts.** A file too large for one batch is read in parts, with the code, before the documentation. [[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]]
-- **Focused readings.** A batch with code or tests is read again for what it removes and against the description's requests. [[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]]
-- **The second reading.** Before the card, each finding is read again by a turn told to refute it, reading the head; it holds a finding only with a scenario and sets its severity by rule. [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]
-- **The tests.** The job runs the pull request's tests itself in the sandbox, under the GitHub feature's "Local container" grant; tests that need a Docker daemon could not run and are not failures. [[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]
-- **The numbers.** Every turn's numbers are kept in the job database, and the card says how many times the model was asked. [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]
-- **The rules** all live in Scout.Review. [[pages/decisions/0065-the-review-rules-live-in-scout-review]]
+- [[pages/architecture/code-review/queue-and-what-is-kept]]: the queue of reviews (waiting, picked in order, stopped while waiting, after a restart) and what the job database and the turn record keep.
+- [[pages/architecture/code-review/job-start-and-batches]]: the preflight checks, the snapshot, the plan in reading order, the inputs every batch is handed; the window of batches, the three readings, the reads a batch is offered, the match that places a finding, the extra request and the union.
+- [[pages/architecture/code-review/what-a-reading-evaluates]]: the points a reading judges, the removed and requests readings' questions, and what a finding carries.
+- [[pages/architecture/code-review/tests-in-docker]]: what is sent to Docker when a review runs the tests, what is read back, and what never goes into the container.
+- [[pages/architecture/code-review/second-reading-and-verdict]]: the second reading's groups, reads and four outcomes, and the one decision of what the review offers.
+
+The decisions behind them: evidence and derived lines [[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]], parts [[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]], focused readings [[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]], the second reading [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]], the tests [[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]], the turn numbers [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]], the rules in one project [[pages/decisions/0065-the-review-rules-live-in-scout-review]], the window [[pages/decisions/0074-a-review-runs-its-batches-through-a-window]] and the queue [[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]].
 
 ## What a review never does
 
