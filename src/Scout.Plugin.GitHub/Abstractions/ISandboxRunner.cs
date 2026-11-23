@@ -31,6 +31,8 @@ public sealed record SandboxRunRequest(string SnapshotRoot, string? StackHint, s
 /// <param name="Output">The captured output, possibly cut; empty when nothing ran.</param>
 /// <param name="Note">What the owner should know about how it ran, such as the SDK it rolled forward to; null when nothing.</param>
 /// <param name="Unrunnable">When every test that failed could not run because the container has no Docker daemon, the sentence that says how many; then the run did not fail, though <paramref name="ExitCode"/> is not zero; otherwise null.</param>
+/// <param name="Projects">The test projects whose summary the run printed, with their counts; null when it printed none.</param>
+/// <param name="ProjectsPartial">True when more test projects printed a summary than are counted, so the later ones are not among <paramref name="Projects"/>.</param>
 public sealed record SandboxRunResult(
     bool Ran,
     string? Reason,
@@ -40,4 +42,6 @@ public sealed record SandboxRunResult(
     double DurationSeconds,
     string Output,
     string? Note = null,
-    string? Unrunnable = null);
+    string? Unrunnable = null,
+    IReadOnlyList<Scout.Review.TestProjectFacts>? Projects = null,
+    bool ProjectsPartial = false);

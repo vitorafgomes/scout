@@ -140,6 +140,17 @@ function makeBridge(
       code: '482913',
       expiresAt: '2026-10-28T12:10:00.000Z',
     })),
+    mcpStatus: vi.fn(async () => ({
+      enabled: false,
+      startMode: 'ask' as const,
+      port: 47231,
+      hasToken: false,
+      tokenCreatedAt: null,
+      listener: { state: 'off' as const },
+      pending: null,
+      activity: [],
+    })),
+    onMcpChanged: vi.fn(() => () => undefined),
     desktopGetSettings: vi.fn(async (): Promise<DesktopSettings> => desktopSettings),
     desktopSetKeepRunning: vi.fn(async (req: DesktopToggleRequest): Promise<DesktopSettings> => {
       desktopSettings = { ...desktopSettings, keepRunning: req.enabled };
@@ -285,7 +296,7 @@ describe('Settings: Chat connections', () => {
     TestBed.resetTestingModule();
   });
 
-  it("opens in the prototype's order, Appearance first, then Chat connections, the worker and About, then who can use Scout, the floating button, Audio, Desktop and Updates", async () => {
+  it("opens in the prototype's order, Appearance first, then Chat connections, the worker and About, then who can use Scout, the floating button, Audio, Desktop, Updates and the MCP server", async () => {
     const fixture = await render(makeBridge(), makeWizard({}));
 
     const headings = Array.from(
@@ -309,6 +320,7 @@ describe('Settings: Chat connections', () => {
       'Audio',
       'Desktop',
       'Updates',
+      'MCP server',
     ]);
     expect(columns).toEqual([headings.slice(0, 4), headings.slice(4)]);
   });

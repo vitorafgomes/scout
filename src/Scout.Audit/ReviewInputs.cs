@@ -2,16 +2,18 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Scout.Knowledge;
+using Scout.Review;
 
 namespace Scout.Audit;
 
 /// <summary>
 /// What a pull request says it does: its title and description, the issue it names with that issue's title and body,
-/// whether the issue could not be read, and whether Scout cut the description or the issue's body.
+/// whether the issue could not be read, whether Scout cut the description or the issue's body, and the length each had
+/// before Scout cut it, null when it was not cut or was cut before the length was kept.
 /// </summary>
 public sealed record ReviewPurpose(
     string Title, string? Description, int? Issue = null, string? IssueTitle = null, string? IssueBody = null, bool IssueUnread = false,
-    bool DescriptionCut = false, bool IssueBodyCut = false);
+    bool DescriptionCut = false, bool IssueBodyCut = false, int? DescriptionLength = null, int? IssueBodyLength = null);
 
 /// <summary>One of the project's rule files at the reviewed commit: its path, its text, whether the text was cut, and whether the pull request changes it.</summary>
 internal sealed record ReviewRuleFile(string Path, string Text, bool Cut, bool ChangedHere);
@@ -166,7 +168,7 @@ internal sealed partial record ReviewRemoved(
         var withoutDiff = 0;
         foreach (var file in files.Where(f => !f.Path.Any(char.IsControl)))
         {
-            var test = RepositoryAudits.ReadingOrder(file.Path) == 1;
+            var test = ReviewReadings.ReadingOrder(file.Path) == 1;
             if (file.Status == "removed")
             {
                 (test ? tests : deleted).Add(new(file.Path, test ? RemovedEntry.TestFileDeleted : RemovedEntry.FileDeleted, [], 0, 0));
@@ -230,7 +232,7 @@ internal sealed partial record ReviewRemoved(
         {
             return Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
                 .Select(path => ProjectFileFilter.ToRelativePath(root, path))
-                .Where(path => ProjectFileFilter.IsIndexable(path) && RepositoryAudits.ReadingOrder(path) == 0)
+                .Where(path => ProjectFileFilter.IsIndexable(path) && ReviewReadings.ReadingOrder(path) == 0)
                 .ToLookup(path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -262,17 +264,25 @@ internal sealed partial record ReviewRemoved(
 internal sealed record ReviewInputs(ReviewPurpose? Purpose, ReviewRules Rules, ReviewRemoved Removed)
 {
     internal const int MaxTitle = 300;
-    internal const int MaxBody = 4_000;
 
-    /// <summary>The purpose with each title cut at <see cref="MaxTitle"/> and the description and the issue's body at <see cref="MaxBody"/>, each body's cut flag set when it was cut.</summary>
+    /// <summary>The characters of the linked issue's body kept.</summary>
+    internal const int MaxIssueBody = 4_000;
+
+    /// <summary>
+    /// The purpose with each title cut at <see cref="MaxTitle"/>, the description at <see cref="PullRequestDescription.MaxLength"/>,
+    /// the length the description is read at, and the issue's body at <see cref="MaxIssueBody"/>, each body's cut flag set
+    /// when it was cut.
+    /// </summary>
     internal static ReviewPurpose Bound(ReviewPurpose given) => given with
     {
         Title = Cut(given.Title, MaxTitle),
-        Description = Cut(given.Description, MaxBody),
+        Description = Cut(given.Description, PullRequestDescription.MaxLength),
         IssueTitle = Cut(given.IssueTitle, MaxTitle),
-        IssueBody = Cut(given.IssueBody, MaxBody),
-        DescriptionCut = given.DescriptionCut || given.Description?.Length > MaxBody,
-        IssueBodyCut = given.IssueBodyCut || given.IssueBody?.Length > MaxBody,
+        IssueBody = Cut(given.IssueBody, MaxIssueBody),
+        DescriptionCut = given.DescriptionCut || given.Description?.Length > PullRequestDescription.MaxLength,
+        IssueBodyCut = given.IssueBodyCut || given.IssueBody?.Length > MaxIssueBody,
+        DescriptionLength = given.Description?.Length > PullRequestDescription.MaxLength ? given.Description.Length : given.DescriptionLength,
+        IssueBodyLength = given.IssueBody?.Length > MaxIssueBody ? given.IssueBody.Length : given.IssueBodyLength,
     };
 
     /// <summary>
@@ -292,7 +302,43 @@ internal sealed record ReviewInputs(ReviewPurpose? Purpose, ReviewRules Rules, R
             notes.Add("The project's rule files could not be read.");
         }
 
+        if (Purpose is { } purpose && CutNote(purpose) is { } cut)
+        {
+            notes.Add(cut);
+        }
+
         return notes;
+    }
+
+    /// <summary>
+    /// The one note that says how much of the description and of the issue's body Scout read when either was cut, for
+    /// keeping or for sending: the characters sent of the characters the text had; null when neither was cut.
+    /// </summary>
+    private static string? CutNote(ReviewPurpose purpose)
+    {
+        var sent = AuditBatchRunner.SentPurpose(purpose);
+        string?[] clauses =
+        [
+            Clause("the pull request's description", purpose.Description, sent.Description, purpose.DescriptionCut, sent.DescriptionCut, purpose.DescriptionLength),
+            Clause("the linked issue's body", purpose.IssueBody, sent.IssueBody, purpose.IssueBodyCut, sent.IssueBodyCut, purpose.IssueBodyLength),
+        ];
+        var said = clauses.OfType<string>().ToList();
+        return said.Count == 0 ? null : $"Scout read {string.Join(" and ", said)}.";
+    }
+
+    /// <summary>How much of one cut text was read, of how much it had when that is known.</summary>
+    private static string? Clause(string name, string? kept, string? read, bool cutKept, bool cutSent, int? length)
+    {
+        if (!(cutKept || cutSent) || kept is null)
+        {
+            return null;
+        }
+
+        var of = length ?? (cutKept ? null : kept.Length);
+        var count = (read ?? string.Empty).Length.ToString("N0", CultureInfo.InvariantCulture);
+        return of is null
+            ? $"{name} up to {count} characters; the rest was not kept"
+            : $"{name} up to {count} of its {of.Value.ToString("N0", CultureInfo.InvariantCulture)} characters";
     }
 
     /// <summary>The sentences of <see cref="Notes"/> about what the pull request removed, each counted over every removal and agreeing with its number.</summary>

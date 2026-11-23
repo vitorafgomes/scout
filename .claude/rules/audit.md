@@ -22,6 +22,9 @@ Read one when your change touches what its title names.
 - [[pages/decisions/0061-the-pull-request-review-job-as-built|ADR 0061 - The pull request review job as built]] - the review batch turn, the run, its bounds of running time and its one card
 - [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell|ADR 0062 - The review job runs to its end, in parallel, shown and controlled from the bell]] - the review read to its end, code first, in waves; the owner's controls; the pause at 60 minutes
 - [[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed|ADR 0064 - The review batch is handed the purpose, the project's rules and what was removed]] - the three inputs computed by code, their bounds and how they are kept with the job
+- [[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code|ADR 0066 - Every finding carries evidence, and its line is derived by code]] - the extra request and the placed findings
+- [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario|ADR 0069 - The second reading tries to refute]] - the second reading's turn, groups and bounds
+- [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept|ADR 0073 - The numbers of each model turn are kept]] - `audit_turn`, the card's counts, the opt-in record
 - [[pages/decisions/0039-repository-snapshot-under-the-data-folder|ADR 0039 - A repository snapshot under Scout's data folder, read locally and searched by the Knowledge index]] - the snapshot the plan is cut from
 - [[pages/decisions/0040-review-findings-as-cards-in-chat|ADR 0040 - The review's findings as cards in the chat, posted as one review from the cards]] - the `scout-findings` block and `present_audit_findings`
 - [[pages/decisions/0033-channel-operator-architecture|ADR 0033 - Channel operator architecture: state in the control plane, pipeline in Scout.Operator, media through the connected AI Source, progress back to the originating channel]] - the background-job and origin-post precedent
@@ -48,6 +51,7 @@ Find the row your change matches and read that page. Read one or two rows, not t
 | Invariants it preserves | `context/pages/services/audit/invariants-it-preserves.md` |
 | Tests | `context/pages/services/audit/tests.md` |
 | Tests of the review job | `context/pages/services/audit/tests-review-job.md` |
+| Evidence; parts; focused readings; the second reading; the turn table; the opt-in record | `context/pages/services/audit/public-contract-review-quality.md` |
 | Open items | `context/pages/services/audit/open-items.md` |
 
 For where a type lives or who calls it, ask the code graph (`graphify explain "<Type>"`, `graphify affected "<Type>"`).

@@ -1,3 +1,5 @@
+using Scout.Review;
+
 namespace Scout.Audit;
 
 /// <summary>
@@ -18,6 +20,15 @@ public interface IReviewPullRequests
     /// refuses it. A read that fails throws.
     /// </summary>
     Task<string?> HeadAsync(string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>
+    /// Scout's own findings from earlier reviews of pull request <paramref name="number"/>, each with its conversation
+    /// (<see cref="EarlierFindings.Own"/>); null when GitHub does not find the pull request. A read that fails throws.
+    /// </summary>
+    Task<EarlierConversations?> EarlierAsync(string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>The checks of commit <paramref name="sha"/> counted for the review's offer; null when they were not all read. A read that fails throws.</summary>
+    Task<OfferChecks?> ChecksAsync(string owner, string repo, string sha, CancellationToken ct);
 }
 
 /// <summary>A pull request as a review reads it again: its head commit and every changed file with its patch.</summary>

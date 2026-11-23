@@ -121,7 +121,7 @@ public sealed class BundledSkillsTests
         body.ShouldContain("Then end the answer with the verdict.");
         body.ShouldContain("\"severity\":\"block\"");
         body.ShouldContain("`severity` is `block`, `fix` or `nit`");
-        body.ShouldContain("The review card's Post button sends the comments the user chose to Scout Desktop directly; it never reaches you");
+        body.ShouldContain("The review card offers one action, the one the review decides for the findings the user chose, and sends it to Scout Desktop directly; it never reaches you");
         body.ShouldContain("The call queues the review for the owner's approval, an Approve card waiting in the chat and in Approvals of Scout Desktop, and posts nothing: say that it waits for the owner's approval.");
         body.ShouldContain("never call `submit_pull_request_review` again for the same review");
         body.ShouldNotContain("Review to post");
@@ -153,7 +153,9 @@ public sealed class BundledSkillsTests
         body.ShouldContain("You never edit files, commit, merge or approve anything yourself: a verdict is given only when the user asks for it, and only after the owner approves it in Scout Desktop.");
         body.ShouldContain("When the user asks in chat for the pull request to be approved, or for changes to be requested, call `give_pull_request_verdict(owner, repo, number, verdict, findings_json, commit)` once");
         body.ShouldContain("never claim the verdict was given");
-        body.ShouldContain("The review card's Approve and Request changes buttons send the verdict to Scout Desktop directly; they never reach you");
+        body.ShouldContain("The review card offers one action, the one the review decides for the findings the user chose, and sends it to Scout Desktop directly; it never reaches you");
+        body.ShouldContain("Scout does not approve on its own: a person approves the pull request on GitHub.");
+        body.ShouldNotContain("Post button", Case.Sensitive);
         body.ShouldContain("call them only when the user asks for that comment or reply in chat");
         foreach (var function in new[] { "comment_on_pull_request", "reply_to_review_comment" })
         {

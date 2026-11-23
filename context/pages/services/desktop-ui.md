@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI"
-version: "1.117"
+version: "1.118"
 date: 2026-10-22
-updated: 2026-11-12
-changes: "v1.117 (2026-11-12): a vault check that fails keeps the localStorage mirror of the selection (a cloud provider, the ChatGPT plan or Ollama) instead of wiping it; a failed vault availability check shows the unavailable banner; Clear of the Logs screen does not throw when storage is unavailable."
+updated: 2026-11-21
+changes: "v1.118 (2026-11-21): a topic page added. v1.117 (2026-11-12): a vault check that fails keeps the localStorage mirror of the selection (a cloud provider, the ChatGPT plan or Ollama) instead of wiping it; a failed vault availability check shows the unavailable banner; Clear of the Logs screen does not throw when storage is unavailable."
 page_type: service
 status: active
 description: "Electron desktop app (Bun workspace, Angular renderer): onboards a Discord bot or a Slack app, keeps credentials in the OS keychain, spawns and supervises the Scout.Host.Console worker, and manages local Ollama and Whisper models from Node."
@@ -76,6 +76,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/desktop-ui/allowed-users\|Allowed users]] | Allowed users | 4828 |
 | [[pages/services/desktop-ui/slack-setup\|Slack setup]] | Slack setup | 3300 |
 | [[pages/services/desktop-ui/settings-settings-follows-its-artboard-context-p\|Settings: Settings follows its artboard, context/prototypes/desktop/Settings.dc.html (pages/roadmap/prototype-migration,]] | Settings follows its artboard, context/prototypes/desktop/Settings.dc.html (pages/roadmap/prototype-migration,; Chat connections; Scout worker; Who can use Scout | 10577 |
+| [[pages/services/desktop-ui/mcp-server\|The MCP server]] | The local MCP server, its Settings group, its token and its four tools | 2729 |
 | [[pages/services/desktop-ui/settings-audio\|Settings: Audio]] | Audio; Appearance; Logs screen; The Logs screen (route logs, in | 10675 |
 | [[pages/services/desktop-ui/quick-ask\|Quick ask]] | Quick ask | 1402 |
 | [[pages/services/desktop-ui/desktop-presence\|Desktop presence]] | Desktop presence | 4075 |

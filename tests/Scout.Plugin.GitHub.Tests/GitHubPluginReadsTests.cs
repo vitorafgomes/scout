@@ -314,13 +314,13 @@ public sealed class GitHubPluginReadsTests
             .Returns(new RepositoryFile("vendor/lib", "submodule", null, 0, []));
         var plugin = new GitHubPlugin(client);
 
-        (await plugin.GetFileContentsAsync("octocat", "hello", "src/Program.cs", "main", CancellationToken.None))
-            .ShouldBe("src/Program.cs (20 bytes) at main:\nConsole.WriteLine();");
-        (await plugin.GetFileContentsAsync("octocat", "hello", "src", "", CancellationToken.None))
+        (await plugin.GetFileContentsAsync("octocat", "hello", "src/Program.cs", "main", ct: CancellationToken.None))
+            .ShouldBe("src/Program.cs (20 bytes) at main, lines 1 to 1 of 1; the file ends there:\nConsole.WriteLine();");
+        (await plugin.GetFileContentsAsync("octocat", "hello", "src", "", ct: CancellationToken.None))
             .ShouldBe("src is a directory:\n  - Program.cs (file)");
-        (await plugin.GetFileContentsAsync("octocat", "hello", "big.bin", "", CancellationToken.None))
+        (await plugin.GetFileContentsAsync("octocat", "hello", "big.bin", "", ct: CancellationToken.None))
             .ShouldBe("big.bin (5000000 bytes) has no text GitHub returns inline; it is binary or over 1 MB.");
-        (await plugin.GetFileContentsAsync("octocat", "hello", "vendor/lib", "", CancellationToken.None))
+        (await plugin.GetFileContentsAsync("octocat", "hello", "vendor/lib", "", ct: CancellationToken.None))
             .ShouldBe("vendor/lib is a submodule, not a file; GitHub returns no text for it.");
     }
 
@@ -336,7 +336,7 @@ public sealed class GitHubPluginReadsTests
     {
         var client = Client();
 
-        var result = await new GitHubPlugin(client).GetFileContentsAsync(owner, repo, path, reference, CancellationToken.None);
+        var result = await new GitHubPlugin(client).GetFileContentsAsync(owner, repo, path, reference, ct: CancellationToken.None);
 
         result.ShouldBeOneOf(GitHubNames.InvalidRepository, GitHubNames.InvalidPath, GitHubNames.InvalidReference);
         await client.DidNotReceiveWithAnyArgs().GetFileContentAsync(default!, default!, default!, default, default);
@@ -368,7 +368,7 @@ public sealed class GitHubPluginReadsTests
 
         (await plugin.GetPullRequestAsync("octocat", "hello", 42, CancellationToken.None)).ShouldBe("GitHub is currently unavailable. Try again later.");
         (await plugin.GetIssueAsync("octocat", "hello", 13, CancellationToken.None)).ShouldBe("GitHub request timed out. Try again later.");
-        (await plugin.GetFileContentsAsync("octocat", "hello", "a.cs", "", CancellationToken.None)).ShouldBe("Could not reach GitHub. Try again later.");
+        (await plugin.GetFileContentsAsync("octocat", "hello", "a.cs", "", ct: CancellationToken.None)).ShouldBe("Could not reach GitHub. Try again later.");
     }
 
     [Fact]
@@ -430,8 +430,8 @@ public sealed class GitHubPluginReadsTests
             .Returns(new CodeSearchResult(0, []));
         var plugin = new GitHubPlugin(client);
 
-        var hits = await plugin.SearchCodeAsync("octocat", "hello", "catch (Exception)", "", "", CancellationToken.None);
-        var none = await plugin.SearchCodeAsync("octocat", "hello", "nothing", "", "", CancellationToken.None);
+        var hits = await plugin.SearchCodeAsync("octocat", "hello", "catch (Exception)", "", "", ct: CancellationToken.None);
+        var none = await plugin.SearchCodeAsync("octocat", "hello", "nothing", "", "", ct: CancellationToken.None);
 
         hits.ShouldBe("41 file(s) in octocat/hello match \"catch (Exception)\" (default branch; first 2 shown)\n--- src/Checkout.cs\ncatch (Exception)\n  {\n  }\nsecond\n--- src/Old.cs");
         none.ShouldBe("No file in octocat/hello matches \"nothing\" (default branch).");
@@ -448,7 +448,7 @@ public sealed class GitHubPluginReadsTests
     {
         var client = Client();
 
-        var result = await new GitHubPlugin(client).SearchCodeAsync("octocat", "hello", query, path, extension, CancellationToken.None);
+        var result = await new GitHubPlugin(client).SearchCodeAsync("octocat", "hello", query, path, extension, ct: CancellationToken.None);
 
         result.ShouldBeOneOf(GitHubNames.InvalidQuery, GitHubNames.InvalidPath, GitHubNames.InvalidExtension);
         await client.DidNotReceiveWithAnyArgs().SearchCodeAsync(default!, default!, default!, default, default, default);
@@ -474,23 +474,218 @@ public sealed class GitHubPluginReadsTests
                 .Returns(new RepositoryFile("src/Checkout.cs", "file", "from GitHub", 11, []));
             var plugin = new GitHubPlugin(client, await SnapshotOfHello(dir));
 
-            var file = await plugin.GetFileContentsAsync("octocat", "hello", "src/Checkout.cs", "", CancellationToken.None);
-            var folder = await plugin.GetFileContentsAsync("octocat", "hello", "src", "main", CancellationToken.None);
+            var file = await plugin.GetFileContentsAsync("octocat", "hello", "src/Checkout.cs", "", ct: CancellationToken.None);
+            var folder = await plugin.GetFileContentsAsync("octocat", "hello", "src", "main", ct: CancellationToken.None);
             var listing = await plugin.ListRepositoryFilesAsync("octocat", "hello", "", "", "cs", CancellationToken.None);
-            var search = await plugin.SearchCodeAsync("octocat", "hello", "Total()", "", "", CancellationToken.None);
-            var other = await plugin.GetFileContentsAsync("octocat", "hello", "src/Checkout.cs", "feat/x", CancellationToken.None);
+            var search = await plugin.SearchCodeAsync("octocat", "hello", "Total()", "", "", ct: CancellationToken.None);
+            var other = await plugin.GetFileContentsAsync("octocat", "hello", "src/Checkout.cs", "feat/x", ct: CancellationToken.None);
 
-            file.ShouldBe("src/Checkout.cs (41 bytes) at main (local snapshot at abc1234):\nclass Checkout { decimal Total() => 0; }\n");
+            file.ShouldBe("src/Checkout.cs (41 bytes) at main (local snapshot at abc1234), lines 1 to 1 of 1; the file ends there:\nclass Checkout { decimal Total() => 0; }\n");
             folder.ShouldBe("src is a directory (local snapshot at abc1234):\n  - Checkout.cs");
             listing.ShouldContain("octocat/hello at main: 2 file(s)");
             listing.ShouldContain("  src/Checkout.cs (41 bytes)");
             listing.ShouldEndWith("(from the local snapshot at abc1234)");
             search.ShouldStartWith("1 file(s) in octocat/hello match \"Total()\"");
             search.ShouldContain("--- src/Checkout.cs\nclass Checkout { decimal Total() => 0; }");
-            search.ShouldEndWith("(from the local snapshot of main at abc1234, every file searched)");
+            search.ShouldStartWith("1 file(s) in octocat/hello match \"Total()\" (the local snapshot of main at abc1234, every file searched; first 1 shown)", Case.Sensitive, "the first line says which snapshot was searched");
             other.ShouldContain("from GitHub");
             await client.DidNotReceive().ListRepositoryFilesAsync("octocat", "hello", Arg.Any<string?>(), Arg.Any<CancellationToken>());
             await client.DidNotReceiveWithAnyArgs().SearchCodeAsync(default!, default!, default!, default, default, default);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private static readonly string LongFile = string.Concat(Enumerable.Range(1, 3_000).Select(i => string.Create(CultureInfo.InvariantCulture, $"    var line{i:D4} = Compute({i});\n")));
+
+    private static GitHubPlugin Reading(IGitHubClient client, string text)
+    {
+        client.GetFileContentAsync("octocat", "hello", "src/Long.cs", "main", Arg.Any<CancellationToken>())
+            .Returns(new RepositoryFile("src/Long.cs", "file", text, text.Length, []));
+        return new GitHubPlugin(client);
+    }
+
+    private static async Task<List<string>> ReadToTheEnd(GitHubPlugin plugin, string path, string reference)
+    {
+        var answers = new List<string>();
+        var firstLine = 1;
+        while (answers.Count < 100)
+        {
+            var answer = await plugin.GetFileContentsAsync("octocat", "hello", path, reference, firstLine, ct: CancellationToken.None);
+            answers.Add(answer);
+            var header = answer[..answer.IndexOf('\n', StringComparison.Ordinal)];
+            const string Next = "call again with firstLine ";
+            var at = header.IndexOf(Next, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                break;
+            }
+
+            firstLine = int.Parse(header[(at + Next.Length)..^1], CultureInfo.InvariantCulture);
+        }
+
+        return answers;
+    }
+
+    private static string Body(string answer) => answer[(answer.IndexOf('\n', StringComparison.Ordinal) + 1)..];
+
+    [Fact]
+    public async Task R1_A_File_Longer_Than_One_Answer_Is_Read_To_Its_End_By_Following_Each_Answer_And_The_Parts_Joined_Are_The_File()
+    {
+        var answers = await ReadToTheEnd(Reading(Client(), LongFile), "src/Long.cs", "main");
+
+        answers.Count.ShouldBeGreaterThan(1, "a file longer than one answer comes in parts");
+        answers.ShouldAllBe(a => Body(a).Length <= GitHubPlugin.PatchCap, "each part fits the bound of one answer");
+        answers[0].ShouldStartWith("src/Long.cs (100893 bytes) at main, lines 1 to 609 of 3,000; to read on, call again with firstLine 610:\n", Case.Sensitive, "the header says which lines, how many and the next call");
+        answers[^1].ShouldStartWith("src/Long.cs (100893 bytes) at main, lines 2,973 to 3,000 of 3,000; the file ends there:\n", Case.Sensitive, "the last part says the file ends");
+        string.Concat(answers.Select(Body)).ShouldBe(LongFile, "the parts joined are the file");
+    }
+
+    [Fact]
+    public async Task R1_A_Snapshot_File_Longer_Than_One_Answer_Is_Read_To_Its_End_The_Same_Way()
+    {
+        var dir = Directory.CreateTempSubdirectory("scout-reads-lines-").FullName;
+        try
+        {
+            var store = new RepositorySnapshotStore(dir, 0, new FakeTimeProvider());
+            await store.ExtractAsync("octocat", "hello", new RepositoryCommit("main", "abc1234def5678", true), new MemoryStream(TarGzFixture.Build(
+                TarGzFixture.Text("src/Long.cs", LongFile))), CancellationToken.None);
+            var client = Client();
+
+            var answers = await ReadToTheEnd(new GitHubPlugin(client, store), "src/Long.cs", "");
+
+            answers[0].ShouldStartWith("src/Long.cs (100893 bytes) at main (local snapshot at abc1234), lines 1 to 609 of 3,000; to read on, call again with firstLine 610:\n", Case.Sensitive, "the snapshot's header stays in front");
+            string.Concat(answers.Select(Body)).ShouldBe(LongFile, "the parts joined are the file");
+            client.ReceivedCalls().ShouldBeEmpty("a snapshot read asks GitHub nothing");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task R2_The_Lines_Around_A_Given_Line_Can_Be_Asked_For_Directly()
+    {
+        var answer = await Reading(Client(), LongFile).GetFileContentsAsync("octocat", "hello", "src/Long.cs", "main", 1_200, 5, CancellationToken.None);
+
+        answer.ShouldBe(
+            "src/Long.cs (100893 bytes) at main, lines 1,200 to 1,204 of 3,000; to read on, call again with firstLine 1205:\n"
+            + string.Concat(Enumerable.Range(1_200, 5).Select(i => string.Create(CultureInfo.InvariantCulture, $"    var line{i:D4} = Compute({i});\n"))),
+            "the lines asked for, and no more");
+    }
+
+    [Fact]
+    public async Task R3_A_Read_Of_Any_Lines_Reaches_The_Same_Repository_Reference_And_Path_As_A_Whole_Read_And_A_Refused_Name_Stays_Refused()
+    {
+        var client = Client();
+        var plugin = Reading(client, LongFile);
+
+        await plugin.GetFileContentsAsync("octocat", "hello", "src/Long.cs", "main", 2_000, 10, CancellationToken.None);
+        var refused = await plugin.GetFileContentsAsync("octocat", "hello", "src/../../x", "main", 2_000, 10, CancellationToken.None);
+
+        client.ReceivedCalls().Select(c => (c.GetMethodInfo().Name, string.Join(",", c.GetArguments().Take(4))))
+            .ShouldBe([("GetFileContentAsync", "octocat,hello,src/Long.cs,main")], "the slice is cut from the same file; nothing else is asked");
+        refused.ShouldBe(GitHubNames.InvalidPath, "a path that could leave the repository is refused before any request, with lines asked or not");
+    }
+
+    [Theory]
+    [InlineData(0, 0, GitHubPlugin.FirstLineBelowOne)]
+    [InlineData(-3, 0, GitHubPlugin.FirstLineBelowOne)]
+    [InlineData(1, -1, GitHubPlugin.LineCountBelowZero)]
+    [InlineData(3_001, 0, "src/Long.cs has 3,000 lines; firstLine 3001 is past its end.")]
+    public async Task A_First_Line_Below_One_A_Negative_Count_Or_A_First_Line_Past_The_End_Is_Answered_With_Its_Sentence(int firstLine, int lineCount, string sentence)
+    {
+        var client = Client();
+
+        var answer = await Reading(client, LongFile).GetFileContentsAsync("octocat", "hello", "src/Long.cs", "main", firstLine, lineCount, CancellationToken.None);
+
+        answer.ShouldBe(sentence, "each out-of-range value has its own answer");
+    }
+
+    [Fact]
+    public async Task A_Line_Longer_Than_One_Answer_Is_Cut_At_The_Bound_And_Says_So_And_An_Empty_File_Says_It_Is_Empty()
+    {
+        var text = new string('x', 25_000) + "\nnext\n";
+        var client = Client();
+        client.GetFileContentAsync("octocat", "hello", "empty.txt", "main", Arg.Any<CancellationToken>()).Returns(new RepositoryFile("empty.txt", "file", "", 0, []));
+
+        var cut = await Reading(client, text).GetFileContentsAsync("octocat", "hello", "src/Long.cs", "main", ct: CancellationToken.None);
+        var empty = await new GitHubPlugin(client).GetFileContentsAsync("octocat", "hello", "empty.txt", "main", ct: CancellationToken.None);
+
+        cut.ShouldBe("src/Long.cs (25006 bytes) at main, line 1 of 2, cut at 20,000 characters because the line is longer; to read on, call again with firstLine 2:\n" + new string('x', 20_000), "a line longer than the bound is cut there, with a note");
+        empty.ShouldBe("empty.txt (0 bytes) at main: the file is empty.", "an empty file says so");
+    }
+
+    [Fact]
+    public async Task When_The_Read_Fails_With_Lines_Asked_The_Api_Read_Answers_Its_Clean_Line_And_The_Snapshot_Read_Says_Not_Found()
+    {
+        var dir = Directory.CreateTempSubdirectory("scout-reads-lines-").FullName;
+        try
+        {
+            var client = Client();
+            client.GetFileContentAsync("octocat", "hello", "a.cs", "feat/x", Arg.Any<CancellationToken>())
+                .Returns<RepositoryFile?>(_ => throw new HttpRequestException("reset"));
+            var plugin = new GitHubPlugin(client, await SnapshotOfHello(dir));
+
+            var api = await plugin.GetFileContentsAsync("octocat", "hello", "a.cs", "feat/x", 40, 10, CancellationToken.None);
+            var local = await plugin.GetFileContentsAsync("octocat", "hello", "missing.cs", "", 40, 10, CancellationToken.None);
+
+            api.ShouldBe("Could not reach GitHub. Try again later.", "a failed API read answers the same clean line with lines asked");
+            local.ShouldBe("missing.cs not found in octocat/hello at main (abc1234).", "a snapshot read that finds nothing says so with lines asked");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task C3_A_search_at_a_reference_reads_that_snapshot_and_asks_GitHub_nothing_and_one_at_a_reference_with_no_snapshot_searches_nothing()
+    {
+        var dir = Directory.CreateTempSubdirectory("scout-reads-search-").FullName;
+        try
+        {
+            var store = await SnapshotOfHello(dir);
+            await store.ExtractAsync("octocat", "hello", new RepositoryCommit("feat/x", "fff9999eee8888", false), new MemoryStream(TarGzFixture.Build(
+                TarGzFixture.Text("src/Checkout.cs", "class Checkout { decimal Total() => 1; }\n"))), CancellationToken.None);
+            var client = Client();
+            var plugin = new GitHubPlugin(client, store);
+
+            var head = await plugin.SearchCodeAsync("octocat", "hello", "Total()", reference: "abc1234def5678", ct: CancellationToken.None);
+            var none = await plugin.SearchCodeAsync("octocat", "hello", "Total()", reference: "0123456789abcdef", ct: CancellationToken.None);
+            var other = await plugin.SearchCodeAsync("someone", "else", "Total()", reference: "abc1234def5678", ct: CancellationToken.None);
+
+            head.ShouldStartWith("1 file(s) in octocat/hello match \"Total()\" (the local snapshot of main at abc1234, every file searched; first 1 shown)", Case.Sensitive, "the search reads the snapshot at the reference named, not the newest");
+            head.ShouldContain("Total() => 0", Case.Sensitive, "the text is that commit's");
+            none.ShouldBe("Scout has no local snapshot of octocat/hello at 0123456789abcdef, and GitHub searches only the default branch, so nothing was searched; read the files at 0123456789abcdef with get_file_contents.", "a reference with no snapshot is never searched on GitHub's default branch instead");
+            other.ShouldBe("Scout has no local snapshot of someone/else at abc1234def5678, and GitHub searches only the default branch, so nothing was searched; read the files at abc1234def5678 with get_file_contents.", "a snapshot of one repository is never read for another");
+            client.ReceivedCalls().ShouldBeEmpty("a search at a reference asks GitHub nothing");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task When_The_Snapshot_Searched_Cannot_Be_Read_The_Search_Says_So_And_Asks_GitHub_Nothing()
+    {
+        var dir = Directory.CreateTempSubdirectory("scout-reads-search-").FullName;
+        try
+        {
+            var store = await SnapshotOfHello(dir);
+            var client = Client();
+            var plugin = new GitHubPlugin(client, store);
+            var snapshot = store.Find("octocat", "hello", "main").ShouldNotBeNull();
+            File.CreateSymbolicLink(Path.Combine(snapshot.Root, "src", "Gone.cs"), Path.Combine(dir, "no-such-file"));
+
+            var answer = await plugin.SearchCodeAsync("octocat", "hello", "Total()", reference: "main", ct: CancellationToken.None);
+
+            answer.ShouldBe("The local snapshot of octocat/hello at abc1234 could not be read, so nothing was searched; read the files with get_file_contents.", "a snapshot that cannot be read is said, never searched on GitHub instead");
+            client.ReceivedCalls().ShouldBeEmpty();
         }
         finally
         {

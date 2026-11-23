@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub"
-version: "1.21"
+version: "1.22"
 date: 2026-10-21
-updated: 2026-11-12
-changes: "v1.21 (2026-11-13) present_review_findings records a review that found nothing, called with [], so the card still shows what was checked; an audit still needs at least one finding.."
+updated: 2026-11-21
+changes: "v1.22 (2026-11-21): a topic page added. v1.21 (2026-11-13) present_review_findings records a review that found nothing, called with [], so the card still shows what was checked; an audit still needs at least one finding.."
 page_type: service
 status: active
 description: "GitHub plugin: fourteen read functions over a typed REST client (listing, one pull request with its diffs, comments and checks, one issue, one file, the whole tree, code search, and the two that hand a review's or an audit's findings to the reply as the block the desktop renders as cards), declared writes: into Scout's data folder and a local container under the owner's grant (the conventions profile, a repository snapshot, an audit job and a container test run), and on GitHub only as actions the owner approves one by one (a commenting review, comments, replies, issues, and the verdict, an approval or a request for changes); authenticates from a token or from the token file the desktop GitHub sign-in writes, signs the writes the owner switched to the optional Scout bot with the bot's token, and self-gates off when neither token is configured."
@@ -30,6 +30,7 @@ Read the page your change touches, not all of them.
 | Page | Read when a change touches | Characters |
 |---|---|---|
 | [[pages/services/plugin-github/public-contract\|Public contract]] | Public contract | 10460 |
+| [[pages/services/plugin-github/public-contract-reads-and-verdict\|Public contract, reads and the verdict]] | The file read by lines, the search at a reference, the verdict's one decision | 3040 |
 | [[pages/services/plugin-github/how-it-works\|How it works]] | How it works | 1953 |
 | [[pages/services/plugin-github/the-writes\|The writes (ADR 0038 v1.3, ADR 0043, 2026-11-07)]] | The writes (ADR 0038 v1.3, ADR 0043, 2026-11-07) | 11977 |
 | [[pages/services/plugin-github/the-review-note\|The review note (ADR 0063, 2026-11-20)]] | The review note; ReviewNote; findings_json; the note preview | 3117 |

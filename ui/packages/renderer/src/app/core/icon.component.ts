@@ -26,6 +26,8 @@ export const ICONS = Object.freeze({
   list: 'M4 6h16M4 12h16M4 18h10',
   settings:
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1',
+  sliders:
+    'M4 6h10M18 6h2M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 12h4M12 12h8M8 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 18h11M19 18h1M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
   close: 'M6 6l12 12M18 6 6 18',
   play: 'M7 4l13 8-13 8z',
   pause: 'M8 5v14M16 5v14',

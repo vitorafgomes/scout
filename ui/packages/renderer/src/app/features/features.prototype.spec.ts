@@ -696,12 +696,12 @@ describe("Features as Features.dc.html draws it: each panel's description, Reads
         [
           'Pull request reviews',
           'Cannot be undone',
-          'Post a review with comments; your click on Post on a review card is the approval, and one asked in chat waits for you in Approvals',
+          "Post a review with comments; your click on the review card's action is the approval, and one asked in chat waits for you in Approvals",
         ],
         [
           'Pull request verdicts',
           'Cannot be undone',
-          'Approve a pull request or request changes; your choice on a review card is the approval, and one asked in chat waits for you in Approvals',
+          'Request changes on a pull request; Scout does not approve on its own, your click on the review card is the approval, and one asked in chat waits for you in Approvals',
         ],
         [
           'Pull request comments',
@@ -940,8 +940,8 @@ describe('Features as Features.dc.html draws it: the Allow writes confirmation',
       issues: actionLines(row('New issues')),
     }).toEqual({
       verdicts: [
-        "Approve a pull request or request changes on it when you choose that verdict on the review card; a verdict stays in the pull request's history, so each one runs only after you approve that action in Scout Desktop",
-        'Approve a pull request or request changes on it when you ask for it in chat; each verdict waits for you to approve it in Scout Desktop',
+        "Request changes on a pull request when the review card offers it and you choose it; Scout does not approve on its own, a person approves on GitHub; a verdict stays in the pull request's history, so each one runs only after you approve that action in Scout Desktop",
+        'Request changes on a pull request when you ask for it in chat; each verdict waits for you to approve it in Scout Desktop',
       ],
       issues: [
         "Open an issue on a repository when you ask for it in chat; an issue notifies the repository's watchers and stays in its history, so each one waits for you to approve that issue in Scout Desktop",

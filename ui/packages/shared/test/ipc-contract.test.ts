@@ -159,6 +159,14 @@ describe('CHANNEL constant', () => {
         'localTranscript',
         'localTurns',
         'localVoices',
+        'mcpAnswerStart',
+        'mcpChanged',
+        'mcpCreateToken',
+        'mcpPickPort',
+        'mcpRevokeToken',
+        'mcpSetEnabled',
+        'mcpSetStartMode',
+        'mcpStatus',
         'noticeRecord',
         'notifications',
         'notificationsList',
@@ -335,6 +343,21 @@ describe('the controls a job entry offers', () => {
     ['a running review job', 'reviewjob:acme/api#52', 'running', undefined, 'pause stop'],
     ['a paused review job', 'reviewjob:acme/api#52', 'paused', undefined, 'continue stop'],
     ['a done review job', 'reviewjob:acme/api#52', 'done', undefined, ''],
+    [
+      'a review job waiting for another review',
+      'reviewjob:acme/api#53',
+      'waiting',
+      undefined,
+      'stop',
+    ],
+    [
+      'a waiting review job while a stop waits for Scout',
+      'reviewjob:acme/api#53',
+      'waiting',
+      { action: 'stop', phase: 'waiting' },
+      '',
+    ],
+    ['a waiting entry of an audit', 'audit:acme/shop', 'waiting', undefined, ''],
     [
       'a running review job while a stop waits for Scout',
       'reviewjob:acme/api#52',
@@ -910,6 +933,14 @@ describe('ChannelName type', () => {
       'scout:notifications.control': true,
       'scout:notifications': true,
       'scout:notice.record': true,
+      'scout:mcp.status': true,
+      'scout:mcp.setEnabled': true,
+      'scout:mcp.createToken': true,
+      'scout:mcp.revokeToken': true,
+      'scout:mcp.setStartMode': true,
+      'scout:mcp.pickPort': true,
+      'scout:mcp.answerStart': true,
+      'scout:mcp.changed': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });
@@ -966,6 +997,9 @@ describe('no-external-write sanity scan', () => {
     'scout:local.deleteMeetings',
     'scout:github.bot.create',
     'scout:github.bot.setWrites',
+    // - scout:mcp.createToken -> stores the SHA-256 of a new MCP token in Scout's own vault; the token itself goes
+    //                            once to the Scout window and nothing leaves this computer.
+    'scout:mcp.createToken',
   ];
 
   // Verbs that typically imply mutation against an external system. If a new
@@ -1066,6 +1100,8 @@ describe('the verdict on a pull request', () => {
       selfAuthored: true,
       coverage: true,
       notes: true,
+      offer: true,
+      earlier: true,
     };
     const coverageFields: Record<keyof ReviewCoverage, true> = { read: true, of: true };
     const checkFields: Record<keyof ReviewCheck, true> = {
@@ -1086,12 +1122,14 @@ describe('the verdict on a pull request', () => {
     };
     const bare: ReviewFindings = { repository: 'acme/shop', number: 5, verdict: 'v', findings: [] };
 
-    expect(Object.keys(reviewFields).slice(-5)).toEqual([
+    expect(Object.keys(reviewFields).slice(-7)).toEqual([
       'checks',
       'tests',
       'selfAuthored',
       'coverage',
       'notes',
+      'offer',
+      'earlier',
     ]);
     expect(Object.keys(coverageFields)).toEqual(['read', 'of']);
     const job: ReviewFindings = {

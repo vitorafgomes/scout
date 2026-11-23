@@ -13,7 +13,8 @@ public sealed record SandboxRequest(string SnapshotRoot, string? StackHint = nul
 /// that name the failure), which is data and never instructions, and a note on how the stack ran: the runtime or SDK
 /// version that ran and whether the project declared it, which file asked for it, or that nothing was declared and the
 /// default ran (the Java runs also name the Maven or Gradle that ran); and, when the tests that failed could not run
-/// because the container has no Docker daemon, the sentence that says so, null otherwise.
+/// because the container has no Docker daemon, the sentence that says so with what passed, null otherwise; and the test
+/// projects' counts as data when the output holds <c>dotnet test</c>'s summaries, null otherwise.
 /// </summary>
 public sealed record SandboxResult(
     bool Ran,
@@ -24,7 +25,22 @@ public sealed record SandboxResult(
     double DurationSeconds,
     string Output,
     string? Note = null,
-    string? Unrunnable = null);
+    string? Unrunnable = null,
+    SandboxTestCounts? Tests = null);
+
+/// <summary>
+/// One test project's summary line of a <c>dotnet test</c> run: its name, its passed, failed and skipped tests, and whether
+/// its failures could not run for want of a Docker daemon: it failed, passed no test, and every failure of it the output
+/// kept names a missing daemon.
+/// </summary>
+public sealed record SandboxTestProject(string Name, long Passed, long Failed, long Skipped, bool Unrunnable);
+
+/// <summary>
+/// The test projects' summaries a run printed, read from the whole output as it arrived; <c>Partial</c> when more projects
+/// printed a summary than Scout counts, so the later ones are not among them; and the sentence that says what passed,
+/// what failed and where, and what could not run.
+/// </summary>
+public sealed record SandboxTestCounts(IReadOnlyList<SandboxTestProject> Projects, bool Partial, string Sentence);
 
 /// <summary>One version a repository declares: the file that declares it and the version it asks for, such as <c>.nvmrc</c> and <c>Node 20</c>.</summary>
 public sealed record SandboxDeclaredVersion(string Source, string Version);

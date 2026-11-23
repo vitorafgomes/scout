@@ -277,6 +277,10 @@ export {
   type ReviewFindings,
   type ReviewCheck,
   type ReviewCoverage,
+  type ReviewOffer,
+  type ReviewEarlier,
+  type ReviewEarlierFinding,
+  type EarlierOutcome,
   type ReviewTests,
   type LocalShortcut,
   type LocalSuspendShortcutRequest,
@@ -334,6 +338,13 @@ export {
   jobControls,
   type NotificationsMarkReadRequest,
   type NoticeRecordRequest,
+  type McpStartMode,
+  type McpListenerState,
+  type McpPendingStart,
+  type McpActivityRow,
+  type McpStatus,
+  type McpCreatedToken,
+  type McpAnswerStartRequest,
 } from './ipc-contract.js';
 
 export { compareVersions, pickDownload, type ReleaseAsset } from './version.js';
@@ -344,3 +355,20 @@ export { ISSUES_TARGET, issueLinks } from './issue-links.js';
 export { reviewQuestion } from './review-question.js';
 
 export { signerInWords } from './signer.js';
+
+export {
+  checkMark,
+  checksOutcome,
+  MAX_OFFER_REASON,
+  cardOfTurn,
+  latestReviewCard,
+  OLD_CARD_REASON,
+  offerOf,
+  parseReviewFindings,
+  toOffer,
+  testsLine,
+  verdictRequest,
+  verdictTestsLine,
+  type CheckMark,
+  type SelectedFinding,
+} from './review-findings.js';

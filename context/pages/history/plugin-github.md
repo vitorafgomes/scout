@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub - history"
-version: "1.6"
+version: "1.7"
 date: 2026-11-10
-updated: 2026-11-20
-changes: "v1.6 (2026-11-20): the review note, the review inputs and an unreadable answer. v1.5 (2026-11-19): the review start counts the files GitHub did not list. v1.4 (2026-11-17): a pull request whose diffs were left out is reviewed as a job. v1.3 (2026-11-15): no approval over a conflict; unrunnable in the answer and the block. v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-21
+changes: "v1.7 (2026-11-21): the file read by lines, the search at a reference, one verdict decision (ADRs 0070, 0071). v1.6 (2026-11-20): the review note, the review inputs and an unreadable answer. v1.5 (2026-11-19): the review start counts the files GitHub did not list. v1.4 (2026-11-17): a pull request whose diffs were left out is reviewed as a job. v1.3 (2026-11-15): no approval over a conflict; unrunnable in the answer and the block. v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the GitHub plugin and when."
@@ -18,6 +18,13 @@ reliability: high
 # Plugin.GitHub - history
 
 > Dated changes to [[pages/services/plugin-github]]; the service page states how it works now.
+
+
+## 2026-11-21 - The file read by lines, the search at a reference, one verdict decision
+
+- **What it was:** a file read answered its first 20,000 characters only; `search_code` searched the newest snapshot or the default branch; the gate decided the verdict on its own reading; the verdict function's texts named approval and the card's buttons.
+- **What it is:** a file is read by lines with a header that says how to read on; a search at a reference reads that snapshot and asks GitHub nothing; the verdict follows `ReviewOffers.Decide`, which does not offer approval on its own; with no test run kept the reason says no test ran here; the verdict function's texts say what it does today ([[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]], [[pages/decisions/0071-the-file-read-by-lines-and-the-search-at-a-reference]]).
+- **Tests:** new tests in `GitHubPluginReadsTests` and `GitHubActionsPluginVerdictTests`; changed on purpose: the expected file-read headers, the verdict reasons with no test run kept, and the stack record's log line, which now names the kind of failure only.
 
 ## 2026-11-20 - The review note, the review inputs and an unreadable answer
 

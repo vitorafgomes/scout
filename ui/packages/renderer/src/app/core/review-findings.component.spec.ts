@@ -19,6 +19,7 @@ import {
   type ReviewCheck,
   type ReviewFinding,
   type ReviewFindings,
+  type ReviewOffer,
 } from '@scout/shared';
 
 import { issueBody } from './review-findings';
@@ -63,6 +64,48 @@ const review: ReviewFindings = {
 };
 const URL = 'https://github.com/acme/shop/pull/5#pullrequestreview-77';
 const reviewed: ReviewFindings = { ...review, commit: 'ec7f951' };
+
+/** The offers a test makes the worker give, in the decision's own words. */
+const COMMENT_OFFER: ReviewOffer = {
+  verdict: 'comment',
+  reason: 'Comment, not approve: 2 optional suggestions were kept.',
+  commentInstead: false,
+};
+const REQUEST_OFFER: ReviewOffer = {
+  verdict: 'request_changes',
+  reason: 'Request changes: 1 finding needs fixing.',
+  commentInstead: true,
+};
+const APPROVE_OFFER: ReviewOffer = {
+  verdict: 'approve',
+  reason:
+    'Approve: every changed file was read, nothing needs fixing, the tests passed and every check passed.',
+  commentInstead: false,
+};
+const WAIT_OFFER: ReviewOffer = {
+  verdict: 'wait',
+  reason: 'Approve when the checks pass: 2 checks are still running.',
+  commentInstead: false,
+};
+const NONE_OFFER: ReviewOffer = {
+  verdict: 'none',
+  reason: 'The pull request changed since the review; review it again.',
+  commentInstead: false,
+};
+
+/** The asks before the edit is applied in the keystroke test: the first selection, the next, and the offered note. */
+const WHILE_TYPING = 3;
+
+/** Waits out the preview's quiet window, so the offer for the current selection has come back. */
+async function offered(fixture: Fixture): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  await settle(fixture);
+}
+
+/** The offer row's primary button. */
+function offerButton(fixture: Fixture): HTMLButtonElement | null {
+  return el(fixture, 'offer') as HTMLButtonElement | null;
+}
 const audit: ReviewFindings = {
   kind: 'audit',
   repository: 'acme/shop',
@@ -129,7 +172,8 @@ function auditBatch(id: string, findings: readonly ReviewFinding[]): LocalTurn {
 const QUEUED_IN_PORTUGUESE =
   'Coloquei as issues na fila; cada uma espera a sua aprovação no Scout Desktop.';
 
-function makeBridge() {
+function makeBridge(offerFor: (req: GitHubVerdictRequest) => ReviewOffer = () => COMMENT_OFFER) {
+  let offerNow = offerFor;
   let turns: readonly LocalTurn[] = [
     {
       id: 'f-1',
@@ -257,7 +301,12 @@ function makeBridge() {
         body: `${f.title}\n\n${f.why}\n\n**Fix:** ${f.fix}`,
       })),
       dropped: [] as string[],
+      offer: offerNow(req) as ReviewOffer | undefined,
     })),
+    /** Makes the worker answer every later preview with the offer `offerFor` gives. */
+    offering: (next: (req: GitHubVerdictRequest) => ReviewOffer) => {
+      offerNow = next;
+    },
     appOpenExternal: vi.fn(async (_req: { url: string }): Promise<void> => undefined),
   };
 }
@@ -447,7 +496,7 @@ describe('review findings cards', () => {
       expect(line).toBe(sentence);
       expect(el(fixture, 'all-dismissed')).toBeNull();
       expect(text(el(fixture, 'summary'))).toBe('0 of 1 selected · 1 undecided');
-      expect(el(fixture, 'post')).not.toBeNull();
+      expect(el(fixture, findings === audit ? 'post' : 'offer')).not.toBeNull();
     },
   );
 
@@ -466,7 +515,11 @@ describe('review findings cards', () => {
       'Dismissed: Move has no lock Undo',
     );
     expect(text(el(fixture, 'summary'))).toBe('2 of 2 selected');
-    expect(text(el(fixture, 'post'))).toBe('Post 2 on PR #5');
+    await offered(fixture);
+    expect(
+      text(offerButton(fixture)),
+      'the review card has one action, the one the worker offers',
+    ).toBe('Comment');
   });
 
   it('Edit shows what is wrong and the fix, Use this text keeps the edited text and marks Yes, and the comment is rebuilt from it', async () => {
@@ -486,6 +539,8 @@ describe('review findings cards', () => {
     await click(fixture, el(fixture, 'use-text', card(fixture, 1)));
     const closed = el(fixture, 'editor');
     await click(fixture, el(fixture, 'toggle-preview'));
+    await offered(fixture);
+    await offered(fixture);
     const preview = text(el(fixture, 'preview'));
     await click(fixture, el(fixture, 'edit', card(fixture, 1)));
 
@@ -503,22 +558,21 @@ describe('review findings cards', () => {
   it('a click on Post is the approval: it goes to the desktop once as the verdict comment with the review body, the chosen comments in order with the edited body and the reviewed commit, never through the model, and while it posts the footer gives way to the posting box with the target, so Post cannot be clicked again', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
-    const post = () => el(fixture, 'post') as HTMLButtonElement;
-    expect(post().disabled).toBe(true);
-    expect(text(post())).toBe('Post on PR #5');
+    const post = () => offerButton(fixture)!;
+    expect(el(fixture, 'post'), 'a review card has no Post of its own').toBeNull();
 
     await click(fixture, el(fixture, 'yes', card(fixture, 2)));
     await click(fixture, el(fixture, 'edit', card(fixture, 0)));
     await write(fixture, 'comment-text', card(fixture, 0), 'Edited: sum after the discounts.');
     await click(fixture, el(fixture, 'use-text', card(fixture, 0)));
+    await offered(fixture);
 
     expect(post().disabled).toBe(false);
-    expect(text(post())).toBe('Post 2 on PR #5');
-    expect(post().getAttribute('aria-label')).toBe('Post 2 on PR #5');
+    expect(text(post())).toBe('Comment');
     await click(fixture, post());
     const box = el(fixture, 'posting');
     const posting = {
-      post: el(fixture, 'post'),
+      post: el(fixture, 'offer'),
       decide: ['yes', 'no', 'edit', 'yes-all'].map((test) => all(fixture, test).length),
       target: text(el(fixture, 'target', box ?? undefined)),
       line: text(el(fixture, 'verdict-giving', box ?? undefined)),
@@ -531,7 +585,7 @@ describe('review findings cards', () => {
       post: null,
       decide: [0, 0, 0, 0],
       target: 'acme/shop · PR #5 · commit ec7f951',
-      line: 'Posting the review… 2 comments in one review on PR #5; your click on Post was the approval.',
+      line: 'Posting the review… 2 comments in one review on PR #5; your click was the approval.',
       bar: 'Posting the review',
     });
     expect(bridge.localAsk).not.toHaveBeenCalled();
@@ -550,8 +604,9 @@ describe('review findings cards', () => {
     const fixture = await render(bridge, reviewed);
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
     await click(fixture, el(fixture, 'no', card(fixture, 1)));
+    await offered(fixture);
 
-    await click(fixture, el(fixture, 'post'));
+    await click(fixture, offerButton(fixture));
     bridge.verdict({
       actionId: 'action-1',
       state: 'failed',
@@ -564,11 +619,11 @@ describe('review findings cards', () => {
     expect(text(el(fixture, 'verdict-failed'))).toBe(
       'GitHub is currently unavailable. Try again later.',
     );
-    expect((el(fixture, 'post') as HTMLButtonElement).disabled).toBe(false);
+    expect(offerButton(fixture)!.disabled).toBe(false);
     expect(all(fixture, 'yes')).toHaveLength(2);
     expect(all(fixture, 'undo')).toHaveLength(1);
 
-    await click(fixture, el(fixture, 'post'));
+    await click(fixture, offerButton(fixture));
     bridge.verdict({ actionId: 'action-2', state: 'given', url: URL, reason: null });
     await settle(fixture);
 
@@ -580,11 +635,9 @@ describe('review findings cards', () => {
     );
     expect(text(posted.querySelector('a'))).toBe(URL);
     expect(
-      ['post', 'approve', 'request-changes'].map(
-        (test) => !(el(fixture, test) as HTMLButtonElement).disabled,
-      ),
-      'a posted review leaves Post and the Verdict group offered at the same commit',
-    ).toEqual([true, true, true]);
+      offerButton(fixture)?.disabled,
+      'a posted review leaves the offered action at the same commit',
+    ).toBe(false);
     expect(card(fixture, 1).classList.contains('no')).toBe(true);
     expect(text(el(fixture, 'dismissed', card(fixture, 1)))).toBe(
       'Dismissed: Move has no lock Undo',
@@ -613,7 +666,7 @@ describe('review findings cards', () => {
     bridge.pushStatus({ ...elsewhere, number: 6 });
     bridge.pushStatus({ ...elsewhere, commit: '0000000' });
     await settle(fixture);
-    const stillOpen = el(fixture, 'post') !== null && el(fixture, 'posted') === null;
+    const stillOpen = el(fixture, 'offer') !== null && el(fixture, 'posted') === null;
 
     bridge.pushStatus(elsewhere);
     await settle(fixture);
@@ -627,8 +680,8 @@ describe('review findings cards', () => {
     );
     expect(text(el(fixture, 'posted')?.querySelector('a') ?? null)).toBe(URL);
     expect(
-      el(fixture, 'post'),
-      'Post stays offered after a review posted elsewhere',
+      el(fixture, 'offer'),
+      'the offered action stays after a review posted elsewhere',
     ).not.toBeNull();
     expect(bridge.githubGiveVerdict).not.toHaveBeenCalled();
   });
@@ -666,15 +719,15 @@ describe('review findings cards', () => {
     ],
     ['a review that names no commit', review, 'acme/shop · PR #5', true],
   ] as const)(
-    'the card says what a click on Post, Approve or Request changes writes to, beside those buttons: %s',
+    'the card says what a click on its offered action writes to: %s',
     async (_label, findings, target, postOff) => {
       const fixture = await render(makeBridge(), findings);
       await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+      await offered(fixture);
 
       const line = el(fixture, 'target');
       expect(text(line)).toBe(target);
-      expect(line?.parentElement?.contains(el(fixture, 'post'))).toBe(true);
-      expect((el(fixture, 'post') as HTMLButtonElement).disabled).toBe(postOff);
+      expect(offerButton(fixture)?.disabled).toBe(postOff);
     },
   );
 
@@ -703,7 +756,7 @@ describe('review findings cards', () => {
     await settle(fixture);
 
     expect(el(fixture, 'posted')).toBeNull();
-    expect(el(fixture, 'post')).not.toBeNull();
+    expect(el(fixture, 'offer')).not.toBeNull();
   });
 
   it('a post main refuses shows the refusal and keeps the buttons; without a reviewed commit Post is off with the reason', async () => {
@@ -715,16 +768,17 @@ describe('review findings cards', () => {
     );
     const fixture = await render(bridge, reviewed);
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await offered(fixture);
 
-    await click(fixture, el(fixture, 'post'));
+    await click(fixture, offerButton(fixture));
     const refused = {
       line: text(el(fixture, 'verdict-failed')),
-      post: (el(fixture, 'post') as HTMLButtonElement).disabled,
+      post: offerButton(fixture)!.disabled,
       posted: el(fixture, 'posted'),
     };
     fixture.componentRef.setInput('review', review);
     await settle(fixture);
-    const post = el(fixture, 'post') as HTMLButtonElement;
+    const post = offerButton(fixture)!;
     await fixture.componentInstance.post();
 
     expect(refused).toEqual({
@@ -768,25 +822,25 @@ describe('review findings cards', () => {
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
     await click(fixture, el(fixture, 'yes', card(fixture, 2)));
     await click(fixture, toggle);
+    await offered(fixture);
+    await offered(fixture);
 
     expect(text(el(fixture, 'toggle-preview'))).toBe('Hide the preview');
     expect(el(fixture, 'toggle-preview')!.getAttribute('aria-expanded')).toBe('true');
     expect(
-      bridge.githubPreviewVerdict.mock.calls.map(([request]) => request),
-      'the preview asks the worker for the verdict the card offers first, with the chosen findings',
-    ).toEqual([
-      {
-        repository: 'acme/shop',
-        number: 5,
-        verdict: 'approve',
-        findings: [total, naming],
-        commit: 'ec7f951',
-        testsLine: '',
-      },
-    ]);
+      bridge.githubPreviewVerdict.mock.calls.at(-1)?.[0],
+      'the open preview shows the note of the verdict the worker offers for the chosen findings',
+    ).toEqual({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'comment',
+      findings: [total, naming],
+      commit: 'ec7f951',
+      testsLine: '',
+    });
     const preview = el(fixture, 'preview')!;
     expect(text(el(fixture, 'preview-for', preview))).toBe(
-      'Preview of the note for Approve, as Scout would post it on PR #5',
+      'Preview of the note for Comment, as Scout would post it on PR #5',
     );
     expect(text(el(fixture, 'preview-note', preview))).toBe(
       `Scout review ${total.title}: ${total.why} ${total.fix} ${naming.title}: ${naming.why} ${naming.fix}`.replace(
@@ -1329,6 +1383,7 @@ describe('review findings cards', () => {
       '122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.';
     const bridge = makeBridge();
     const fixture = await render(bridge, {
+      offer: APPROVE_OFFER,
       ...reviewed,
       checks: PASSED_CHECKS,
       tests: {
@@ -1340,11 +1395,8 @@ describe('review findings cards', () => {
         unrunnable,
       },
     });
-    const offered = {
-      approve: all(fixture, 'approve').length,
-      approveWhenGreen: all(fixture, 'approve-when-green').length,
-      checkLine: el(fixture, 'check-line'),
-    };
+    await click(fixture, el(fixture, 'yes-all'));
+    const shown = { offer: text(offerButton(fixture)), checkLine: el(fixture, 'check-line') };
     const run = el(fixture, 'tests-run');
     const card = {
       chip: text(run),
@@ -1354,12 +1406,12 @@ describe('review findings cards', () => {
       summary: text(el(fixture, 'tests-output')?.querySelector('summary') ?? null),
       output: el(fixture, 'tests-output')?.querySelector('pre')?.textContent,
     };
-    await click(fixture, el(fixture, 'approve'));
+    await click(fixture, offerButton(fixture));
 
-    expect(
-      offered,
-      'an unrunnable run does not block the approval: Approve is offered when every check passed',
-    ).toEqual({ approve: 1, approveWhenGreen: 0, checkLine: null });
+    expect(shown, 'the card shows the Approve the worker offers for it').toEqual({
+      offer: 'Approve',
+      checkLine: null,
+    });
     expect(
       bridge.githubGiveVerdict.mock.calls.map(([request]) => request.testsLine),
       'the approval posts that the tests could not run, with the sentence',
@@ -1377,7 +1429,7 @@ describe('review findings cards', () => {
     });
   });
 
-  it('as the artboard draws them, Yes to all and Post share a row, and Approve and Request changes sit in a Verdict group under it on a review and never on an audit; Approve is hidden when the owner wrote the pull request', async () => {
+  it('as the artboard draws them, a review has Yes to all in its row and the one offered action in the Verdict group, an audit its Open button and no Verdict group', async () => {
     const buttons = (fixture: Fixture) => {
       const root = fixture.nativeElement as HTMLElement;
       const verdict = root.querySelector('.footer [role="group"][aria-label="Verdict"]');
@@ -1388,34 +1440,22 @@ describe('review findings cards', () => {
         verdict:
           verdict === null
             ? null
-            : [
-                text(verdict.querySelector('.verdict-label')),
-                ...Array.from(verdict.querySelectorAll('button')).map((button) =>
-                  button.getAttribute('data-test'),
-                ),
-              ],
+            : Array.from(verdict.querySelectorAll('button')).map((button) =>
+                button.getAttribute('data-test'),
+              ),
       };
     };
 
-    const onReview = buttons(await render(makeBridge()));
-    TestBed.resetTestingModule();
-    const own = buttons(await render(makeBridge(), { ...review, selfAuthored: true }));
+    const onReview = buttons(await render(makeBridge(), { ...review, offer: REQUEST_OFFER }));
     TestBed.resetTestingModule();
     const onAudit = buttons(await render(makeBridge(), audit));
 
-    expect(onReview).toEqual({
-      row: ['yes-all', 'post'],
-      verdict: ['Verdict on the reviewed commit', 'approve', 'request-changes'],
-    });
-    expect(own).toEqual({
-      row: ['yes-all', 'post'],
-      verdict: ['Verdict on the reviewed commit', 'request-changes'],
-    });
+    expect(onReview).toEqual({ row: ['yes-all'], verdict: ['offer', 'comment-instead'] });
     expect(onAudit).toEqual({ row: ['yes-all', 'post'], verdict: null });
   });
 
   it('a click on Approve gives the verdict through the desktop as one action: the review body, the chosen findings as comments, the reviewed commit and the tests line; nothing goes before a click', async () => {
-    const bridge = makeBridge();
+    const bridge = makeBridge(() => APPROVE_OFFER);
     const fixture = await render(bridge, {
       ...reviewed,
       tests: { ran: false, reason: 'No Docker.' },
@@ -1423,10 +1463,11 @@ describe('review findings cards', () => {
     await click(fixture, el(fixture, 'yes', card(fixture, 1)));
     await click(fixture, el(fixture, 'no', card(fixture, 0)));
     await click(fixture, el(fixture, 'yes-all'));
+    await offered(fixture);
     await click(fixture, el(fixture, 'toggle-preview'));
     const beforeClick = bridge.githubGiveVerdict.mock.calls.length;
 
-    await click(fixture, el(fixture, 'approve'));
+    await click(fixture, offerButton(fixture));
 
     expect(beforeClick).toBe(0);
     expect(bridge.localAsk).not.toHaveBeenCalled();
@@ -1443,14 +1484,13 @@ describe('review findings cards', () => {
 
   it('while the action is queued or running the Verdict group is gone and Post is off, with Giving the verdict…, a second click sends nothing; once given the card says Approved on PR #5 with the link and still offers its buttons', async () => {
     const bridge = makeBridge();
-    const fixture = await render(bridge, reviewed);
-    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
-    await click(fixture, el(fixture, 'approve'));
+    const fixture = await render(bridge, { ...reviewed, offer: APPROVE_OFFER });
+    await click(fixture, el(fixture, 'yes-all'));
+    await click(fixture, offerButton(fixture));
     const off = () => ({
       line: text(el(fixture, 'verdict-giving')),
       verdictGroup: (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Verdict"]'),
-      verdictButtons: all(fixture, 'approve').length + all(fixture, 'request-changes').length,
-      post: (el(fixture, 'post') as HTMLButtonElement).disabled,
+      verdictButtons: all(fixture, 'offer').length,
     });
     const queued = off();
     fixture.componentInstance.giveVerdict('request_changes');
@@ -1466,7 +1506,6 @@ describe('review findings cards', () => {
       line: 'Giving the verdict…',
       verdictGroup: null,
       verdictButtons: 0,
-      post: true,
     });
     expect(running).toEqual(queued);
     expect(bridge.githubGiveVerdict).toHaveBeenCalledTimes(1);
@@ -1475,7 +1514,7 @@ describe('review findings cards', () => {
       link: text(given?.querySelector('a') ?? null),
       posted: el(fixture, 'posted'),
       giving: el(fixture, 'verdict-giving'),
-      buttons: ['approve', 'request-changes', 'post', 'yes', 'no', 'edit', 'toggle-preview'].map(
+      buttons: ['offer', 'yes', 'no', 'edit', 'toggle-preview'].map(
         (test) => all(fixture, test).length,
       ),
     }).toEqual({
@@ -1483,14 +1522,15 @@ describe('review findings cards', () => {
       link: 'See the review on GitHub',
       posted: null,
       giving: null,
-      buttons: [1, 1, 1, 3, 3, 3, 1],
+      buttons: [1, 3, 3, 3, 1],
     });
   });
 
   it('a failed action shows its reason and brings the buttons back, and the next click is a new action; Request changes given reads Changes requested on PR #5, never Review posted', async () => {
     const bridge = makeBridge();
-    const fixture = await render(bridge, reviewed);
-    await click(fixture, el(fixture, 'request-changes'));
+    const fixture = await render(bridge, { ...reviewed, offer: REQUEST_OFFER });
+    await click(fixture, el(fixture, 'yes-all'));
+    await click(fixture, offerButton(fixture));
     bridge.verdict({
       actionId: 'action-1',
       state: 'failed',
@@ -1500,12 +1540,12 @@ describe('review findings cards', () => {
     await settle(fixture);
     const failed = {
       reason: text(el(fixture, 'verdict-failed')),
-      enabled: ['approve', 'request-changes'].map(
+      enabled: ['offer', 'comment-instead'].map(
         (test) => !(el(fixture, test) as HTMLButtonElement).disabled,
       ),
     };
 
-    await click(fixture, el(fixture, 'request-changes'));
+    await click(fixture, offerButton(fixture));
     bridge.verdict({ actionId: 'action-2', state: 'given', url: URL, reason: null });
     await settle(fixture);
 
@@ -1525,33 +1565,33 @@ describe('review findings cards', () => {
     bridge.githubGiveVerdict.mockRejectedValueOnce(
       new Error('[scout:github/verdict-refused] The control plane is not running.'),
     );
-    const fixture = await render(bridge, reviewed);
-    await click(fixture, el(fixture, 'approve'));
+    const fixture = await render(bridge, { ...reviewed, offer: APPROVE_OFFER });
+    await click(fixture, el(fixture, 'yes-all'));
+    await click(fixture, offerButton(fixture));
     const refused = {
       reason: text(el(fixture, 'verdict-failed')),
-      enabled: !(el(fixture, 'approve') as HTMLButtonElement).disabled,
+      enabled: !offerButton(fixture)!.disabled,
     };
     TestBed.resetTestingModule();
-    const unpinned = await render(makeBridge(), review);
-    await click(unpinned, el(unpinned, 'approve'));
+    const unpinned = await render(makeBridge(), { ...review, offer: REQUEST_OFFER });
+    await click(unpinned, offerButton(unpinned));
 
     expect(refused).toEqual({ reason: 'The control plane is not running.', enabled: true });
     expect(
-      ['approve', 'request-changes'].map(
+      ['offer', 'comment-instead'].map(
         (test) => (el(unpinned, test) as HTMLButtonElement).disabled,
       ),
     ).toEqual([true, true]);
-    expect(el(unpinned, 'approve')?.title).toBe(
-      'The review names no commit to pin the verdict to.',
-    );
+    expect(offerButton(unpinned)?.title).toBe('The review names no commit to pin the verdict to.');
   });
 
-  it('when every finding is dismissed a review still offers Approve and Request changes beside the nothing-to-post line', async () => {
-    const bridge = makeBridge();
+  it('when every finding is dismissed a review shows what the worker offers for no finding, beside the nothing-to-post line', async () => {
+    const bridge = makeBridge(() => APPROVE_OFFER);
     const fixture = await render(bridge, reviewed);
     for (const index of [0, 1, 2]) await click(fixture, el(fixture, 'no', card(fixture, index)));
+    await offered(fixture);
 
-    await click(fixture, el(fixture, 'approve'));
+    await click(fixture, offerButton(fixture));
 
     expect(text(el(fixture, 'all-dismissed'))).toBe(
       'Nothing to post; every finding was dismissed.',
@@ -1585,7 +1625,7 @@ describe('review findings cards', () => {
     ]);
   });
 
-  it('decisions made in the other window show here: a No there shows the card dismissed, Yes to all there marks every undecided card, an edited text there is the comment Post sends here', async () => {
+  it('decisions made in the other window show here: a No there shows the card dismissed, Yes to all there marks every undecided card, an edited text there is the comment the offered action sends here', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
     const findingsTurn = (await bridge.localGetTurns())[0]!;
@@ -1606,7 +1646,8 @@ describe('review findings cards', () => {
       naming: { pick: 'yes', dismissed: false },
     });
     const summary = text(el(fixture, 'summary'));
-    await click(fixture, el(fixture, 'post'));
+    await offered(fixture);
+    await click(fixture, offerButton(fixture));
 
     expect(dismissed).toEqual(['Dismissed: Move has no lock Undo']);
     expect(summary).toBe('2 of 2 selected');
@@ -1750,8 +1791,8 @@ describe('review findings cards', () => {
     tests: { ran: true, command: 'dotnet test', exitCode: 0, durationSeconds: 42 },
   };
 
-  it('a review with no findings shows the tests chips, the target line and No findings with what was read; no finding card, Yes to all, Post, preview or Request changes', async () => {
-    const fixture = await render(makeBridge(), clean);
+  it('a review with no findings shows the tests chips, the target line and No findings with what was read, and only the action the worker offers', async () => {
+    const fixture = await render(makeBridge(), { ...clean, offer: APPROVE_OFFER });
 
     expect({
       chips: all(fixture, 'check').map((chip) => text(chip)),
@@ -1759,7 +1800,7 @@ describe('review findings cards', () => {
       target: text(el(fixture, 'target')),
       clean: text(el(fixture, 'clean')),
       read: text(el(fixture, 'clean-read')),
-      approve: all(fixture, 'approve').map((b) => (b as HTMLButtonElement).disabled),
+      offer: all(fixture, 'offer').map((b) => [text(b), (b as HTMLButtonElement).disabled]),
       absent: [
         'finding',
         'summary',
@@ -1768,7 +1809,7 @@ describe('review findings cards', () => {
         'post',
         'toggle-preview',
         'preview',
-        'request-changes',
+        'comment-instead',
       ].map((test) => all(fixture, test).length),
     }).toEqual({
       chips: ['build passed'],
@@ -1776,17 +1817,17 @@ describe('review findings cards', () => {
       target: 'acme/shop · PR #5 · commit ec7f951',
       clean: 'No findings.',
       read: 'What Scout says it read: 3 of 3 files read',
-      approve: [false],
+      offer: [['Approve', false]],
       absent: [0, 0, 0, 0, 0, 0, 0, 0],
     });
   });
 
   it('Approve on a clean review gives one verdict: approve, comments [], the reviewed commit, the tests line; nothing before the click', async () => {
     const bridge = makeBridge();
-    const fixture = await render(bridge, clean);
+    const fixture = await render(bridge, { ...clean, offer: APPROVE_OFFER });
     const beforeClick = bridge.githubGiveVerdict.mock.calls.length;
 
-    await click(fixture, el(fixture, 'approve'));
+    await click(fixture, offerButton(fixture));
     fixture.componentInstance.giveVerdict('approve');
     await settle(fixture);
 
@@ -1802,19 +1843,25 @@ describe('review findings cards', () => {
     });
   });
 
-  it('a clean review the owner wrote offers no verdict button', async () => {
-    const fixture = await render(makeBridge(), { ...clean, selfAuthored: true });
+  it('a clean review the owner wrote shows the Comment the worker offers and why, never Approve', async () => {
+    const own: ReviewOffer = {
+      verdict: 'comment',
+      reason:
+        'Comment, not approve: GitHub does not let the author approve their own pull request.',
+      commentInstead: false,
+    };
+    const fixture = await render(makeBridge(), { ...clean, selfAuthored: true, offer: own });
 
     expect({
       clean: text(el(fixture, 'clean')),
       read: text(el(fixture, 'clean-read')),
-      verdictGroup: (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Verdict"]'),
-      buttons: ['approve', 'request-changes', 'post'].map((test) => all(fixture, test).length),
+      offer: all(fixture, 'offer').map(text),
+      reason: text(el(fixture, 'offer-reason')),
     }).toEqual({
       clean: 'No findings.',
       read: 'What Scout says it read: 3 of 3 files read',
-      verdictGroup: null,
-      buttons: [0, 0, 0],
+      offer: ['Comment'],
+      reason: own.reason,
     });
   });
 
@@ -1832,8 +1879,8 @@ describe('review findings cards', () => {
 
   it('a clean review approved reads Approved on PR #5 with the link, and still offers Approve', async () => {
     const bridge = makeBridge();
-    const fixture = await render(bridge, clean);
-    await click(fixture, el(fixture, 'approve'));
+    const fixture = await render(bridge, { ...clean, offer: APPROVE_OFFER });
+    await click(fixture, offerButton(fixture));
     bridge.verdict({ actionId: 'action-1', state: 'given', url: URL, reason: null });
     await settle(fixture);
     const given = el(fixture, 'verdict-given');
@@ -1841,7 +1888,7 @@ describe('review findings cards', () => {
     expect({
       title: text(given?.querySelector('strong') ?? null),
       link: text(given?.querySelector('a') ?? null),
-      buttons: ['approve', 'request-changes', 'post', 'yes-all'].map(
+      buttons: ['offer', 'comment-instead', 'post', 'yes-all'].map(
         (test) => all(fixture, test).length,
       ),
     }).toEqual({
@@ -1898,12 +1945,18 @@ interface CardDrawing {
   readonly gave: number;
 }
 
+/**
+ * What the card draws in each state of the approval that waits for the checks. Its one button is the offer the review
+ * is given (the drawing's approve, approveWhenGreen or requestChanges), so these rows test the card's side; which offer
+ * the checks call for is the worker's rule, in tests/Scout.Review.Tests/ReviewOfferTests.cs. A review card has no Post.
+ */
 const PENDING_DRAWING: CardDrawing = {
   approve: 0,
   approveWhenGreen: 1,
-  requestChanges: 1,
-  post: 1,
-  checkLine: '2 checks are still running. Scout approves only when every check passed.',
+  requestChanges: 0,
+  post: 0,
+  checkLine:
+    '2 checks are still running. Scout does not approve on its own; a person approves on GitHub.',
   waiting: null,
   waitingRole: null,
   cancel: 0,
@@ -1922,13 +1975,14 @@ const WAITING_DRAWING: CardDrawing = {
   approveWhenGreen: 0,
   requestChanges: 0,
   checkLine: null,
-  waiting: 'Waiting for the checks: 2 still running. Scout approves when they pass.',
+  waiting: 'Waiting for the checks: 2 still running. Your approval is sent when they pass.',
   waitingRole: 'status',
   cancel: 1,
 };
 const NOT_APPROVED: CardDrawing = {
   ...PENDING_DRAWING,
   approveWhenGreen: 0,
+  requestChanges: 1,
   checkLine: null,
   endedRole: 'alert',
 };
@@ -1945,7 +1999,21 @@ async function approveWhenGreen(
   bridge: ReturnType<typeof makeBridge>,
   fixture: Fixture,
 ): Promise<void> {
-  await click(fixture, el(fixture, 'approve-when-green'));
+  await click(fixture, offerButton(fixture));
+}
+
+/** The offer a row of the table gives the card: the one its drawing shows, and the wait while the approval waits. */
+function offerOfDrawing(drawing: CardDrawing): ReviewOffer {
+  return drawing.approve > 0
+    ? APPROVE_OFFER
+    : drawing.requestChanges > 0
+      ? REQUEST_OFFER
+      : WAIT_OFFER;
+}
+
+/** How many of the card's offered buttons read `label`. */
+function offeredAs(fixture: Fixture, label: string): number {
+  return all(fixture, 'offer').filter((b) => text(b) === label).length;
 }
 
 async function pushWaiting(
@@ -1977,7 +2045,9 @@ const CARD_STATES: readonly CardStateRow[] = [
     drawing: {
       ...PENDING_DRAWING,
       approveWhenGreen: 0,
-      checkLine: 'lint did not pass. Scout approves only when every check passed.',
+      requestChanges: 1,
+      checkLine:
+        'lint did not pass. Scout does not approve on its own; a person approves on GitHub.',
     },
   },
   {
@@ -1991,7 +2061,8 @@ const CARD_STATES: readonly CardStateRow[] = [
     act: async () => undefined,
     drawing: {
       ...PENDING_DRAWING,
-      checkLine: '1 check is still running. Scout approves only when every check passed.',
+      checkLine:
+        '1 check is still running. Scout does not approve on its own; a person approves on GitHub.',
     },
   },
   {
@@ -2004,7 +2075,7 @@ const CARD_STATES: readonly CardStateRow[] = [
     act: (bridge, fixture) => pushWaiting(fixture, bridge, waitingStatus('waiting', null, 1)),
     drawing: {
       ...WAITING_DRAWING,
-      waiting: 'Waiting for the checks: 1 still running. Scout approves when they pass.',
+      waiting: 'Waiting for the checks: 1 still running. Your approval is sent when they pass.',
     },
   },
   {
@@ -2053,6 +2124,7 @@ const CARD_STATES: readonly CardStateRow[] = [
     drawing: {
       ...NOT_APPROVED,
       approveWhenGreen: 1,
+      requestChanges: 0,
       ended: 'Not approved: the checks did not finish within 2 hours.',
     },
   },
@@ -2188,16 +2260,21 @@ describe('review findings cards: approve when the checks pass, as the artboard d
   it.each(CARD_STATES)('$name', async ({ checks = PENDING_CHECKS, before, act, drawing }) => {
     const bridge = makeBridge();
     before?.(bridge);
-    const fixture = await render(bridge, checks === 'none' ? reviewed : { ...reviewed, checks });
+    const offer = offerOfDrawing(drawing);
+    const fixture = await render(
+      bridge,
+      checks === 'none' ? { ...reviewed, offer } : { ...reviewed, checks, offer },
+    );
+    await click(fixture, el(fixture, 'yes-all'));
     await act(bridge, fixture);
     const role = (test: string) => el(fixture, test)?.getAttribute('role') ?? null;
     const line = (test: string) => text(el(fixture, test)) || null;
 
     expect(
       {
-        approve: all(fixture, 'approve').length,
-        approveWhenGreen: all(fixture, 'approve-when-green').length,
-        requestChanges: all(fixture, 'request-changes').length,
+        approve: offeredAs(fixture, 'Approve'),
+        approveWhenGreen: offeredAs(fixture, 'Approve when the checks pass'),
+        requestChanges: offeredAs(fixture, 'Request changes'),
         post: all(fixture, 'post').length,
         checkLine: line('check-line'),
         waiting: line('waiting-line'),
@@ -2218,12 +2295,13 @@ describe('review findings cards: approve when the checks pass, as the artboard d
   });
 
   it('the click on Approve when the checks pass gives main exactly the approval the owner clicked: approve, pinned to the reviewed commit, the review body, the chosen findings as comments and the tests line; nothing before the click', async () => {
-    const bridge = makeBridge();
+    const bridge = makeBridge(() => WAIT_OFFER);
     const fixture = await render(bridge, { ...reviewed, checks: PENDING_CHECKS });
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await offered(fixture);
     const before = bridge.githubApproveWhenChecksPass.mock.calls.length;
 
-    await click(fixture, el(fixture, 'approve-when-green'));
+    await click(fixture, offerButton(fixture));
 
     expect(before, 'nothing is asked before the click').toBe(0);
     expect(
@@ -2323,11 +2401,12 @@ describe('review findings cards: the look the QuickAsk artboard draws', () => {
   });
 
   it('a button keeps the 32 px look as a minimum, so a label that wraps grows the button instead of being cut', async () => {
-    const fixture = await render(makeBridge(), reviewed);
+    const fixture = await render(makeBridge(), { ...reviewed, offer: REQUEST_OFFER });
+    await click(fixture, el(fixture, 'yes-all'));
     const buttons = [
       el(fixture, 'edit', card(fixture, 0)),
-      el(fixture, 'post'),
-      el(fixture, 'approve'),
+      el(fixture, 'yes-all'),
+      el(fixture, 'offer'),
       el(fixture, 'toggle-preview'),
     ];
 
@@ -2350,7 +2429,8 @@ describe('review findings cards: the look the QuickAsk artboard draws', () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
-    await click(fixture, el(fixture, 'approve'));
+    fixture.componentInstance.giveVerdict('approve');
+    await settle(fixture);
     const giving = el(fixture, 'verdict-giving');
     const inFooter = giving?.closest('.footer') !== null;
     const dot = giving?.querySelector('.dot') ?? null;
@@ -2400,7 +2480,8 @@ describe('review findings cards: a second verdict at the same commit and the not
   it('the given line names the verdict the control plane reports, its commit, its signer and the review on GitHub', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
-    await click(fixture, el(fixture, 'request-changes'));
+    fixture.componentInstance.giveVerdict('request_changes');
+    await settle(fixture);
     given(bridge, 'action-1', 'approve');
     await settle(fixture);
     const box = el(fixture, 'verdict-given')!;
@@ -2427,7 +2508,8 @@ describe('review findings cards: a second verdict at the same commit and the not
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
-    await click(fixture, el(fixture, 'request-changes'));
+    fixture.componentInstance.giveVerdict('request_changes');
+    await settle(fixture);
     given(bridge, 'action-1', 'request_changes');
     await settle(fixture);
     const box = el(fixture, 'verdict-given')!;
@@ -2440,18 +2522,18 @@ describe('review findings cards: a second verdict at the same commit and the not
       box.compareDocumentPosition(offer) & Node.DOCUMENT_POSITION_FOLLOWING,
       'the offer sits under the given line',
     ).toBeTruthy();
+    await offered(fixture);
     expect(
-      ['approve', 'request-changes', 'post'].map(
-        (test) => !(el(fixture, test) as HTMLButtonElement).disabled,
-      ),
-      'Approve, Request changes and Post stay offered after a verdict was given',
-    ).toEqual([true, true, true]);
+      offerButton(fixture)?.disabled,
+      'the offered action stays after a verdict was given',
+    ).toBe(false);
     expect(
       box.classList.contains('changes'),
       'a request for changes is drawn on the warn tone',
     ).toBe(true);
 
-    await click(fixture, el(fixture, 'approve'));
+    fixture.componentInstance.giveVerdict('approve');
+    await settle(fixture);
     expect(
       bridge.githubGiveVerdict,
       'a click after a given verdict sends the new one',
@@ -2461,12 +2543,14 @@ describe('review findings cards: a second verdict at the same commit and the not
   it('the same verdict asked again sends nothing new and says so in one line', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
-    await click(fixture, el(fixture, 'approve'));
+    fixture.componentInstance.giveVerdict('approve');
+    await settle(fixture);
     given(bridge, 'action-1', 'approve');
     await settle(fixture);
     bridge.githubGiveVerdict.mockResolvedValueOnce({ actionId: 'action-1' });
 
-    await click(fixture, el(fixture, 'approve'));
+    fixture.componentInstance.giveVerdict('approve');
+    await settle(fixture);
 
     expect(
       text(el(fixture, 'nothing-new')),
@@ -2484,10 +2568,12 @@ describe('review findings cards: a second verdict at the same commit and the not
   it('a second verdict given at the same commit is the one the given line names, after the earlier one', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge, reviewed);
-    await click(fixture, el(fixture, 'request-changes'));
+    fixture.componentInstance.giveVerdict('request_changes');
+    await settle(fixture);
     given(bridge, 'action-1', 'request_changes');
     await settle(fixture);
-    await click(fixture, el(fixture, 'approve'));
+    fixture.componentInstance.giveVerdict('approve');
+    await settle(fixture);
     given(bridge, 'action-2', 'approve');
     await settle(fixture);
     const box = el(fixture, 'verdict-given')!;
@@ -2523,11 +2609,16 @@ describe('review findings cards: a second verdict at the same commit and the not
     const whileTyping = bridge.githubPreviewVerdict.mock.calls.length;
     await click(fixture, el(fixture, 'use-text', card(fixture, 1)));
     await quiet();
+    await quiet();
 
-    expect(whileTyping, 'one ask on opening and one for the new selection, none while typing').toBe(
-      2,
-    );
-    expect(bridge.githubPreviewVerdict).toHaveBeenCalledTimes(3);
+    expect(
+      whileTyping,
+      'one ask for the first selection, one for the next, then the offered note, none while typing',
+    ).toBe(WHILE_TYPING);
+    expect(
+      bridge.githubPreviewVerdict.mock.calls.length,
+      'the applied edit is asked about once with request changes and once for the offered note',
+    ).toBe(WHILE_TYPING + 2);
     expect(
       text(el(fixture, 'preview-note')),
       'the applied edit reaches the composed note',
@@ -2547,16 +2638,17 @@ describe('review findings cards: a second verdict at the same commit and the not
     expect(bridge.githubPreviewVerdict.mock.calls[0]![0].verdict).toBe('request_changes');
   });
 
-  it('a preview that fails shows why, and the verdict can still be given', async () => {
+  it('a preview that fails shows why, and the card offers nothing it was not told', async () => {
     const bridge = makeBridge();
+    const fixture = await render(bridge, reviewed);
     bridge.githubPreviewVerdict.mockRejectedValueOnce(
       new Error(
         '[scout:github/verdict-refused] Scout approves only when every check of the commit passed: 1 still running (build).',
       ),
     );
-    const fixture = await render(bridge, reviewed);
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
     await click(fixture, el(fixture, 'toggle-preview'));
+    await offered(fixture);
     const failed = el(fixture, 'preview-failed');
 
     expect(text(failed), 'a preview that fails says why in one line').toBe(
@@ -2565,9 +2657,9 @@ describe('review findings cards: a second verdict at the same commit and the not
     expect(failed!.getAttribute('role')).toBe('alert');
     expect(el(fixture, 'preview-note')).toBeNull();
     expect(
-      (el(fixture, 'approve') as HTMLButtonElement).disabled,
-      'the verdict stays enabled: the send composes and checks again',
-    ).toBe(false);
+      text(el(fixture, 'offer-reason')),
+      'a selection whose offer could not be asked says why, and no button stands for an offer nobody gave',
+    ).toBe('Scout approves only when every check of the commit passed: 1 still running (build).');
   });
 
   it('markup in a finding never reaches the preview as markup', async () => {
@@ -2579,6 +2671,7 @@ describe('review findings cards: a second verdict at the same commit and the not
     const fixture = await render(bridge, { ...reviewed, findings: [hostile] });
     await click(fixture, el(fixture, 'yes', card(fixture, 0)));
     await click(fixture, el(fixture, 'toggle-preview'));
+    await offered(fixture);
     const preview = el(fixture, 'preview')!;
 
     expect(
@@ -2643,7 +2736,12 @@ describe('review findings store: a burst of preview changes', () => {
       commit: 'ec7f951',
       testsLine: '',
     };
-    const note = (body: string) => ({ body, comments: [], dropped: [] as string[] });
+    const note = (body: string) => ({
+      body,
+      comments: [],
+      dropped: [] as string[],
+      offer: undefined as ReviewOffer | undefined,
+    });
     const answers: ((value: ReturnType<typeof note>) => void)[] = [];
     bridge.githubPreviewVerdict.mockImplementation(
       () => new Promise((resolve) => answers.push(resolve)),
@@ -2716,5 +2814,236 @@ describe('review findings store: a burst of preview changes', () => {
       bridge.githubPreviewVerdict.mock.calls.map(([sent]) => sent.findings[0]!.title),
       'a change after the window makes another request',
     ).toEqual(['Selection 0', 'Selection 5', 'Selection 6']);
+  });
+});
+
+describe('review findings cards: the one action the worker offers', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  const everyFinding = async (fixture: Fixture) => {
+    await click(fixture, el(fixture, 'yes-all'));
+    await settle(fixture);
+  };
+
+  it.each([
+    [APPROVE_OFFER, 'Approve'],
+    [REQUEST_OFFER, 'Request changes'],
+    [COMMENT_OFFER, 'Comment'],
+    [WAIT_OFFER, 'Approve when the checks pass'],
+  ] as const)('the offer %o shows its one button and its reason', async (offer, label) => {
+    const fixture = await render(makeBridge(), { ...reviewed, offer });
+    await everyFinding(fixture);
+
+    expect(all(fixture, 'offer').map(text), 'one primary button, named by the offer').toEqual([
+      label,
+    ]);
+    expect(text(el(fixture, 'offer-reason'))).toBe(offer.reason);
+    expect(
+      all(fixture, 'comment-instead').length,
+      'a comment instead is offered only beside request changes',
+    ).toBe(offer.verdict === 'request_changes' ? 1 : 0);
+    expect(
+      ['post', 'approve', 'request-changes', 'approve-when-green'].map(
+        (t) => all(fixture, t).length,
+      ),
+    ).toEqual([0, 0, 0, 0]);
+  });
+
+  it('no offer shows the reason and no button', async () => {
+    const fixture = await render(makeBridge(), { ...reviewed, offer: NONE_OFFER });
+    await everyFinding(fixture);
+
+    expect(el(fixture, 'offer')).toBeNull();
+    expect(text(el(fixture, 'offer-reason'))).toBe(NONE_OFFER.reason);
+  });
+
+  it('a card given a request for changes has no approve control anywhere', async () => {
+    const fixture = await render(makeBridge(), { ...reviewed, offer: REQUEST_OFFER });
+    await everyFinding(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    const labels = [...root.querySelectorAll('button')].map((b) => text(b));
+    expect(
+      labels.filter((l) => /^Approve/.test(l)),
+      'no Approve with a finding that needs fixing',
+    ).toEqual([]);
+  });
+
+  it('a card from before the offer shows Comment with the old-card reason', async () => {
+    const fixture = await render(makeBridge(), reviewed);
+    await everyFinding(fixture);
+
+    expect(all(fixture, 'offer').map(text)).toEqual(['Comment']);
+    expect(text(el(fixture, 'offer-reason'))).toBe(
+      'This review was made before Scout decided the verdict; review it again to see what Scout offers.',
+    );
+  });
+
+  it('while a changed selection waits for its offer the button is off, then the answer replaces the block offer', async () => {
+    const bridge = makeBridge(() => APPROVE_OFFER);
+    const fixture = await render(bridge, { ...reviewed, offer: REQUEST_OFFER });
+    await everyFinding(fixture);
+    expect(text(offerButton(fixture))).toBe('Request changes');
+
+    await click(fixture, el(fixture, 'no', card(fixture, 0)));
+    const waiting = {
+      disabled: offerButton(fixture)?.disabled,
+      reason: text(el(fixture, 'offer-reason')),
+    };
+    await offered(fixture);
+
+    expect(waiting, 'never an offer that belongs to another selection').toEqual({
+      disabled: true,
+      reason: 'Asking Scout what it offers for this selection.',
+    });
+    expect(text(offerButton(fixture)), 'the preview answer offer replaces the block offer').toBe(
+      'Approve',
+    );
+    expect(text(el(fixture, 'offer-reason'))).toBe(APPROVE_OFFER.reason);
+  });
+
+  it('Send as a comment instead sends comment with the selection', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, offer: REQUEST_OFFER });
+    await everyFinding(fixture);
+
+    await click(fixture, el(fixture, 'comment-instead'));
+
+    expect(bridge.githubGiveVerdict).toHaveBeenCalledExactlyOnceWith({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'comment',
+      findings: [total, lock, naming],
+      commit: 'ec7f951',
+      testsLine: '',
+    });
+  });
+
+  it('the offered Request changes gives request_changes with the selection', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, offer: REQUEST_OFFER });
+    await everyFinding(fixture);
+
+    await click(fixture, offerButton(fixture));
+
+    expect(bridge.githubGiveVerdict.mock.calls[0]?.[0].verdict).toBe('request_changes');
+  });
+});
+
+describe('ReviewFindingsComponent: the earlier findings section', () => {
+  const base = {
+    title: 'Order sync retries without a limit',
+    severity: 'fix' as const,
+    path: 'src/sync/OrderSync.cs',
+    line: 142,
+    reason: 'src/sync/OrderSync.cs:142 still retries forever.',
+    url: 'https://github.com/acme/shop/pull/5#discussion_r7',
+  };
+  const earlier: NonNullable<ReviewFindings['earlier']> = {
+    checked: true,
+    more: false,
+    unreadable: 0,
+    items: [
+      { ...base, title: 'A refund is sent twice', severity: 'block', outcome: 'fixed' },
+      { ...base, outcome: 'open' },
+      { ...base, title: 'Name the magic number', severity: 'nit', outcome: 'answered', url: null },
+      { ...base, title: 'The basket total', outcome: 'unknown' },
+    ],
+  };
+
+  it('E4 each earlier finding shows its severity, title, outcome in words and tone, reason and a link to its conversation, above the new findings', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, earlier });
+
+    const section = el(fixture, 'earlier-findings');
+    const items = all(fixture, 'earlier-finding').map((item) => ({
+      severity: text(el(fixture, 'earlier-severity', item)),
+      title: text(el(fixture, 'earlier-title', item)),
+      outcome: text(el(fixture, 'earlier-outcome', item)),
+      tone: el(fixture, 'earlier-outcome', item)?.className,
+      reason: text(el(fixture, 'earlier-reason', item)),
+      link: el(fixture, 'earlier-link', item) !== null,
+    }));
+    await click(fixture, el(fixture, 'earlier-link'));
+
+    expect(items, 'each earlier finding as the worker decided it').toEqual([
+      {
+        severity: 'Blocking',
+        title: 'A refund is sent twice',
+        outcome: 'Fixed',
+        tone: 'chip passed',
+        reason: base.reason,
+        link: true,
+      },
+      {
+        severity: 'Fix',
+        title: base.title,
+        outcome: 'Still open',
+        tone: 'chip pending',
+        reason: base.reason,
+        link: true,
+      },
+      {
+        severity: 'Suggestion',
+        title: 'Name the magic number',
+        outcome: 'Answered by the author',
+        tone: 'chip notrun',
+        reason: base.reason,
+        link: false,
+      },
+      {
+        severity: 'Fix',
+        title: 'The basket total',
+        outcome: 'Could not be decided',
+        tone: 'chip notrun',
+        reason: base.reason,
+        link: true,
+      },
+    ]);
+    expect(
+      section!.compareDocumentPosition(el(fixture, 'finding')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      'the section comes before the new findings',
+    ).toBeTruthy();
+    expect(
+      bridge.appOpenExternal,
+      'the link opens the conversation the way the card opens its other links',
+    ).toHaveBeenCalledExactlyOnceWith({ url: base.url });
+    expect(section!.querySelectorAll('button, input').length, 'the section is read-only').toBe(0);
+  });
+
+  it('no section is drawn for a card without earlier findings, from before the section or with none read', async () => {
+    const before = await render(makeBridge(), reviewed);
+    const none = el(before, 'earlier-findings');
+    TestBed.resetTestingModule();
+    const empty = await render(makeBridge(), {
+      ...reviewed,
+      earlier: { checked: false, more: false, unreadable: 0, items: [] },
+    });
+
+    expect([none, el(empty, 'earlier-findings')], 'nothing to draw, no section').toEqual([
+      null,
+      null,
+    ]);
+  });
+
+  it('the earlier findings are not part of the selection the owner sends', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, earlier });
+    await click(fixture, el(fixture, 'yes-all'));
+    fixture.componentInstance.giveVerdict('request_changes');
+    await settle(fixture);
+
+    const sent = bridge.githubGiveVerdict.mock.calls.at(-1)?.[0];
+    const previewed = bridge.githubPreviewVerdict.mock.calls.at(-1)?.[0];
+
+    expect(
+      sent?.findings.map((f) => f.id),
+      'the verdict carries the new findings only',
+    ).toEqual(['total', 'lock', 'naming']);
+    expect(Object.keys(sent ?? {}), 'nothing of the section is sent').not.toContain('earlier');
+    expect(
+      previewed === undefined || !Object.keys(previewed).includes('earlier'),
+      'nor in a preview',
+    ).toBe(true);
   });
 });

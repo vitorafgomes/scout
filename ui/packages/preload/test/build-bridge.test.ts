@@ -142,6 +142,14 @@ describe('buildBridge', () => {
       'githubCancelWaitingApproval',
       'githubWaitingApprovalFor',
       'onGitHubWaitingApproval',
+      'mcpStatus',
+      'mcpSetEnabled',
+      'mcpCreateToken',
+      'mcpRevokeToken',
+      'mcpSetStartMode',
+      'mcpPickPort',
+      'mcpAnswerStart',
+      'onMcpChanged',
       'youtubeSignIn',
       'youtubeStatus',
       'youtubeCancelSignIn',
@@ -1179,6 +1187,55 @@ describe('buildBridge', () => {
     expect(channel).toBe(CHANNEL.githubWaitingApproval);
     expect(received).toEqual([status]);
     expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.githubWaitingApproval, handler);
+  });
+
+  it('the MCP methods reach main only through their own channels with their arguments, and onMcpChanged forwards what main pushes and unsubscribes the same handler', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const status = {
+      enabled: true,
+      startMode: 'ask' as const,
+      port: 47231,
+      hasToken: true,
+      tokenCreatedAt: 1,
+      listener: { state: 'listening' as const, port: 47231 },
+      pending: null,
+      activity: [],
+    };
+    const received: unknown[] = [];
+
+    await bridge.mcpStatus();
+    await bridge.mcpSetEnabled(true);
+    await bridge.mcpCreateToken();
+    await bridge.mcpRevokeToken();
+    await bridge.mcpSetStartMode('free');
+    await bridge.mcpPickPort();
+    await bridge.mcpAnswerStart({ id: 'start-1', start: true });
+    const unsubscribe = bridge.onMcpChanged((pushed) => received.push(pushed));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [
+        string,
+        (event: unknown, payload: unknown) => void,
+      ][]
+    )[0]!;
+    handler({}, status);
+    unsubscribe();
+
+    expect(
+      (ipc.invoke as ReturnType<typeof mock>).mock.calls,
+      'each MCP method goes on its own channel with what it was given',
+    ).toEqual([
+      [CHANNEL.mcpStatus],
+      [CHANNEL.mcpSetEnabled, true],
+      [CHANNEL.mcpCreateToken],
+      [CHANNEL.mcpRevokeToken],
+      [CHANNEL.mcpSetStartMode, 'free'],
+      [CHANNEL.mcpPickPort],
+      [CHANNEL.mcpAnswerStart, { id: 'start-1', start: true }],
+    ]);
+    expect(channel).toBe(CHANNEL.mcpChanged);
+    expect(received).toEqual([status]);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.mcpChanged, handler);
   });
 
   it('the quick-ask methods reach main only through their own channels with their payloads', async () => {

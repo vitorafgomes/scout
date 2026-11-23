@@ -44,6 +44,12 @@ reliability: high
 
 > Dated changes to [[pages/services/llm]]; the service page states how it works now.
 
+## 2026-11-21 - Package updates within the current majors
+
+- **What it was:** `Anthropic` 13.8.0; `Microsoft.Extensions.AI`, `.Abstractions` and `.OpenAI` 10.11.0.
+- **What it is:** `Anthropic` 13.12.0; the three `Microsoft.Extensions.AI` packages 10.11.1. Semantic Kernel stays at 1.82.0, its newest, with its connectors on the same train.
+- **Tests:** every test project, unchanged.
+
 ## 2026-11-12 - Ollama chat on the native API with a context length
 
 - **Asked for:** the whole Ollama flow must work, and "the model must see the whole prompt". Scout reached Ollama through its OpenAI-compatible `/v1` path, which has no field for a context length, so the server loaded the model with its own default of 4,096 tokens and cut a 10,020-token prompt to about 2,050 without saying so (finding 5.3 of [[pages/roadmap/ollama-local-models]]).

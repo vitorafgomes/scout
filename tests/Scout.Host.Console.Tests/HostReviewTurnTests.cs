@@ -151,6 +151,68 @@ public sealed class HostReviewTurnTests
         }
     }
 
+    /// <summary>
+    /// Pins the refusal on the review's own test run: it goes through the write gate on the host's shared kernel, so without
+    /// the Local container grant no container starts. The granted run is not shown here; it needs GitHub's reads first.
+    /// </summary>
+    [Fact]
+    public async Task The_review_s_own_test_run_is_refused_by_the_write_gate_without_the_Local_container_grant_and_starts_no_container()
+    {
+        var gate = new RefusingGate("Local container", "The Local container permission of GitHub is not granted.");
+        var sandbox = new RecordingSandbox();
+        var services = new ServiceCollection().AddLogging();
+        services.AddScoutHost(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Scout:Llm:Provider"] = "Ollama",
+            ["Scout:Llm:Ollama:Endpoint"] = "http://localhost:11434",
+            ["Scout:Llm:Ollama:Chat:Model"] = "llama3.1",
+            ["Scout:Llm:Ollama:Embeddings:Model"] = "nomic-embed-text",
+            ["Scout:Plugins:GitHub:Token"] = "github-dummy-not-real",
+            ["Scout:WorkerGate:SocketPath"] = "/run/scout/cp.sock",
+            ["Scout:WorkerGate:Token"] = "t0ken",
+        }).Build());
+        services.RemoveAll<IWriteGate>();
+        services.AddSingleton<IWriteGate>(gate);
+        services.RemoveAll<Scout.Plugin.GitHub.Abstractions.ISandboxRunner>();
+        services.AddSingleton<Scout.Plugin.GitHub.Abstractions.ISandboxRunner>(sandbox);
+        using var provider = services.BuildServiceProvider();
+        var runner = provider.GetRequiredService<Scout.Audit.AuditBatchRunner>();
+
+        var answer = await runner.RunTestsAsync(
+            new Scout.Audit.AuditJob("job1", "acme", "shop", "abc1234def", null, "running", Kind: Scout.Audit.AuditKind.Review, PullRequest: 12), CancellationToken.None);
+
+        gate.Scopes.ShouldBe(["Local container"], "the run is asked of the write gate under the Local container row, as a call by the model would be");
+        answer.ShouldContain("The Local container permission of GitHub is not granted.", Case.Sensitive, "the refusal is what the card is given as why the tests were not run");
+        sandbox.Runs.ShouldBe(0, "no container is started without the grant");
+    }
+
+    private sealed class RefusingGate(string scope, string reason) : IWriteGate
+    {
+        public List<string> Scopes { get; } = [];
+
+        public Task<WriteGateDecision> RequestAsync(string featureId, string requested, string target, string summary, CancellationToken cancellationToken)
+        {
+            Scopes.Add(requested);
+            return Task.FromResult(requested == scope
+                ? new WriteGateDecision(WriteGateDecisionKind.Refused, reason, null)
+                : new WriteGateDecision(WriteGateDecisionKind.Allowed, string.Empty, null));
+        }
+
+        public Task RecordAsync(string featureId, string scope, string target, string outcome, string? actionId, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class RecordingSandbox : Scout.Plugin.GitHub.Abstractions.ISandboxRunner
+    {
+        public int Runs { get; private set; }
+
+        public Task<Scout.Plugin.GitHub.Abstractions.SandboxRunResult> RunTestsAsync(Scout.Plugin.GitHub.Abstractions.SandboxRunRequest request, CancellationToken ct)
+        {
+            Runs++;
+            throw new InvalidOperationException("no container may start in this test");
+        }
+    }
+
     private sealed class RecordingGate : IWriteGate
     {
         public List<string> Requests { get; } = [];

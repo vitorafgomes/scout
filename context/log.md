@@ -1,3 +1,46 @@
+## [2026-11-22] fix | Three small fixes from an independent check of a review
+A test run that throws once the review was stopped no longer keeps the stopped card from posting; the could-not-run exemption of the exit code applies only to a whole list of projects; a definition the reader cut says (cut) to the second reading. One follow-up added to [[pages/roadmap/followups]].
+
+## [2026-11-22] feat | The review card shows the earlier findings
+The artboard's Earlier findings states first, then the shared parser, the card's read-only section above the new findings and MCP get_review ([[pages/services/desktop-github/verdict-from-the-review-card]]); the follow-up keeps only the resolved state.
+
+## [2026-11-22] feat | A review checks the findings Scout posted on earlier reviews
+[[pages/decisions/0076-a-review-checks-the-findings-scout-posted-on-earlier-reviews]]: Scout's own earlier conversations read and decided at the new head, no repeat reported as new, open ones counted for the verdict, a card section and note; nothing written. The desktop section is a follow-up ([[pages/roadmap/followups]]).
+
+## [2026-11-22] docs | The code review drawn from the code
+[[pages/architecture/code-review-flow]] redrawn with its entry points and the one action, and the inside of a review job drawn on five topic pages under pages/architecture/code-review/: the queue and what is kept, the start and the batches, what a reading evaluates, the tests in Docker, the second reading and the verdict.
+
+## [2026-11-22] fix | One note for the findings the second reading refuted
+The card says once how many findings the second reading refuted over the whole review, with the titles and reasons that fit, instead of one note per group ([[pages/services/audit/public-contract-review-quality]]).
+
+## [2026-11-21] fix | A cited name is resolved to one file before the second reading's citation is judged
+[[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] amended again: a name alone is resolved to the finding's file or the one changed file it ends; a name that cannot be resolved stands; the card names the findings the second reading did not read again.
+
+## [2026-11-21] chore | Package updates within the current majors
+Electron 45.4.1, Angular 22.3.0 and the desktop tools; Anthropic 13.12.0, ONNX Runtime 1.32.0, Microsoft.CodeAnalysis.CSharp 5.12.0 and the .NET patches; the minimatch advisory stays only on electron-builder's packaging path ([[pages/history/desktop-ui]], [[pages/history/llm]], [[pages/history/operator]]). Three follow-ups added to [[pages/roadmap/followups]].
+
+## [2026-11-21] feat | The second reading can note a finding the project records as later work
+[[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] amended: a true finding the project records as later work is kept as a nit titled Noted and counted on the card; a refutation or a note citing a place the head does not hold is unconfirmed. Two follow-ups of the waiting review added to [[pages/roadmap/followups]].
+
+## [2026-11-21] feat | A review asked while another runs says it waits
+[[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]: one sentence in its conversation and a waiting entry in the bell with Stop, running when the worker picks it; the queue runs reviews in the order they were created or continued, across a restart.
+
+## [2026-11-21] feat | A review runs its batches through a window; a mixed test project could not run
+[[pages/decisions/0074-a-review-runs-its-batches-through-a-window]]: a hung batch holds one place, a review batch turn has 3 minutes, each turn row keeps when its last call ended. A test project whose failures all need the Docker daemon could not run beside its tests that passed ([[pages/services/sandbox/test-summary-reader]]).
+
+## [2026-11-21] lint | Full wiki pass
+Summary: 2 broken links, 0 orphans, 0 stale entries, connections not measured, 0 date-field errors, 0 stale pages, 23 schema errors, provenance and page_type not measured, assets not measured.
+Report: archive/lint-2026-11-21.md
+
+## [2026-11-21] docs | Review quality: the testing, sandbox, card and top bar pages, and the rules files
+Added the review quality tests to [[pages/services/audit/tests-review-job]], [[pages/services/plugin-github/testing-footprint]] and [[pages/services/desktop-ui/tests]]; the new [[pages/services/sandbox/test-summary-reader]]; the card's one action on [[pages/services/desktop-github/verdict-from-the-review-card]] and Settings beside the bell on [[pages/services/desktop-ui/layout]]; Scout.Review in [[pages/conventions/testing]] and [[pages/architecture/project-map]]; a rules file for Scout.Review and the new rows in the audit, plugin-github and desktop-ui rules.
+
+## [2026-11-21] docs | Review quality: decisions 0065 to 0073 and their pages
+Recorded the review work as decisions: one home for the review's rules in Scout.Review ([[pages/decisions/0065-the-review-rules-live-in-scout-review]]); evidence and a line derived by code ([[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]]); a large file read in parts ([[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]]); focused readings on code and tests ([[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]]); a second reading that tries to refute ([[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]); one verdict decision and no approval on its own ([[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]]); the file read by lines and the search at a reference ([[pages/decisions/0071-the-file-read-by-lines-and-the-search-at-a-reference]]); the desktop's MCP server ([[pages/decisions/0072-the-desktop-app-serves-a-local-mcp-server]]); the numbers of each model turn ([[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]). Amended 0043, 0055, 0058, 0059, 0060 and 0061; new pages [[pages/services/review]], [[pages/history/review]] and [[pages/services/desktop-ui/mcp-server]]. The MCP server group, drawn on 2026-11-20 as a proposal, is built.
+
+## [2026-11-20] feat | Settings opens from the top bar; an MCP server drawn for the owner
+Settings is a round button with a sliders icon at the right of the bell in the main window, and left the side menu; built with its artboards. The Settings artboard also draws an MCP server group and its top-bar mark, a proposal not built: [[pages/conventions/desktop-prototype]].
+
 ## [2026-11-20] feat | The review notes: one composer, findings never a body, more than one verdict at a commit
 New: [[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]], amending 0043 and 0059 and adding a note to 0032, and [[pages/services/plugin-github/the-review-note]]. The note and each comment are composed by code in the worker from the findings, for the card and the chat; a different verdict or other comments at a commit are sent and an identical request is not; the card previews the note through the worker's stdin and stays open after a verdict. A success GitHub answers with an unreadable body is now a failure saying the write may already be there. Updated the plugin, control plane, contracts, adapter, desktop, skills and invariant pages, their history and testing pages, and the follow-ups.
 

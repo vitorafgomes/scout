@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Scout.Plugin.GitHub.Abstractions;
+using Scout.Review;
 
 namespace Scout.Plugin.GitHub;
 
@@ -17,7 +18,7 @@ internal sealed record ReviewNoteInput(
     int Number,
     string Verdict,
     string Commit,
-    IReadOnlyList<ReviewFinding> Findings,
+    IReadOnlyList<Finding> Findings,
     IReadOnlyList<PullRequestCheck>? Checks,
     ReviewTests? Tests,
     int? FilesRead,
@@ -62,29 +63,17 @@ internal static class ReviewNote
         return null;
     }
 
-    /// <summary>The comment on a finding's line: its severity and title, what is wrong, why it matters, the fix and its rule.</summary>
-    internal static string Comment(ReviewFinding finding)
-    {
-        ArgumentNullException.ThrowIfNull(finding);
-        List<string> lines = [$"{SeverityIcon(finding.Severity)} **{SeverityWord(finding.Severity)}** · {finding.Title}", string.Empty, $"**What is wrong:** {finding.Why}"];
-        if (!string.IsNullOrWhiteSpace(finding.Context))
-        {
-            lines.AddRange([string.Empty, $"**Why it matters:** {finding.Context}"]);
-        }
-
-        lines.AddRange([string.Empty, $"**Proposed fix:** {finding.Fix}"]);
-        if (!string.IsNullOrWhiteSpace(finding.Rule))
-        {
-            lines.AddRange([string.Empty, $"**Rule or document:** {finding.Rule}"]);
-        }
-
-        return string.Join('\n', lines);
-    }
-
     /// <summary>The first 16 hexadecimal characters of the SHA-256 of the verdict and the findings as JSON.</summary>
-    internal static string Digest(string verdict, IReadOnlyList<ReviewFinding> findings, int? filesRead, int? filesChanged, IReadOnlyList<string>? notes)
+    internal static string Digest(string verdict, IReadOnlyList<Finding> findings, int? filesRead, int? filesChanged, IReadOnlyList<string>? notes)
     {
-        var json = JsonSerializer.SerializeToUtf8Bytes(new { verdict, findings, filesRead, filesChanged, notes });
+        var json = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            verdict,
+            findings = findings.Select(f => new { f.Id, f.Severity, f.Title, f.Path, f.Line, f.Context, f.Why, f.Fix, f.Rule }),
+            filesRead,
+            filesChanged,
+            notes,
+        });
         return Convert.ToHexStringLower(SHA256.HashData(json))[..16];
     }
 
@@ -176,7 +165,7 @@ internal static class ReviewNote
         return string.Join(" · ", parts);
     }
 
-    private static string Counts(IReadOnlyList<ReviewFinding> findings, string prefix) =>
+    private static string Counts(IReadOnlyList<Finding> findings, string prefix) =>
         string.Create(
             CultureInfo.InvariantCulture,
             $"{prefix}{findings.Count(f => f.Severity == "block")} blocking, {findings.Count(f => f.Severity == "fix")} to fix, {findings.Count(f => f.Severity == "nit")} optional");
@@ -298,11 +287,11 @@ internal static class ReviewNote
                 "|---|---|---|---|",
                 .. input.Findings.Select(f => string.Create(
                     CultureInfo.InvariantCulture,
-                    $"| {SeverityIcon(f.Severity)} {(f.Severity == "nit" ? "Suggestion, optional" : SeverityWord(f.Severity))} | [`{Code(f.Path)}:{f.Line}`]({LineUrl(input, f)}) | {Cell(f.Title)} | {(string.IsNullOrWhiteSpace(f.Rule) ? f.Severity == "nit" ? "None, optional" : "None" : Cell(f.Rule))} |")),
+                    $"| {FindingComment.Icon(f.Severity)} {(f.Severity == "nit" ? "Suggestion, optional" : FindingComment.Word(f.Severity))} | [`{Code(f.Path)}:{f.Line}`]({LineUrl(input, f)}) | {Cell(f.Title)} | {(string.IsNullOrWhiteSpace(f.Rule) ? f.Severity == "nit" ? "None, optional" : "None" : Cell(f.Rule))} |")),
             ]);
     }
 
-    private static string LineUrl(ReviewNoteInput input, ReviewFinding finding) =>
+    private static string LineUrl(ReviewNoteInput input, Finding finding) =>
         string.Create(
             CultureInfo.InvariantCulture,
             $"https://github.com/{input.Owner}/{input.Repo}/pull/{input.Number}/files#diff-{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(finding.Path)))}R{finding.Line}");
@@ -321,20 +310,6 @@ internal static class ReviewNote
                 : $"Apply the suggestions you agree with, or leave them. Scout did not approve: a person approves, or mention {mention} after a new commit.",
         };
     }
-
-    private static string SeverityIcon(string severity) => severity switch
-    {
-        "block" => ":no_entry:",
-        "fix" => ":wrench:",
-        _ => ":bulb:",
-    };
-
-    private static string SeverityWord(string severity) => severity switch
-    {
-        "block" => "Blocking",
-        "fix" => "Fix",
-        _ => "Suggestion",
-    };
 
     private static List<string> Section(string shortcode, string title, params string[] lines) =>
         [$"#### :{shortcode}: {title}", string.Empty, .. lines, string.Empty];

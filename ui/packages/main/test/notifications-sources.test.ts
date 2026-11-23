@@ -795,6 +795,18 @@ describe('every review sentence, mapped whole', () => {
         source: 'worker',
       },
     ],
+    [
+      'the waiting sentence of a review asked while another runs',
+      'The review of acme/api#52 waits for the review of acme/web#44 to end; it starts by itself.',
+      {
+        id: ID,
+        kind: 'waiting',
+        title: 'Review of acme/api#52 waiting',
+        detail:
+          'The review of acme/api#52 waits for the review of acme/web#44 to end; it starts by itself.',
+        source: 'worker',
+      },
+    ],
   ];
 
   it.each(rows)('%s', (_name, text, entry) => {

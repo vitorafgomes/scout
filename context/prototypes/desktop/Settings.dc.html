@@ -55,12 +55,21 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </button>
 </div>
 
+<sc-if value="{{mcp.on}}" hint-placeholder-val="{{false}}">
+<a href="#s-mcp" aria-label="MCP server is active. Open its settings" title="MCP server is active. Open its settings" style="position: relative; width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center; text-decoration: none; box-sizing: border-box">
+<svg width="19" height="19" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>
+<span aria-hidden="true" style="position: absolute; top: 4px; right: 4px; width: 11px; height: 11px; box-sizing: border-box; border: 2px solid {{t.surface}}; border-radius: 6px; background: {{t.ok}}"></span>
+</a>
+</sc-if>
 <button aria-label="{{bellLabel}}" aria-expanded="{{bellOpenText}}" onClick="{{toggleBell}}" style="position: relative; width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{bellBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center">
 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg>
 <sc-if value="{{bellHasUnread}}" hint-placeholder-val="{{true}}">
 <span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
 </sc-if>
 </button>
+<a href="Settings.dc.html" aria-label="Settings" title="Settings" aria-current="page" style="width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center; text-decoration: none; box-sizing: border-box">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 12h4M12 12h8M8 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 18h11M19 18h1M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0"></path></svg>
+</a>
 
 <sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
 <section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
@@ -133,7 +142,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px">
 <div style="display: flex; flex-direction: column; gap: 4px; margin-right: auto; min-width: 0">
 <h1 style="margin: 0; font-size: 20px; font-weight: 600">Settings</h1>
-<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Chat connections, the Scout worker, who can use Scout, the quick-ask button, the microphone and speaker, and how this app looks.</p>
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Chat connections, the Scout worker, who can use Scout, the quick-ask button, the microphone and speaker, the MCP server, and how this app looks.</p>
 </div>
 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
 <span id="yt-label" style="font-size: 12px; color: {{t.muted}}">Preview: YouTube connected</span>
@@ -549,6 +558,74 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </sc-if>
 </section>
 
+<section aria-labelledby="s-mcp" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px">
+<h2 id="s-mcp" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">MCP server</h2>
+<span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: {{mcp.chipBg}}; color: {{mcp.chipFg}}">{{mcp.chip}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">A coding assistant on this computer asks Scout for a review and follows it, through the Model Context Protocol. It never writes on GitHub: a verdict, a comment and an issue are given only from this app, with your approval.</p>
+<div style="display: flex; align-items: center; gap: 12px">
+<span id="mcp-on" style="margin-right: auto">Let an assistant on this computer use Scout</span>
+<button role="switch" aria-checked="{{swMcp.checked}}" aria-labelledby="mcp-on" onClick="{{swMcp.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{swMcp.justify}}; background: {{swMcp.track}}; border: 1px solid {{swMcp.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{swMcp.thumb}}"></span></span></button>
+</div>
+<sc-if value="{{mcp.failed}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5; background: {{t.errBg}}; color: {{t.err}}">The MCP server did not start: port 47231 on this computer is in use. Close what uses it, or let Scout pick another port. <button onClick="{{mcp.retry}}" style="border: 0; background: transparent; color: {{t.err}}; font: inherit; font-weight: 600; text-decoration: underline; padding: 0">Pick another port and start</button></p>
+</sc-if>
+<sc-if value="{{mcp.on}}" hint-placeholder-val="{{true}}">
+<dl style="margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px">
+<dt style="color: {{t.muted}}">Address</dt><dd style="margin: 0"><code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">http://127.0.0.1:47231/mcp</code></dd>
+<dt style="color: {{t.muted}}">Reachable from</dt><dd style="margin: 0">This computer only</dd>
+<dt style="color: {{t.muted}}">Token</dt><dd style="margin: 0">{{mcp.tokenLine}}</dd>
+</dl>
+<sc-if value="{{mcp.tokenShown}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; background: {{t.warnBg}}; color: {{t.warn}}">
+<span style="font-size: 13px; font-weight: 600">Copy the token now. Scout does not show it again.</span>
+<code style="font-size: 13px; padding: 6px 8px; border-radius: 6px; background: {{t.surface}}; color: {{t.fg}}; overflow-wrap: anywhere">scout_mcp_7fQ2mVx9Kc41TnRz8LdW3aYb6HsE0pUj</code>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><button onClick="{{mcp.copied}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px">Copy the token</button><button onClick="{{mcp.copied}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px">Copy the settings for an assistant</button></div>
+</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{mcp.createToken}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px">{{mcp.createLabel}}</button>
+<sc-if value="{{mcp.hasToken}}" hint-placeholder-val="{{true}}"><button onClick="{{mcp.revoke}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; color: {{t.err}}">Revoke the token</button></sc-if>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">A new token replaces the one before it. An assistant with no token, or an old one, is refused.</p>
+
+<h3 style="margin: 4px 0 0; font-size: 13px; font-weight: 600">What an assistant can do</h3>
+<sc-for list="{{mcp.can}}" as="c" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid {{t.line}}; border-radius: 8px">
+<div style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 600; font-size: 13px; margin-right: auto">{{c.title}}</span><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: {{c.chipBg}}; color: {{c.chipFg}}">{{c.chip}}</span></div>
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.5">{{c.what}}</span>
+<span style="font-size: 12px; color: {{t.muted}}">{{c.asks}}</span>
+</div>
+</sc-for>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<span id="mcp-start" style="margin-right: auto; font-size: 13px">When an assistant starts a review</span>
+<div role="group" aria-labelledby="mcp-start" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<sc-for list="{{mcp.startModes}}" as="m" hint-placeholder-count="2">
+<button aria-pressed="{{m.pressed}}" onClick="{{m.pick}}" style="height: 28px; padding: 0 12px; border: 0; border-radius: 14px; font-size: 12px; background: {{m.bg}}; color: {{m.fg}}; font-weight: {{m.weight}}">{{m.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<h3 style="margin: 4px 0 0; font-size: 13px; font-weight: 600">What assistants did</h3>
+<sc-if value="{{mcp.noActivity}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Nothing yet. Each request of an assistant is listed here, the refused ones too.</p>
+</sc-if>
+<sc-if value="{{mcp.hasActivity}}" hint-placeholder-val="{{true}}">
+<div role="table" aria-label="What assistants did" style="display: flex; flex-direction: column; font-size: 13px">
+<sc-for list="{{mcp.activity}}" as="a" hint-placeholder-count="4">
+<div role="row" style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 8px 0; border-top: 1px solid {{t.line}}">
+<span role="cell" style="flex: none; width: 44px; color: {{t.muted}}">{{a.when}}</span>
+<span role="cell" style="flex: 1 1 150px; min-width: 0; font-weight: 500">{{a.what}}</span>
+<code role="cell" style="flex: none; font-size: 12px; color: {{t.fg2}}">{{a.target}}</code>
+<span role="cell" style="flex: 1 1 100%; padding-left: 56px; color: {{a.fg}}">{{a.result}}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+</section>
+
 </div>
 </div>
 
@@ -628,6 +705,20 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 </sc-if>
 
+<sc-if value="{{mcp.asking}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 140px 16px 16px">
+<div role="dialog" aria-modal="true" aria-labelledby="mcp-ask-title" aria-describedby="mcp-ask-body" style="width: 480px; max-width: 100%; background: {{t.surface}}; border-radius: 14px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 id="mcp-ask-title" style="margin: 0; font-size: 17px; font-weight: 600">An assistant asks to start a review</h2>
+<p id="mcp-ask-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Review of <code style="padding: 2px 6px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">acme/api#44</code> at <code style="padding: 2px 6px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">4f2a9c1</code>: 37 files in 6 batches. Scout reads GitHub and uses your AI Source; it writes nothing on GitHub.</p>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Follow it in the bell. The request waits 2 minutes for your answer, then it is refused.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
+<button autofocus="autofocus" onClick="{{mcp.answer}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Refuse</button>
+<button onClick="{{mcp.answer}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; font-weight: 500">Start the review</button>
+</div>
+</div>
+</div>
+</sc-if>
+
 <sc-if value="{{confirmOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 140px 16px 16px">
 <div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" onKeyDown="{{confirmKey}}" style="width: 440px; max-width: 100%; background: {{t.surface}}; border-radius: 14px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
@@ -645,7 +736,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1600}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2200}}'>
 class Component extends DCLogic {
   constructor(props) {
     super(props);
@@ -889,7 +980,7 @@ class Component extends DCLogic {
     }) : [];
     const dlgMissing = dlgDef ? dlgDef.fields.some(([key, , , prefix]) => badField(key, prefix)) : false;
     return Object.assign(this.shellVals(t, 'Settings', 'Settings'), {
-      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About: trademark notices open'], ['updAvailable', 'Update available'], ['updCannot', 'Update: this package cannot update itself'], ['updDownloading', 'Update: downloading'], ['updInstalling', 'Update: restarting'], ['updFailed', 'Update: download failed'], ['updCheckFailed', 'Update: check failed'], ['betaUpToDate', 'Beta: up to date'], ['betaAvailable', 'Beta: pre-release available'], ['betaBackToStable', 'Beta: back to Stable on a pre-release'], ['verOpen', 'Versions: list open'], ['verOpenBeta', 'Versions: list on Beta'], ['verLoading', 'Versions: loading'], ['verFailed', 'Versions: could not list'], ['verConfirm', 'Versions: older version asks first'], ['verInstalling', 'Versions: installing an older version'], ['verCannot', 'Versions: package cannot update itself'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
+      preview: this.segVals(t, [['normal', 'Normal'], ['mcpOn', 'MCP: on'], ['mcpToken', 'MCP: token created'], ['mcpAsk', 'MCP: asks to start'], ['mcpNothing', 'MCP: nothing yet'], ['mcpFailed', 'MCP: did not start'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About: trademark notices open'], ['updAvailable', 'Update available'], ['updCannot', 'Update: this package cannot update itself'], ['updDownloading', 'Update: downloading'], ['updInstalling', 'Update: restarting'], ['updFailed', 'Update: download failed'], ['updCheckFailed', 'Update: check failed'], ['betaUpToDate', 'Beta: up to date'], ['betaAvailable', 'Beta: pre-release available'], ['betaBackToStable', 'Beta: back to Stable on a pre-release'], ['verOpen', 'Versions: list open'], ['verOpenBeta', 'Versions: list on Beta'], ['verLoading', 'Versions: loading'], ['verFailed', 'Versions: could not list'], ['verConfirm', 'Versions: older version asks first'], ['verInstalling', 'Versions: installing an older version'], ['verCannot', 'Versions: package cannot update itself'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
       themeChoices: this.segVals(t, [['light', 'Light', sun], ['dark', 'Dark', moon], ['system', 'System', monitor]], s.theme, (id) => this.setState({ theme: id })),
       worker: {
         chip: wkChip[0],
@@ -919,6 +1010,7 @@ class Component extends DCLogic {
         hidden: s.preview === 'audioHidden',
       },
       swLogs: this.switchVals(t, s.showLogs, flip('showLogs')),
+      swMcp: (() => { const on = s.preview !== 'mcpFailed' && (Boolean(s.mcp) || s.preview.startsWith('mcp')); return this.switchVals(t, on, () => this.setState({ mcp: !on, mcpToken: false, preview: 'normal' })); })(),
       swBubble: this.switchVals(t, s.bubble, flip('bubble')),
       corners: this.segVals(t, [['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']], s.corner, (id) => this.setState({ corner: id })),
       hasDisplayRow: s.preview !== 'oneMonitor' && s.preview !== 'monitorGoneOneLeft',
@@ -957,6 +1049,45 @@ class Component extends DCLogic {
         { id: '412398765432109876', platform: 'Discord', removeLabel: 'Remove 412398765432109876' },
         { id: 'U04QF7K2L9P', platform: 'Slack', removeLabel: 'Remove U04QF7K2L9P' },
       ],
+      mcp: (() => {
+        const p = s.preview;
+        const failed = p === 'mcpFailed';
+        const on = !failed && (Boolean(s.mcp) || p.startsWith('mcp'));
+        const tokenShown = on && (p === 'mcpToken' || Boolean(s.mcpToken));
+        const hasToken = on && p !== 'mcpNothing';
+        const ask = (s.mcpStart || 'ask') === 'ask';
+        const yes = [t.okBg, t.ok];
+        const no = [t.neutralBg, t.neutral];
+        const can = [
+          ['Read', 'Offered', yes, 'The reviews and audits Scout ran and how far each one is, the finished review card with its findings and what Scout offers, and the note Scout would post on the pull request.', 'Never asks you.'],
+          ['Start a review', 'Offered', yes, 'Start a review of a pull request that the GitHub Feature already reads. Scout reads GitHub and uses your AI Source.', ask ? 'Asks you here before each start.' : 'Starts without asking; each start shows in the bell.'],
+          ['Write on GitHub', 'Not offered', no, 'Give a verdict, post a comment, open an issue, merge.', 'An assistant that asks is refused, and the refusal is listed below.'],
+        ];
+        const rows = [
+          ['12:01', 'Give a verdict', 'acme/api#44', 'Refused: writing on GitHub is not offered to an assistant.', t.err],
+                    ['11:44', 'List the reviews', '', '1 review running, batch 4 of 6.', t.fg2],
+          ['11:42', 'Start a review', 'acme/api#44', ask ? 'Started after you allowed it: 37 files in 6 batches.' : 'Started: 37 files in 6 batches.', t.fg2],
+        ];
+        return {
+          on, failed, tokenShown, hasToken,
+          asking: p === 'mcpAsk',
+          chip: failed ? 'Did not start' : on ? 'Active' : 'Off',
+          chipBg: failed ? t.errBg : on ? t.okBg : t.neutralBg,
+          chipFg: failed ? t.err : on ? t.ok : t.neutral,
+          tokenLine: hasToken ? 'Created today at 11:40. Scout keeps only a fingerprint of it, never the token.' : 'None yet. An assistant cannot connect until you create one.',
+          createLabel: hasToken ? 'Create a new token' : 'Create a token',
+          createToken: () => this.setState({ mcp: true, mcpToken: true, preview: 'normal' }),
+          copied: () => this.setState({ mcpToken: false, preview: p === 'mcpToken' ? 'mcpOn' : p }),
+          revoke: () => this.setState({ mcp: true, mcpToken: false, preview: 'mcpNothing' }),
+          retry: () => this.setState({ mcp: true, preview: 'mcpOn' }),
+          answer: () => this.setState({ mcp: true, preview: 'mcpOn' }),
+          can: can.map(([title, chip, tone, what, asks]) => ({ title, chip, chipBg: tone[0], chipFg: tone[1], what, asks })),
+          startModes: this.segVals(t, [['ask', 'Ask me each time'], ['free', 'Start without asking']], ask ? 'ask' : 'free', (id) => this.setState({ mcpStart: id })),
+          activity: rows.map(([when, what, target, result, fg]) => ({ when, what, target, result, fg })),
+          hasActivity: on && p !== 'mcpNothing',
+          noActivity: on && p === 'mcpNothing',
+        };
+      })(),
       desktopSwitches: desk,
       ver: (() => {
         const p = s.preview;
@@ -1084,7 +1215,6 @@ class Component extends DCLogic {
       ['Meetings', 'Meetings.dc.html', 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],
       ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
       ['Logs', 'Logs.dc.html', 'M4 6h16M4 12h16M4 18h10'],
-      ['Settings', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1'],
       ['YouTube operator', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
     ].filter(([label]) => label !== 'YouTube operator' || this.state.youtubeConnected !== false);
     const nav = navDefs.map(([label, href, d]) => {

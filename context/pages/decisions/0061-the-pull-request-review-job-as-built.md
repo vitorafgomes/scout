@@ -1,9 +1,9 @@
 ---
 title: "ADR 0061 - The pull request review job as built"
-version: "1.3"
+version: "1.4"
 date: 2026-11-18
-updated: 2026-11-20
-changes: "v1.3 (2026-11-20) dated line: amended by ADR 0064. v1.2 (2026-11-19) dated line: amended by ADR 0062"
+updated: 2026-11-21
+changes: "v1.4 (2026-11-21): dated line: amended by ADRs 0066 to 0070 and 0073. v1.3 (2026-11-20) dated line: amended by ADR 0064. v1.2 (2026-11-19) dated line: amended by ADR 0062"
 page_type: adr
 status: accepted
 description: "The review job of ADR 0055 as built: a closed read-only batch turn that counts as read only when the model presented its block, the files read once and the head before each later batch, 10 batches and 60 minutes of running time, and one card that fits, built before the job is done, with the verdict and the read line computed by code."
@@ -31,6 +31,8 @@ Accepted on 2026-11-18. It amends ADR 0055, whose text stays as it was decided; 
 Amended 2026-11-19 by [[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]: the bounds are replaced by a pause at 60 minutes of clock time since the last resume, and the batches run in waves, code first.
 
 Amended 2026-11-20 by [[pages/decisions/0064-the-review-batch-is-handed-the-purpose-the-rules-and-what-was-removed]]: a batch's request also carries the purpose, the project's rules and what was removed, each as data.
+
+Amended 2026-11-21 by [[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]] (the line from the quote), [[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]] (parts), [[pages/decisions/0068-focused-readings-only-on-code-and-test-batches]] (focused readings), [[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]] (the second reading), [[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]] (the verdict computed by one decision, no approval on its own) and [[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]] (the card's counts read from the turn table).
 
 ## The problem
 

@@ -57,8 +57,9 @@ public sealed class GitHubVerdictRunner : IReviewNotePreview
 
     /// <summary>
     /// The note and comments the verdict <paramref name="requestJson"/> describes would post now, in the shape of a queued
-    /// verdict, composed by the same path as <see cref="GiveAsync"/> with the same reads and nothing sent:
-    /// <c>{"body", "comments":[{"id","path","line","body"}], "dropped":["path:line"]}</c>.
+    /// verdict, composed by the same path as <see cref="GiveAsync"/> with the same reads and nothing sent, and what the
+    /// review offers for the findings selected (<see cref="Scout.Review.ReviewOffers.Decide"/>):
+    /// <c>{"body", "comments":[{"id","path","line","body"}], "dropped":["path:line"], "offer":{"verdict","reason","commentInstead"}}</c>.
     /// </summary>
     /// <param name="requestJson">The verdict as the review card would queue it.</param>
     /// <param name="ct">Cancels the reads.</param>
@@ -67,7 +68,7 @@ public sealed class GitHubVerdictRunner : IReviewNotePreview
     public async Task<string> PreviewAsync(string requestJson, CancellationToken ct)
     {
         var request = Read(requestJson) ?? throw new WriteFailedException(Unreadable, "refused");
-        var (body, comments, dropped) = await _actions.PreviewAsync(
+        var (body, comments, dropped, offer) = await _actions.PreviewAsync(
                 request.Owner, request.Repo, request.Number, request.Verdict, request.Findings, request.Commit, request.Extras, ct)
             .ConfigureAwait(false);
         return JsonSerializer.Serialize(new
@@ -75,6 +76,7 @@ public sealed class GitHubVerdictRunner : IReviewNotePreview
             body,
             comments = comments.Select(c => new { id = c.Id, path = c.Comment.Path, line = c.Comment.Line, body = c.Comment.Body }),
             dropped,
+            offer = new { verdict = offer.Verdict, reason = offer.Reason, commentInstead = offer.CommentInstead },
         });
     }
 

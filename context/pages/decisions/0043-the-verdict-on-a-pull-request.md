@@ -1,9 +1,9 @@
 ---
 title: "ADR 0043 - The verdict on a pull request, with the project's tests in an isolated container"
-version: "1.5"
+version: "1.6"
 date: 2026-11-07
-updated: 2026-11-20
-changes: "v1.5 (2026-11-20): amendment, a different verdict or other comments at a commit are sent and an identical request is not; the note is composed by code (ADR 0063). v1.4 (2026-11-14): the tests line's outcome is in the verdict's row."
+updated: 2026-11-21
+changes: "v1.6 (2026-11-21): amendment, Scout does not offer approval on its own (ADR 0070). v1.5 (2026-11-20): amendment, a different verdict or other comments at a commit are sent and an identical request is not; the note is composed by code (ADR 0063). v1.4 (2026-11-14): the tests line's outcome is in the verdict's row."
 page_type: adr
 status: accepted
 description: "Scout comments on pull requests and issues, replies to review comments, and approves a pull request or requests changes as a declared write the owner approves per action, and the verdict carries the project's tests: the pull request's check runs first, then the project's own test command run in a disposable container on the owner's machine under fixed isolation rules."
@@ -119,3 +119,11 @@ Tests to write with the change, in the words of the requirement:
 - [[pages/roadmap/gap-plan]] G8; [[pages/roadmap/future-improvements]] F10 (the dependency graph)
 - [[pages/decisions/0032-per-feature-write-permissions]], [[pages/decisions/0040-review-findings-as-cards-in-chat]], [[pages/decisions/0039-repository-snapshot-under-the-data-folder]], [[pages/decisions/0033-channel-operator-architecture]]
 - [[pages/services/plugin-github]], [[pages/services/skills]], [[pages/services/desktop-ui]], [[pages/overview/vision]]
+
+## Amendments
+
+### 2026-11-21 - Scout does not offer approval on its own
+
+- **Replaces** the decision's "approve or request changes, a declared write the owner approves on the card" in what the card offers: the card offers one action, decided by `ReviewOffers.Decide` (`src/Scout.Review/ReviewOffer.cs:61`), which gives request changes for a confirmed finding that needs fixing and a comment otherwise, never approve, by [[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]].
+- **Where it holds:** the gate refuses a verdict the review does not offer (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:318`); the GitHub feature's declaration says Scout does not approve on its own (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:107`). The approval path stays in the code for a later flag of the owner.
+- **How it is held:** `tests/Scout.Review.Tests/ReviewOfferTests.cs:117`, `tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginVerdictTests.cs:67`.

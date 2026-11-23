@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Scout.Plugin.GitHub.Abstractions;
+using Scout.Review;
 
 namespace Scout.Plugin.GitHub.Tests;
 
@@ -9,9 +10,9 @@ public sealed partial class ReviewNoteTests
     private const string PathHash = "274f9a969eb9685c73f8eb8f0cdb78a687ae73e8969eea5670f248b45837b879";
     private const string Line12 = $"https://github.com/acme/api/pull/42/files#diff-{PathHash}R12";
 
-    private static readonly ReviewFinding Blocking = new("a", "block", "Move has no lock", "src/Orders/Checkout.cs", 12, null, "Two moves lose an item.", "Take the lock.", "Every write takes the lock.");
-    private static readonly ReviewFinding ToFix = new("b", "fix", "Retry never ends", "src/Orders/Checkout.cs", 30, null, "The loop has no bound.", "Bound it.", null);
-    private static readonly ReviewFinding Optional = new("c", "nit", "Name the limit", "src/Orders/Checkout.cs", 41, null, "The name hides its unit.", "Rename it.", null);
+    private static readonly Finding Blocking = new("a", "block", "Move has no lock", "src/Orders/Checkout.cs", 12, null, "Two moves lose an item.", "Take the lock.", "Every write takes the lock.");
+    private static readonly Finding ToFix = new("b", "fix", "Retry never ends", "src/Orders/Checkout.cs", 30, null, "The loop has no bound.", "Bound it.", null);
+    private static readonly Finding Optional = new("c", "nit", "Name the limit", "src/Orders/Checkout.cs", 41, null, "The name hides its unit.", "Rename it.", null);
 
     private static readonly PullRequestCheck[] FourChecks =
     [
@@ -25,7 +26,7 @@ public sealed partial class ReviewNoteTests
 
     private static ReviewNoteInput Input(
         string verdict = ReviewNote.Approve,
-        IReadOnlyList<ReviewFinding>? findings = null,
+        IReadOnlyList<Finding>? findings = null,
         IReadOnlyList<PullRequestCheck>? checks = null,
         ReviewTests? tests = null,
         int? read = null,
@@ -471,6 +472,14 @@ public sealed partial class ReviewNoteTests
     }
 
     [Fact]
+    public void The_Digest_Of_The_Same_Verdict_Is_The_Same_Whatever_Type_Holds_Its_Findings()
+    {
+        var digest = ReviewNote.Digest(ReviewNote.RequestChanges, [Blocking, ToFix, Optional], 5, 7, ["Two files were not read."]);
+
+        digest.ShouldBe("c84141b64f57c53e", "the digest recorded for this verdict, its findings, the counts and the note stays the same");
+    }
+
+    [Fact]
     public void The_Digest_Changes_With_The_Verdict_The_Findings_And_Each_Extra_And_Not_Otherwise()
     {
         string[] notes = ["2 files not read: no diff was given for it."];
@@ -518,7 +527,7 @@ public sealed partial class ReviewNoteTests
     [Fact]
     public void A_Path_And_A_Title_With_A_Backtick_A_Pipe_And_A_Line_Break_Stay_One_Row_Of_Four_Cells()
     {
-        var odd = new ReviewFinding("o", "block", "Title `with| a\nbreak", "src/a`b|c\nd.cs", 12, null, "Why.", "Fix.", null);
+        var odd = new Finding("o", "block", "Title `with| a\nbreak", "src/a`b|c\nd.cs", 12, null, "Why.", "Fix.", null);
 
         var row = Lines(Input(ReviewNote.RequestChanges, [odd])).Single(l => l.StartsWith("| :no_entry: Blocking", StringComparison.Ordinal));
         var cells = UnescapedPipe().Split(row.Trim('|'));

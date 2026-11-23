@@ -2,7 +2,7 @@
 title: "Operator - history"
 version: "1.1"
 date: 2026-11-05
-updated: 2026-11-14
+updated: 2026-11-21
 changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
 page_type: reference
 status: artefact
@@ -16,6 +16,12 @@ reliability: high
 # Operator - history
 
 > Dated changes and acceptance runs of [[pages/services/operator]]; the service page states how it works now.
+
+## 2026-11-21 - ONNX Runtime 1.32.0
+
+- **What it was:** `Microsoft.ML.OnnxRuntime` 1.31.1, which runs the face models of `FaceMouth`.
+- **What it is:** 1.32.0, the newest of the same major; the models and their use are unchanged.
+- **Tests:** every test project, unchanged.
 
 ## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
 

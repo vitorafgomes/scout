@@ -7,9 +7,11 @@ import {
   inject,
   input,
 } from '@angular/core';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { IconComponent } from '../core/icon.component';
 import { LlmConfigStore, providerLabel } from '../core/llm-config.store';
+import { McpStore } from '../core/mcp.store';
 import { THEME_OPTIONS, ThemeStore } from '../core/theme.store';
 import { NotificationBellComponent } from './notification-bell.component';
 
@@ -25,11 +27,17 @@ export function screenTitle(
   );
 }
 
-/** The bar above every screen of a window: the screen's title, the AI Source and model in use, the screen's own actions, the theme switch and the bell. */
+/** The bar above every screen of a window: the screen's title, the AI Source and model in use, the screen's own actions, the theme switch, the bell and, in the main window, the Settings button. */
 @Component({
   selector: 'sc-top-bar',
   standalone: true,
-  imports: [IconComponent, NgTemplateOutlet, NotificationBellComponent],
+  imports: [
+    IconComponent,
+    NgTemplateOutlet,
+    NotificationBellComponent,
+    RouterLink,
+    RouterLinkActive,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="bar" data-test="top-bar">
@@ -55,7 +63,32 @@ export function screenTitle(
           </button>
         }
       </div>
+      @if (mcpActive()) {
+        <a
+          class="settings mcp"
+          routerLink="/settings"
+          aria-label="MCP server is active. Open its settings"
+          title="MCP server is active. Open its settings"
+          data-test="mcp-mark"
+        >
+          <sc-icon name="plug" [size]="19" />
+          <span class="mcp-dot" aria-hidden="true"></span>
+        </a>
+      }
       <sc-notification-bell />
+      @if (settings()) {
+        <a
+          class="settings"
+          routerLink="/settings"
+          routerLinkActive="settings--active"
+          ariaCurrentWhenActive="page"
+          aria-label="Settings"
+          title="Settings"
+          data-test="nav-settings"
+        >
+          <sc-icon name="sliders" [size]="19" />
+        </a>
+      }
     </header>
   `,
   styles: [
@@ -105,6 +138,34 @@ export function screenTitle(
         color: var(--sc-muted);
         cursor: pointer;
       }
+      .settings {
+        width: 40px;
+        height: 40px;
+        box-sizing: border-box;
+        border-radius: 20px;
+        border: 1px solid var(--sc-line);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--sc-fg);
+      }
+      .mcp {
+        position: relative;
+      }
+      .mcp-dot {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 11px;
+        height: 11px;
+        box-sizing: border-box;
+        border: 2px solid var(--sc-surface);
+        border-radius: 6px;
+        background: var(--sc-ok);
+      }
+      .settings--active {
+        background: var(--sc-surface-2);
+      }
       .theme-option[aria-pressed='true'] {
         background: var(--sc-pressed);
         color: var(--sc-fg);
@@ -114,12 +175,20 @@ export function screenTitle(
 })
 export class TopBarComponent {
   private readonly llm = inject(LlmConfigStore);
+  private readonly mcp = inject(McpStore);
   protected readonly theme = inject(ThemeStore);
   protected readonly options = THEME_OPTIONS;
 
   readonly title = input.required<string>();
   /** The routed screen's own controls, drawn after the title; none on a screen that has none. */
   readonly actions = input<TemplateRef<unknown> | null>(null);
+  /** True in the window that has the Settings screen: the bar then ends with the button that opens it. */
+  readonly settings = input(false);
+
+  /** True in the window that has the Settings screen while the MCP server listens: the bar then shows its mark. */
+  readonly mcpActive = computed(
+    () => this.settings() && this.mcp.status()?.listener.state === 'listening',
+  );
 
   readonly source = computed<string>(() => {
     const provider = this.llm.provider();

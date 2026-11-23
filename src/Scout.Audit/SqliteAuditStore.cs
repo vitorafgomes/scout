@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Scout.Audit.Storage;
+using Scout.Review;
 using static Scout.Audit.AuditStatus;
 
 namespace Scout.Audit;
@@ -78,9 +79,20 @@ internal sealed class SqliteAuditStore : IAuditJobStore
         });
 
     /// <inheritdoc />
+    public Task<string?> EarlierAsync(string jobId, CancellationToken ct) =>
+        RunAsync("read", db => db.Jobs.Where(j => j.Id == jobId).Select(j => j.Earlier).SingleOrDefaultAsync(ct));
+
+    /// <inheritdoc />
+    public Task SaveEarlierAsync(string jobId, string json, CancellationToken ct) =>
+        RunAsync("save", db => db.Jobs.Where(j => j.Id == jobId).ExecuteUpdateAsync(set => set.SetProperty(j => j.Earlier, json), ct));
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<AuditJob>> RunningJobsAsync(CancellationToken ct) =>
         RunAsync<IReadOnlyList<AuditJob>>("read", async db =>
-            await Jobs(RunningJobs(db)).ToListAsync(ct).ConfigureAwait(false));
+        {
+            var rows = await RunningJobs(db).ToListAsync(ct).ConfigureAwait(false);
+            return [.. Jobs(rows.OrderBy(j => j.Resumed ?? j.Started).AsQueryable())];
+        });
 
     /// <inheritdoc />
     public Task<AuditJob?> JobAsync(string id, CancellationToken ct) =>
@@ -110,11 +122,93 @@ internal sealed class SqliteAuditStore : IAuditJobStore
             await Batches(db.Batches.Where(b => b.JobId == jobId && b.Status == Pending).OrderBy(b => b.Seq).Take(count)).ToListAsync(ct).ConfigureAwait(false));
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<AuditFinding>> FindingsAsync(string jobId, CancellationToken ct) =>
-        RunAsync<IReadOnlyList<AuditFinding>>("read", async db =>
+    public Task<IReadOnlyList<Finding>> FindingsAsync(string jobId, CancellationToken ct) =>
+        RunAsync<IReadOnlyList<Finding>>("read", async db =>
             await Findings(db, jobId)
-                .Select(f => new AuditFinding(f.Id, f.Severity, f.Title, f.Path, f.Line, f.Context, f.Why, f.Fix, f.Rule))
+                .Select(f => new Finding(f.Id, f.Severity, f.Title, f.Path, f.Line, f.Context, f.Why, f.Fix, f.Rule, f.Evidence))
                 .ToListAsync(ct).ConfigureAwait(false));
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, (string State, string? Reason)>> FindingStatesAsync(string jobId, CancellationToken ct) =>
+        RunAsync<IReadOnlyDictionary<string, (string State, string? Reason)>>("read", async db =>
+            (await db.Findings.Where(f => f.JobId == jobId && f.State != ContestStatus.Open)
+                .Select(f => new { f.Id, f.State, f.DismissedReason })
+                .ToListAsync(ct).ConfigureAwait(false))
+            .ToDictionary(f => f.Id, f => (f.State, f.DismissedReason), StringComparer.Ordinal));
+
+    /// <inheritdoc />
+    public Task AddTurnAsync(string jobId, AuditTurn turn, CancellationToken ct) =>
+        RunAsync("save", async db =>
+        {
+            db.Turns.Add(new AuditTurnRow
+            {
+                JobId = jobId,
+                Batch = turn.Batch,
+                Reading = turn.Reading,
+                ContestGroup = turn.Group,
+                Attempt = turn.Attempt,
+                Extra = turn.Extra,
+                Started = Now() - TimeSpan.FromMilliseconds(turn.ElapsedMs),
+                ElapsedMs = turn.ElapsedMs,
+                RequestLength = turn.RequestLength,
+                Calls = JsonSerializer.Serialize(turn.Calls),
+                Presented = turn.Presented,
+                Placed = turn.Placed,
+                LeftOut = turn.LeftOut,
+                Failure = turn.Failure,
+                Held = turn.Held,
+                Refuted = turn.Refuted,
+                Uncertain = turn.Uncertain,
+                LastCallMs = turn.LastCallMs,
+            });
+            return await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        });
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<ReadingTotals>> TurnTotalsAsync(string jobId, CancellationToken ct) =>
+        RunAsync<IReadOnlyList<ReadingTotals>>("read", async db =>
+        {
+            var turns = await db.Turns.Where(t => t.JobId == jobId).OrderBy(t => t.Number).ToListAsync(ct).ConfigureAwait(false);
+            return [.. turns.GroupBy(t => t.Reading, StringComparer.Ordinal).Select(g => new ReadingTotals(
+                g.Key,
+                g.Count(),
+                g.Sum(t => t.ElapsedMs),
+                g.Sum(t => JsonSerializer.Deserialize<Dictionary<string, int>>(t.Calls)?.Values.Sum() ?? 0),
+                g.Sum(t => t.Presented),
+                g.Sum(t => t.Placed),
+                g.Sum(t => t.LeftOut),
+                g.Count(t => t.Failure is not null),
+                g.GroupBy(t => (t.Batch, t.ContestGroup)).Count(place => place.All(t => t.Failure is not null))))];
+        });
+
+    /// <inheritdoc />
+    public Task StampRunAsync(string jobId, string? version, string? chatModel, CancellationToken ct) =>
+        RunAsync("save", db => db.Jobs.Where(j => j.Id == jobId)
+            .ExecuteUpdateAsync(set => set.SetProperty(j => j.ScoutVersion, version).SetProperty(j => j.ChatModel, chatModel), ct));
+
+    /// <inheritdoc />
+    public Task RecordOutcomesAsync(string jobId, IReadOnlyDictionary<string, ContestOutcome> outcomes, CancellationToken ct) =>
+        RunAsync("save", async db =>
+        {
+            var recorded = 0;
+            foreach (var (id, outcome) in outcomes)
+            {
+                var state = ContestStatus.StateOf(outcome.Status);
+                var reason = outcome.Status == ContestStatus.Holds ? null : outcome.Reason;
+                if (outcome.Status == ContestStatus.Holds && await db.Findings.FirstOrDefaultAsync(f => f.JobId == jobId && f.Id == id && f.State == ContestStatus.Open, ct).ConfigureAwait(false) is { } row)
+                {
+                    (row.State, row.DismissedReason, row.Severity, row.Why) = (state, null, outcome.Severity ?? row.Severity, Contestation.WithScenario(row.Why, outcome.Scenario));
+                    recorded += await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                recorded += await db.Findings
+                    .Where(f => f.JobId == jobId && f.Id == id && f.State == ContestStatus.Open)
+                    .ExecuteUpdateAsync(set => set.SetProperty(f => f.State, state).SetProperty(f => f.DismissedReason, reason), ct).ConfigureAwait(false);
+            }
+
+            return recorded;
+        });
 
     /// <inheritdoc />
     public Task BeginBatchAsync(string jobId, int order, CancellationToken ct) =>
@@ -123,9 +217,9 @@ internal sealed class SqliteAuditStore : IAuditJobStore
             .ExecuteUpdateAsync(set => set.SetProperty(b => b.Started, Now()), ct));
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<AuditFinding>> CompleteBatchAsync(
-        string jobId, int order, IReadOnlyList<string> filesRead, IReadOnlyList<AuditFinding> findings, CancellationToken ct) =>
-        RunAsync<IReadOnlyList<AuditFinding>>("save", async db =>
+    public Task<IReadOnlyList<Finding>> CompleteBatchAsync(
+        string jobId, int order, IReadOnlyList<string> filesRead, IReadOnlyList<Finding> findings, string? leftOut, CancellationToken ct) =>
+        RunAsync<IReadOnlyList<Finding>>("save", async db =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
             var existing = await db.Findings.Where(f => f.JobId == jobId).Select(f => new { f.Id, f.MergeKey }).ToListAsync(ct).ConfigureAwait(false);
@@ -133,7 +227,7 @@ internal sealed class SqliteAuditStore : IAuditJobStore
             var keys = new HashSet<string>(existing.Select(f => f.MergeKey), StringComparer.Ordinal);
             long seq = keys.Count;
 
-            var added = new List<AuditFinding>();
+            var added = new List<Finding>();
             foreach (var finding in findings)
             {
                 if (!keys.Add(MergeKey(finding)))
@@ -153,6 +247,7 @@ internal sealed class SqliteAuditStore : IAuditJobStore
                     Path = kept.Path,
                     Line = kept.Line,
                     Context = kept.Context,
+                    Evidence = kept.Evidence,
                     Why = kept.Why,
                     Fix = kept.Fix,
                     Rule = kept.Rule,
@@ -160,14 +255,14 @@ internal sealed class SqliteAuditStore : IAuditJobStore
                 added.Add(kept);
             }
 
-            await FinishBatchAsync(db, jobId, order, Done, filesRead, null, ct).ConfigureAwait(false);
+            await FinishBatchAsync(db, jobId, order, Done, filesRead, null, leftOut, ct).ConfigureAwait(false);
             await transaction.CommitAsync(ct).ConfigureAwait(false);
             return added;
         });
 
     /// <inheritdoc />
     public Task NotCoveredAsync(string jobId, int order, IReadOnlyList<string> filesRead, string reason, CancellationToken ct) =>
-        RunAsync("save", db => FinishBatchAsync(db, jobId, order, NotCovered, filesRead, reason, ct));
+        RunAsync("save", db => FinishBatchAsync(db, jobId, order, NotCovered, filesRead, reason, null, ct));
 
     /// <inheritdoc />
     public Task<bool> StopAsync(string owner, string repo, int? pullRequest, CancellationToken ct) =>
@@ -213,8 +308,8 @@ internal sealed class SqliteAuditStore : IAuditJobStore
     internal static IQueryable<AuditFindingRow> Findings(AuditDbContext db, string jobId) =>
         db.Findings.Where(f => f.JobId == jobId).OrderBy(f => f.Seq);
 
-    internal static string MergeKey(AuditFinding finding) =>
-        finding.Path.Trim().ToUpperInvariant() + "\n" + finding.Title.Trim().ToUpperInvariant();
+    internal static string MergeKey(Finding finding) =>
+        finding.Path.Trim().ToUpperInvariant() + "\n" + new string([.. finding.Title.Where(char.IsLetterOrDigit)]).ToUpperInvariant();
 
     private static string FreeId(string id, HashSet<string> taken)
     {
@@ -229,7 +324,7 @@ internal sealed class SqliteAuditStore : IAuditJobStore
     }
 
     private async Task<int> FinishBatchAsync(
-        AuditDbContext db, string jobId, int order, string status, IReadOnlyList<string> filesRead, string? failure, CancellationToken ct)
+        AuditDbContext db, string jobId, int order, string status, IReadOnlyList<string> filesRead, string? failure, string? leftOut, CancellationToken ct)
     {
         var batch = await db.Batches.SingleOrDefaultAsync(b => b.JobId == jobId && b.Seq == order, ct).ConfigureAwait(false);
         if (batch is not null)
@@ -238,16 +333,19 @@ internal sealed class SqliteAuditStore : IAuditJobStore
             batch.Finished = Now();
             batch.FilesRead = [.. filesRead];
             batch.Failure = failure;
+            batch.LeftOut = leftOut;
         }
 
         return await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     private static IQueryable<AuditJob> Jobs(IQueryable<AuditJobRow> rows) =>
-        rows.Select(j => new AuditJob(j.Id, j.Owner, j.Repo, j.CommitSha, j.Origin, j.Status, j.PausedReason, j.Kind, j.PullRequest, DateTime.SpecifyKind(j.Started, DateTimeKind.Utc)));
+        rows.Select(j => new AuditJob(
+            j.Id, j.Owner, j.Repo, j.CommitSha, j.Origin, j.Status, j.PausedReason, j.Kind, j.PullRequest, DateTime.SpecifyKind(j.Started, DateTimeKind.Utc),
+            j.Finished == null ? null : DateTime.SpecifyKind(j.Finished.Value, DateTimeKind.Utc)));
 
     private static IQueryable<AuditBatch> Batches(IQueryable<AuditBatchRow> rows) =>
-        rows.Select(b => new AuditBatch(b.Seq, b.Area, b.Files, b.Status, b.FilesRead, b.Failure, b.Partial));
+        rows.Select(b => new AuditBatch(b.Seq, b.Area, b.Files, b.Status, b.FilesRead, b.Failure, b.Partial, b.LeftOut));
 
     private async Task<T> RunAsync<T>(string operation, Func<AuditDbContext, Task<T>> work)
     {

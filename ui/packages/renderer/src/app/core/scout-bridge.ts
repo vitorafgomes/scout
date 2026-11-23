@@ -111,6 +111,10 @@ import {
   type GitHubVerdictKey,
   type GitHubVerdictRequest,
   type GitHubVerdictStatus,
+  type McpAnswerStartRequest,
+  type McpCreatedToken,
+  type McpStartMode,
+  type McpStatus,
   type GitHubWaitingApproval,
   type LocalSetDecisionsRequest,
   type YouTubeSaveApiKeyRequest,
@@ -397,6 +401,17 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     onGitHubWaitingApproval:
       (_listener: (status: GitHubWaitingApproval) => void): (() => void) =>
+      () =>
+        undefined,
+    mcpStatus: (): Promise<McpStatus> => rejectNotAvailable(),
+    mcpSetEnabled: (_enabled: boolean): Promise<McpStatus> => rejectNotAvailable(),
+    mcpCreateToken: (): Promise<McpCreatedToken> => rejectNotAvailable(),
+    mcpRevokeToken: (): Promise<McpStatus> => rejectNotAvailable(),
+    mcpSetStartMode: (_mode: McpStartMode): Promise<McpStatus> => rejectNotAvailable(),
+    mcpPickPort: (): Promise<McpStatus> => rejectNotAvailable(),
+    mcpAnswerStart: (_req: McpAnswerStartRequest): Promise<boolean> => rejectNotAvailable(),
+    onMcpChanged:
+      (_listener: (status: McpStatus) => void): (() => void) =>
       () =>
         undefined,
     githubBotCreate: (_req: GitHubBotCreateRequest): Promise<GitHubBotStatus> =>
@@ -962,6 +977,40 @@ export class ScoutBridgeService {
   /** The note and comments a verdict would post now; nothing is sent. */
   async githubPreviewVerdict(req: GitHubVerdictRequest): Promise<GitHubNotePreview> {
     return this.bridge.githubPreviewVerdict(req);
+  }
+
+  /** The MCP server as main reports it: never the token nor its hash. */
+  async mcpStatus(): Promise<McpStatus> {
+    return this.bridge.mcpStatus();
+  }
+
+  async mcpSetEnabled(enabled: boolean): Promise<McpStatus> {
+    return this.bridge.mcpSetEnabled(enabled);
+  }
+
+  /** A new token, the only time it is given, and the status after it. */
+  async mcpCreateToken(): Promise<McpCreatedToken> {
+    return this.bridge.mcpCreateToken();
+  }
+
+  async mcpRevokeToken(): Promise<McpStatus> {
+    return this.bridge.mcpRevokeToken();
+  }
+
+  async mcpSetStartMode(mode: McpStartMode): Promise<McpStatus> {
+    return this.bridge.mcpSetStartMode(mode);
+  }
+
+  async mcpPickPort(): Promise<McpStatus> {
+    return this.bridge.mcpPickPort();
+  }
+
+  async mcpAnswerStart(req: McpAnswerStartRequest): Promise<boolean> {
+    return this.bridge.mcpAnswerStart(req);
+  }
+
+  onMcpChanged(listener: (status: McpStatus) => void): () => void {
+    return this.bridge.onMcpChanged(listener);
   }
 
   async githubVerdictStatus(req: GitHubVerdictAction): Promise<GitHubVerdictStatus> {

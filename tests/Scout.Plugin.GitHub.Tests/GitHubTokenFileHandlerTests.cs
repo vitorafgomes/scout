@@ -179,6 +179,9 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
             await function.InvokeAsync(new Kernel(), arguments);
         }
 
+        arguments.Remove("reference");
+        await plugin["search_code"].InvokeAsync(new Kernel(), arguments);
+
         var paths = _requests.Select(r => r.Path).ToList();
         paths.ShouldContain("/user/repos");
         paths.ShouldContain("/repos/octocat/hello-world/pulls");

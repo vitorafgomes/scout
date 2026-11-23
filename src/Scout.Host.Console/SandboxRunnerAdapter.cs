@@ -30,5 +30,7 @@ internal sealed class SandboxRunnerAdapter(DockerSandboxRunner runner, bool enab
 
     /// <summary>The sandbox's result as the plugin's, field by field.</summary>
     internal static SandboxRunResult ToPlugin(SandboxResult result) =>
-        new(result.Ran, result.Reason, result.Image, result.Command, result.ExitCode, result.DurationSeconds, result.Output, result.Note, result.Unrunnable);
+        new(result.Ran, result.Reason, result.Image, result.Command, result.ExitCode, result.DurationSeconds, result.Output, result.Note, result.Unrunnable,
+            result.Tests is { } tests ? [.. tests.Projects.Select(p => new Scout.Review.TestProjectFacts(p.Name, p.Passed, p.Failed, p.Skipped, p.Unrunnable))] : null,
+            result.Tests?.Partial ?? false);
 }

@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
+using Scout.Review;
 
 namespace Scout.Plugin.GitHub;
 
@@ -19,15 +19,21 @@ internal sealed partial record ReviewFindings(
     string Verdict,
     string? Read,
     IReadOnlyList<string>? Known,
-    IReadOnlyList<ReviewFinding> Findings,
+    IReadOnlyList<Finding> Findings,
     IReadOnlyList<ReviewCheck>? Checks = null,
     ReviewTests? Tests = null,
-    bool? SelfAuthored = null)
+    bool? SelfAuthored = null,
+    Offer? Offer = null)
 {
 
-    internal const int MaxFindings = 50;
-    internal const int MaxTitleLength = 200;
-    internal const int MaxRuleLength = 300;
+    /// <summary>The checks read with the head, counted for the offer; never written into the block.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal OfferChecks? CheckCounts { get; init; }
+
+    /// <summary>Whether the pull request moved past the commit reviewed when the checks were read; never written into the block.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal bool HeadMoved { get; init; }
+
     internal const int MaxKnown = 20;
     internal const int MaxKnownLength = 300;
     internal const string Audit = "audit";
@@ -44,16 +50,11 @@ internal sealed partial record ReviewFindings(
     internal const string InvalidKnown =
         "The known limitations must be a JSON array of at most 20 texts, each 1 to 300 characters.";
 
-    private static readonly HashSet<string> Severities = new(StringComparer.Ordinal) { "block", "fix", "nit" };
-
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
-
-    [GeneratedRegex(@"\A[A-Za-z0-9-]{1,40}\z")]
-    private static partial Regex FindingId();
 
     /// <summary>The fenced <c>scout-findings</c> block: the info string, one line of JSON, the closing fence.</summary>
     internal string ToBlock() => "```scout-findings\n" + JsonSerializer.Serialize(this, Json) + "\n```";
@@ -120,11 +121,10 @@ internal sealed partial record ReviewFindings(
     }
 
     /// <summary>
-    /// The findings of a JSON array of at most <see cref="MaxFindings"/>, each passing the desktop's rules and with an id
-    /// of its own; otherwise null and one sentence naming the first problem, <paramref name="invalid"/> when the text is
-    /// not such an array.
+    /// The findings of a JSON array that pass <see cref="FindingValidation"/>; otherwise null and one sentence naming the
+    /// first problem, <paramref name="invalid"/> when the text is not a JSON array.
     /// </summary>
-    internal static (IReadOnlyList<ReviewFinding>? Findings, string? Problem) ParseFindings(string? json, string invalid)
+    internal static (IReadOnlyList<Finding>? Findings, string? Problem) ParseFindings(string? json, string invalid)
     {
         JsonElement array;
         try
@@ -137,30 +137,30 @@ internal sealed partial record ReviewFindings(
             return (null, invalid);
         }
 
-        if (array.ValueKind != JsonValueKind.Array || array.GetArrayLength() > MaxFindings)
+        if (array.ValueKind != JsonValueKind.Array)
         {
             return (null, invalid);
         }
 
-        var findings = new List<ReviewFinding>();
-        var ids = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var element in array.EnumerateArray())
+        var elements = array.EnumerateArray().ToList();
+        var findings = elements.Select(Candidate).ToList();
+        if (findings.Count > FindingLimits.MaxFindings)
         {
-            var position = (findings.Count + 1).ToString(CultureInfo.InvariantCulture);
-            if (ParseFinding(element) is not { } finding)
-            {
-                return (null, $"Finding {position} {ProblemOf(element)}");
-            }
-
-            if (!ids.Add(finding.Id))
-            {
-                return (null, $"Finding {position} repeats the id {finding.Id}; each id must be unique.");
-            }
-
-            findings.Add(finding);
+            return (null, FindingValidation.ProblemOf(findings!));
         }
 
-        return (findings, null);
+        for (var index = 0; index < findings.Count; index++)
+        {
+            var problem = findings[index] is { } finding
+                ? FindingValidation.ProblemOf(finding) ?? TypeProblemOf(elements[index])
+                : "must be a JSON object.";
+            if (problem is not null)
+            {
+                return (null, $"Finding {(index + 1).ToString(CultureInfo.InvariantCulture)} {problem}");
+            }
+        }
+
+        return FindingValidation.ProblemOf(findings!) is { } repeated ? (null, repeated) : (findings!, null);
     }
 
     private static bool TryKnown(string? knownJson, out IReadOnlyList<string>? known)
@@ -202,69 +202,32 @@ internal sealed partial record ReviewFindings(
         return true;
     }
 
-    private static ReviewFinding? ParseFinding(JsonElement element) =>
-        ProblemOf(element) is null
-            ? new ReviewFinding(
+    /// <summary>The finding an element of the array names, its line 0 when it is not a whole number; null when it is not an object.</summary>
+    private static Finding? Candidate(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Object
+            ? new Finding(
                 Text(element, "id")!, Text(element, "severity")!, Text(element, "title")!, Text(element, "path")!,
-                element.GetProperty("line").GetInt32(), Blank(Text(element, "context")), Text(element, "why")!, Text(element, "fix")!,
-                Blank(Text(element, "rule")))
+                element.TryGetProperty("line", out var line) && line.ValueKind == JsonValueKind.Number && line.TryGetInt32(out var value) ? value : 0,
+                Blank(Text(element, "context")), Text(element, "why")!, Text(element, "fix")!, Blank(Text(element, "rule")),
+                string.IsNullOrWhiteSpace(Text(element, "evidence")) ? null : Text(element, "evidence"))
             : null;
 
-    private static string? ProblemOf(JsonElement element)
+    /// <summary>A context, a rule or evidence that is neither text nor null, which <see cref="Candidate"/> reads as none.</summary>
+    private static string? TypeProblemOf(JsonElement element)
     {
-        if (element.ValueKind != JsonValueKind.Object)
-        {
-            return "must be a JSON object.";
-        }
-
-        if (Text(element, "id") is not { } id || !FindingId().IsMatch(id))
-        {
-            return "needs an id of 1 to 40 letters, digits or hyphens.";
-        }
-
-        if (Text(element, "severity") is not { } severity || !Severities.Contains(severity))
-        {
-            return "needs a severity of block, fix or nit.";
-        }
-
-        if (Text(element, "title") is not { } title || string.IsNullOrWhiteSpace(title) || title.Length > MaxTitleLength)
-        {
-            return "needs a title of 1 to 200 characters.";
-        }
-
-        if (Text(element, "path") is not { } path || !GitHubNames.IsValidPath(path) || path.Contains("..", StringComparison.Ordinal))
-        {
-            return "needs a path relative to the repository root, without a leading slash or '..'.";
-        }
-
-        if (!element.TryGetProperty("line", out var line) || line.ValueKind != JsonValueKind.Number
-            || !line.TryGetInt32(out var value) || value < 1)
-        {
-            return "needs a line that is a positive whole number.";
-        }
-
         if (element.TryGetProperty("context", out var context) && context.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
         {
             return "has a context that is not text.";
         }
 
-        if (string.IsNullOrWhiteSpace(Text(element, "why")))
+        if (element.TryGetProperty("evidence", out var evidence) && evidence.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
         {
-            return "needs a why that says what is wrong.";
+            return "has evidence that is not text.";
         }
 
-        if (string.IsNullOrWhiteSpace(Text(element, "fix")))
-        {
-            return "needs a fix.";
-        }
-
-        if (element.TryGetProperty("rule", out var rule)
-            && (rule.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || (Blank(rule.GetString())?.Length ?? 0) > MaxRuleLength))
-        {
-            return "needs a rule of 1 to 300 characters, or none.";
-        }
-
-        return null;
+        return element.TryGetProperty("rule", out var rule) && rule.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)
+            ? $"needs a rule of 1 to {FindingLimits.MaxRuleLength.ToString(CultureInfo.InvariantCulture)} characters, or none."
+            : null;
     }
 
     private static string? Text(JsonElement element, string name) =>
@@ -272,13 +235,6 @@ internal sealed partial record ReviewFindings(
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
-
-/// <summary>
-/// One finding of a review or an audit, anchored to a line of the file, with the project rule it departs from when
-/// one is named.
-/// </summary>
-internal sealed record ReviewFinding(
-    string Id, string Severity, string Title, string Path, int Line, string? Context, string Why, string Fix, string? Rule);
 
 /// <summary>One of the pull request's checks, as the card shows it; the conclusion is written as null while it runs.</summary>
 internal sealed record ReviewCheck(

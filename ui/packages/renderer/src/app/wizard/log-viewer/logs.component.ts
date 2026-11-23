@@ -228,7 +228,7 @@ function stampOf(event: OutputEvent): Stamp {
               Scout is running and has not written anything yet. New lines appear here as it works.
             </p>
             <a matButton="outlined" routerLink="/settings" data-test="open-settings">
-              <sc-icon name="settings" [size]="16" />Open Settings
+              <sc-icon name="sliders" [size]="16" />Open Settings
             </a>
           } @else {
             <span class="empty-icon"><sc-icon name="stop" [size]="24" /></span>

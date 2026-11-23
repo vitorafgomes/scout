@@ -23,6 +23,132 @@ reliability: medium
 
 ## Entries
 
+### A project that failed to build beside one that needs Docker cannot be told apart (2026-11-22)
+
+- **Gap:** the run's facts count each test project that printed its summary; a project that failed to build prints none, so beside a project whose failures all need a Docker daemon the run reads as could not run, and the offer sets the exit code aside ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]). The exemption already stands aside when the list of projects is partial.
+- **Blocker:** the sandbox reads summaries, not build errors.
+- **Unblocks with:** the summary reader counting a build that failed as a project that failed.
+
+### Earlier findings: the resolved state is not read (2026-11-22)
+
+- **Gap:** whether a conversation of an earlier review is resolved is not read, so every one of Scout's earlier conversations is checked ([[pages/decisions/0076-a-review-checks-the-findings-scout-posted-on-earlier-reviews]]).
+- **Blocker:** it needs GraphQL, a POST, which the plugin's GET-only reads do not allow.
+- **Unblocks with:** part 2's decision record, which brings it with the writes.
+
+### The turn table does not count noted answers (2026-11-21)
+
+- **Gap:** each second reading turn's row counts the findings that held, were refuted and were uncertain, but not the ones noted ([[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]], amended 2026-11-21).
+- **Blocker:** the count is a new nullable column, so a migration, its designer and the model snapshot.
+- **Unblocks with:** that migration, in a change of its own.
+
+### xunit 2 is legacy; its successor is xunit v3 (2026-11-21)
+
+- **Gap:** every test project runs on `xunit` 2.9.3 with `xunit.runner.visualstudio` 4.0.1; its publisher marks the 2 line as legacy in favour of v3.
+- **Blocker:** v3 is a migration: the test projects become executables with new package names, and the runner, the attributes and the `ITestOutputHelper` uses change in every test project under `tests/`.
+- **Unblocks with:** a pull request of its own that moves every test project at once, the totals compared before and after.
+
+### Microsoft.Bot is legacy; Teams moves to its successor (2026-11-21)
+
+- **Gap:** the Teams adapter uses `Microsoft.Bot.Builder`, `Microsoft.Bot.Builder.Integration.AspNet.Core`, `Microsoft.Bot.Connector` and `Microsoft.Bot.Schema` 4.23.1, which their publisher marks as legacy.
+- **Blocker:** its successor is another SDK with another activity model, so it touches `src/Scout.Adapter.Teams` and its tests, and the host's registration of the adapter.
+- **Unblocks with:** a pull request of its own for the Teams adapter.
+
+### A waiting review stopped is said only when a batch of the running review ends (2026-11-21)
+
+- **Gap:** a review stopped while it waits for another posts its stop as the next batch of the running review ends, up to the review batch turn's bound later, not at once ([[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]). The bell waits long enough for it.
+- **Blocker:** none; the window does not wake on a stop.
+- **Unblocks with:** the window woken by the stop signal as well as by a batch's end.
+
+### A waiting entry names a review that was since stopped (2026-11-21)
+
+- **Gap:** when the review a waiting review waits for is stopped, the waiting entry keeps naming it until the worker picks the waiting review ([[pages/decisions/0075-a-review-asked-while-another-runs-says-it-waits]]).
+- **Blocker:** the sentence is said once, when the review starts waiting.
+- **Unblocks with:** the waiting sentence said again for the reviews behind one that leaves the queue.
+
+### The review misses most of what a careful review finds (2026-11-21)
+
+- **Gap:** measured on real pull requests against a careful review of the same diff, Scout's review finds a minority of the confirmed problems, even after the evidence rule, the parts, the focused readings and the second reading ([[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]).
+- **Blocker:** the first reading, not the second, is where the problems are missed.
+- **Unblocks with:** a first reading measured against the same set, change by change.
+
+### Related files are batched by folder, not by relation (2026-11-21)
+
+- **Gap:** a batch holds files of one folder; a change spread over a caller and its callee in two folders is read in two batches that never see each other ([[pages/decisions/0067-a-file-too-large-for-one-batch-is-read-in-parts]]).
+- **Blocker:** no relation between files is computed.
+- **Unblocks with:** batches planned by the names a change touches across files.
+
+### No reasoning effort is asked for review turns (2026-11-21)
+
+- **Gap:** a review turn uses the chat service's defaults; no reasoning effort is set for these turns only.
+- **Blocker:** the plan provider's client overwrites the caller's options on every call.
+- **Unblocks with:** a per-turn option the provider adapters pass through.
+
+### A refuted finding can come back in the next run (2026-11-21)
+
+- **Gap:** a review asked again starts with no memory of what the second reading refuted, so the same false finding can be read and refuted again ([[pages/decisions/0069-the-second-reading-tries-to-refute-and-holds-only-with-a-scenario]]).
+- **Blocker:** refutations are kept per job only.
+- **Unblocks with:** refuted findings carried to the next job at the same pull request.
+
+### The second reading's answers are cut at 300 characters (2026-11-21)
+
+- **Gap:** a reason or a scenario over 300 characters is cut on a word and kept; the cut can drop the line the reason named.
+- **Blocker:** none.
+- **Unblocks with:** a longer bound measured on the card and the note.
+
+### A hunk that only removes has no line for an inline comment (2026-11-21)
+
+- **Gap:** a finding quoting lines of a hunk that only removes is placed at the hunk's new start, which is not on the new side, so its inline comment is dropped and the finding stays in the note's body only ([[pages/decisions/0066-every-finding-carries-evidence-and-its-line-is-derived-by-code]]).
+- **Blocker:** GitHub anchors a comment on a line of the diff's new side.
+- **Unblocks with:** a comment on the removed side, or on the nearest line of the diff.
+
+### The control plane does not use Scout.Review (2026-11-21)
+
+- **Gap:** the control plane checks a findings card's shape only, not the review's rules ([[pages/decisions/0065-the-review-rules-live-in-scout-review]]).
+- **Blocker:** none.
+- **Unblocks with:** the control plane calling Scout.Review where it judges a card.
+
+### Turn totals are not exposed through the MCP read tool (2026-11-21)
+
+- **Gap:** `get_review` answers the card, not the job's turn totals ([[pages/decisions/0073-the-numbers-of-each-model-turn-are-kept]]).
+- **Blocker:** a `usage` object in the card block needs the desktop parser to accept it.
+- **Unblocks with:** the shared card parser and its type taking `usage`, with a test for a block without it.
+
+### No automated test shows a granted test run reaching the sandbox (2026-11-21)
+
+- **Gap:** the review's own test run through the write gate is pinned for the refusal without the "Local container" grant; a granted run through the gate reaching the sandbox was seen only in live runs ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]).
+- **Blocker:** in the host the function reads the pull request from GitHub before it reaches the sandbox.
+- **Unblocks with:** a host test with a fake GitHub handler.
+
+### Tests that need a Docker daemon do not run in the sandbox (2026-11-21)
+
+- **Gap:** a test project whose failures all need a Docker daemon is reported as could not run, covered for the offer only by the pull request's own checks.
+- **Blocker:** the sandbox gives the container no Docker daemon, by its isolation rules.
+- **Unblocks with:** a decision on running such tests, if ever, outside the sandbox.
+
+### The second reading is unstable on a claim proved in the description (2026-11-21)
+
+- **Gap:** a claim whose proof is in the pull request's description rather than in the code is held in one run and refuted in another.
+- **Blocker:** the second reading is handed the requests, not the description's whole text.
+- **Unblocks with:** the description handed as data and a rule for claims about it.
+
+### Three end-to-end specs touched by the review work were not run locally (2026-11-21)
+
+- **Gap:** the desktop end-to-end specs changed for the card's texts were updated but not run.
+- **Blocker:** none.
+- **Unblocks with:** one run of the end-to-end suite.
+
+### The review branch must be rebased onto main before a pull request (2026-11-21)
+
+- **Gap:** the review work sits on a branch cut before later changes on main.
+- **Blocker:** none.
+- **Unblocks with:** a rebase and the full test run before the pull request.
+
+### Review features not built (2026-11-21)
+
+- **Gap:** noticing a pull request without a mention, the "review started" note on GitHub, checking earlier findings again after a new commit, blocking a merge, and approval under the owner's flag ([[pages/decisions/0070-one-verdict-decision-and-no-approval-on-its-own]]) are not built.
+- **Blocker:** each needs the owner's decision.
+- **Unblocks with:** a decision per feature.
+
 ### The tests line is still a second comment beside the review note (2026-11-20)
 
 - **Gap:** a verdict's tests line is posted as its own comment after the note ([[pages/decisions/0063-what-scout-writes-on-a-pull-request-follows-the-templates]]), so the pull request carries two texts where the artboard draws one.
@@ -281,13 +407,13 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:273`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1707`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:240`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:246`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1707`) has no `note`, its parser drops it (`ui/packages/shared/src/review-findings.ts:282`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
 ### The review card keeps only the end of a failed run's output (2026-11-13)
 
-- **Gap:** a failed sandbox run's result leads with the lines that name the failure, then the last 4,000 characters ([[pages/services/sandbox]]); `run_pull_request_tests` answers the model both, but the run kept for the review's card is cut to its last 4,000 (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:249`), and the desktop's parser cuts to the last 4,000 again (`ui/packages/renderer/src/app/core/review-findings.ts:263`), so a failure the model saw in the failure section can be absent from the card ([[pages/services/plugin-github]]).
+- **Gap:** a failed sandbox run's result leads with the lines that name the failure, then the last 4,000 characters ([[pages/services/sandbox]]); `run_pull_request_tests` answers the model both, but the run kept for the review's card is cut to its last 4,000 (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:249`), and the desktop's parser cuts to the last 4,000 again (`ui/packages/shared/src/review-findings.ts:21`), so a failure the model saw in the failure section can be absent from the card ([[pages/services/plugin-github]]).
 - **Blocker:** the kept output counts toward the 24,000-character findings block, and the card is a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** the kept run carrying the failure section within a bound the findings block allows, the parser keeping it, and the card's tests line showing it, with the artboard updated and a spec row per state.
 
@@ -470,7 +596,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A review reads every non-zero exit as "Tests failed" (2026-11-10)
 
-- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:94`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
+- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/shared/src/review-findings.ts:88`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
 - **Unblocks with:** `testsLine` reading "Tests could not be started: <reason>" when `ran` is true and `reason` is set, with rows for a restore failure, exits 126 and 127, an exit 1 without a reason and a pass; no contract change, the field is already in the block. Exit 2 from a line `sh` cannot parse stays "Tests failed".
 
 ### A project that mixes passing tests with tests that need Docker is reported as failed (2026-11-15)

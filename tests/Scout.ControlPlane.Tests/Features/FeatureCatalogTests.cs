@@ -59,6 +59,7 @@ public sealed class FeatureCatalogTests
             "Read the comments on a pull request",
             "Read which account Scout signs in as, so it never approves a pull request that account opened",
             "Read the check runs and commit statuses of a pull request's head commit, and the reviews already given on it",
+            "Read the review comments on a pull request and the replies under them when a review job checks the findings Scout posted on earlier reviews; nothing is written",
         ]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Issues").Actions.ShouldBe(["List open issues", "Read one issue"]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Notifications").Actions.ShouldBe([
@@ -87,8 +88,8 @@ public sealed class FeatureCatalogTests
             ("Issues", ScopeAccess.Read, "List open issues and read one issue"),
             ("Notifications", ScopeAccess.Read, "Search every five minutes for your mentions, review requests and replies; read the pull requests that mention your Scout bot and the bot's own name"),
             ("Scout's data folder", ScopeAccess.Write, "Keep conventions profiles, repository snapshots, audit jobs and review jobs on this computer"),
-            ("Pull request reviews", ScopeAccess.IrreversibleWrite, "Post a review with comments; your click on Post on a review card is the approval, and one asked in chat waits for you in Approvals"),
-            ("Pull request verdicts", ScopeAccess.IrreversibleWrite, "Approve a pull request or request changes; your choice on a review card is the approval, and one asked in chat waits for you in Approvals"),
+            ("Pull request reviews", ScopeAccess.IrreversibleWrite, "Post a review with comments; your click on the review card's action is the approval, and one asked in chat waits for you in Approvals"),
+            ("Pull request verdicts", ScopeAccess.IrreversibleWrite, "Request changes on a pull request; Scout does not approve on its own, your click on the review card is the approval, and one asked in chat waits for you in Approvals"),
             ("Pull request comments", ScopeAccess.IrreversibleWrite, "Comment on a pull request or reply to a review comment; each one waits for you in Approvals"),
             ("New issues", ScopeAccess.IrreversibleWrite, "Open an issue; your click on Open issues on a findings card is the approval, and one asked in chat waits for you in Approvals"),
             ("Issue comments", ScopeAccess.IrreversibleWrite, "Comment on an existing issue; each one waits for you in Approvals"),
@@ -108,9 +109,9 @@ public sealed class FeatureCatalogTests
                     "Keep the audit job of a repository, its plan, progress and findings, when you ask for a whole-repository audit in chat; the audit reads the snapshot and pauses or stops when you ask | " +
                     "Keep the review job of a pull request too large for one turn, its plan, progress and findings, when a review in chat finds diffs left out; the review reads the snapshot at the head commit and posts one card in the chat, nothing on GitHub"),
                 ("Pull request reviews",
-                    "Post a review with comments on a pull request; this review only comments, it never approves or requests changes. A review notifies the pull request's author and everyone following it, so each one needs your approval in Scout Desktop: your click on Post on a review card is that approval, and a review asked for in chat waits for you to approve it"),
+                    "Post a review with comments on a pull request; this review only comments, it never approves or requests changes. A review notifies the pull request's author and everyone following it, so each one needs your approval in Scout Desktop: your click on the review card's action is that approval, and a review asked for in chat waits for you to approve it"),
                 ("Pull request verdicts",
-                    "Approve a pull request or request changes on it when you choose that verdict on the review card; a verdict stays in the pull request's history, so each one runs only after you approve that action in Scout Desktop | Approve a pull request or request changes on it when you ask for it in chat; each verdict waits for you to approve it in Scout Desktop"),
+                    "Request changes on a pull request when the review card offers it and you choose it; Scout does not approve on its own, a person approves on GitHub; a verdict stays in the pull request's history, so each one runs only after you approve that action in Scout Desktop | Request changes on a pull request when you ask for it in chat; each verdict waits for you to approve it in Scout Desktop"),
                 ("Pull request comments",
                     "Comment on a pull request's conversation when you ask for it in chat; a comment notifies everyone following the pull request, so each one waits for you to approve that comment in Scout Desktop | " +
                     "Reply to a review comment on a pull request when you ask for it in chat; each reply waits for you to approve it in Scout Desktop"),
@@ -373,5 +374,16 @@ public sealed class FeatureCatalogTests
         row.Actions.ShouldContain(
             a => a.StartsWith("Keep the review job of a pull request too large for one turn", StringComparison.Ordinal) && a.EndsWith("nothing on GitHub", StringComparison.Ordinal),
             "the start of a review job is a write declared under Scout's data folder, and says nothing is written on GitHub");
+    }
+
+    [Fact]
+    public void L2_no_feature_declares_that_Scout_approves_on_its_own_or_names_the_Post_button_of_a_review_card()
+    {
+        var texts = GitHub.ScopeMatrix!.SelectMany(s => s.Actions.Prepend(s.Summary)).ToList();
+
+        texts.ShouldNotBeEmpty();
+        texts.ShouldAllBe(
+            t => !t.Contains("Post on a review card", StringComparison.Ordinal) && !t.StartsWith("Approve a pull request", StringComparison.Ordinal),
+            "a declaration says what Scout writes today: no Post button on a review card, and no approval on its own");
     }
 }

@@ -76,6 +76,12 @@ public interface IGitHubClient
         string owner, string repo, int number, CancellationToken ct);
 
     /// <summary>
+    /// List the review comments of pull request <paramref name="number"/>, oldest first, with their conversation and
+    /// commit, one page of at most <c>100</c>; null when the pull request is not found or not accessible.
+    /// </summary>
+    Task<PullRequestReviewComments?> ListReviewCommentsAsync(string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>
     /// Read issue <paramref name="number"/>. Returns null when the issue is not found or not accessible.
     /// </summary>
     Task<IssueDetails?> GetIssueAsync(

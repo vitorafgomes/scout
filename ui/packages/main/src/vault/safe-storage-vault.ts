@@ -30,7 +30,13 @@ export type MainOnlyVaultKey =
   | 'update.skipped-version'
   | 'update.channel'
   | 'update.last-check'
-  | 'features.pending-revokes';
+  | 'features.pending-revokes'
+  | 'mcp.enabled'
+  | 'mcp.startMode'
+  | 'mcp.port'
+  | 'mcp.token'
+  | 'mcp.tokenHash'
+  | 'mcp.tokenCreatedAt';
 
 export type StoredVaultKey = VaultKey | MainOnlyVaultKey;
 

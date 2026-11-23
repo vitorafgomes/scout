@@ -11,6 +11,7 @@
     <Project Path="src/Scout.Plugin.YouTube/Scout.Plugin.YouTube.csproj" />
     <Project Path="src/Scout.Knowledge/Scout.Knowledge.csproj" />
     <Project Path="src/Scout.Plugin.Kubernetes/Scout.Plugin.Kubernetes.csproj" />
+    <Project Path="src/Scout.Review/Scout.Review.csproj" />
     <Project Path="src/Scout.Skills/Scout.Skills.csproj" />
     <Project Path="src/Scout.ControlPlane.Contracts/Scout.ControlPlane.Contracts.csproj" />
     <Project Path="src/Scout.ControlPlane/Scout.ControlPlane.csproj" />
@@ -33,6 +34,7 @@
     <Project Path="tests/Scout.Plugin.YouTube.Tests/Scout.Plugin.YouTube.Tests.csproj" />
     <Project Path="tests/Scout.Knowledge.Tests/Scout.Knowledge.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.Kubernetes.Tests/Scout.Plugin.Kubernetes.Tests.csproj" />
+    <Project Path="tests/Scout.Review.Tests/Scout.Review.Tests.csproj" />
     <Project Path="tests/Scout.Skills.Tests/Scout.Skills.Tests.csproj" />
     <Project Path="tests/Scout.ControlPlane.Tests/Scout.ControlPlane.Tests.csproj" />
     <Project Path="tests/Scout.Transcription.Whisper.Tests/Scout.Transcription.Whisper.Tests.csproj" />

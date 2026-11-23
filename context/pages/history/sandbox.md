@@ -1,9 +1,9 @@
 ---
 title: "Sandbox - history"
-version: "1.3"
+version: "1.4"
 date: 2026-11-10
-updated: 2026-11-15
-changes: "v1.3 (2026-11-15): tests that could not run for want of a Docker daemon are not a failure. v1.2 (2026-11-14): the record is written as running when the test command starts. v1.1 (2026-11-14): the run's record names the command that ran. v1.0: initial history note: a test command that could not be started says so"
+updated: 2026-11-21
+changes: "v1.4 (2026-11-21): the review job runs the tests itself; the counts per test project read as the output flows. v1.3 (2026-11-15): tests that could not run for want of a Docker daemon are not a failure. v1.2 (2026-11-14): the record is written as running when the test command starts. v1.1 (2026-11-14): the run's record names the command that ran. v1.0: initial history note: a test command that could not be started says so"
 page_type: reference
 status: artefact
 description: "What changed in Scout.Sandbox and when."
@@ -17,6 +17,13 @@ reliability: high
 # Sandbox - history
 
 > Dated changes to [[pages/services/sandbox]]; the service page states how it works now.
+
+
+## 2026-11-21 - The review job runs the tests, and each test project's counts are read as the output flows
+
+- **What it was:** the tests ran when the model called `run_pull_request_tests`, and a run kept its exit code and the unrunnable count only.
+- **What it is:** a review job starts the run itself through the same function on the shared kernel, so the GitHub feature's "Local container" grant applies and its refusal reaches the card; the run's summary reader keeps the passed, failed and skipped counts of each test project as the output flows (`src/Scout.Sandbox/DockerSandboxRunner.cs:338`), and a project whose failures all needed the Docker daemon could not run ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]).
+- **Tests:** `tests/Scout.Host.Console.Tests/HostReviewTurnTests.cs:159` (refused without the grant, no container started); the summary reader's tests in `tests/Scout.Sandbox.Tests`.
 
 ## 2026-11-15 - Tests that could not run for want of a Docker daemon are not a failure
 

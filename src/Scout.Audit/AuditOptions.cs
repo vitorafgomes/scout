@@ -9,6 +9,14 @@ public sealed class AuditOptions
     /// <summary>Configuration section bound to these options.</summary>
     public const string Section = "Scout:Audit";
 
+    /// <summary>
+    /// True to record each review turn for diagnosis: one JSON-lines file per batch and reading, and one per group of the
+    /// second reading, under <c>audit/&lt;job&gt;</c> in Scout's own data folder, wherever <see cref="DbPath"/> puts the
+    /// database; off by default. The environment variable
+    /// <c>Scout__Audit__RecordTurns=true</c> sets it.
+    /// </summary>
+    public bool RecordTurns { get; set; }
+
     /// <summary>The SQLite file of the jobs; empty for <c>Scout/audit.db</c> under the user's local application data.</summary>
     public string DbPath { get; set; } = string.Empty;
 
@@ -23,6 +31,13 @@ public sealed class AuditOptions
 
     /// <summary>How long one batch turn may take before it is abandoned as not answered in time.</summary>
     public TimeSpan TurnTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// The time one review batch turn may take, shorter than <see cref="TurnTimeout"/>, which audits and the second
+    /// reading's groups keep: review batch turns measured on real pull requests took 8 to 90 seconds, so 3 minutes is twice
+    /// the slowest with room, and a turn that hangs is retried once and reported within minutes, not twenty.
+    /// </summary>
+    public TimeSpan ReviewTurnTimeout { get; set; } = TimeSpan.FromMinutes(3);
 
     /// <summary>
     /// How many batches of a pull request review run at once, 1 to 8; 4 unless configured, and 1 when the configured AI

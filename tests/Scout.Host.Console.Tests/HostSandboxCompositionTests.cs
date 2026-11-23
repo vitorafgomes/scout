@@ -207,4 +207,17 @@ public sealed class HostSandboxCompositionTests : IDisposable
         record.GetProperty("stack").GetString().ShouldBe(".NET");
         record.GetProperty("result").GetString().ShouldBe("passed");
     }
+
+    [Fact]
+    public void The_adapter_carries_each_test_project_s_counts_and_whether_the_list_is_partial()
+    {
+        var counts = new Scout.Sandbox.SandboxTestCounts([new Scout.Sandbox.SandboxTestProject("Shop.Tests", 827, 0, 2, false), new Scout.Sandbox.SandboxTestProject("Shop.IntegrationTests", 0, 133, 0, true)], true, "s");
+
+        var result = SandboxRunnerAdapter.ToPlugin(new Scout.Sandbox.SandboxResult(true, null, "img", "dotnet test", 1, 1, "out", null, null, counts));
+
+        (result.Projects, result.ProjectsPartial).ShouldSatisfyAllConditions(
+            "every project and the partial flag reach the plugin",
+            r => r.Projects.ShouldBe([new Scout.Review.TestProjectFacts("Shop.Tests", 827, 0, 2, false), new Scout.Review.TestProjectFacts("Shop.IntegrationTests", 0, 133, 0, true)]),
+            r => r.ProjectsPartial.ShouldBeTrue());
+    }
 }

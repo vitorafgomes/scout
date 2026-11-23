@@ -5,6 +5,7 @@ import {
   type LocalListeningResponse,
   type LocalTranscriptEvent,
   type GitHubVerdictStatus,
+  type McpStatus,
   type GitHubWaitingApproval,
   type LocalTurn,
   type ScoutBridge,
@@ -600,6 +601,36 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       ipc.on(CHANNEL.githubVerdict, handler);
       return () => {
         ipc.removeListener(CHANNEL.githubVerdict, handler);
+      };
+    },
+    mcpStatus() {
+      return ipc.invoke(CHANNEL.mcpStatus) as ReturnType<ScoutBridge['mcpStatus']>;
+    },
+    mcpSetEnabled(enabled) {
+      return ipc.invoke(CHANNEL.mcpSetEnabled, enabled) as ReturnType<ScoutBridge['mcpSetEnabled']>;
+    },
+    mcpCreateToken() {
+      return ipc.invoke(CHANNEL.mcpCreateToken) as ReturnType<ScoutBridge['mcpCreateToken']>;
+    },
+    mcpRevokeToken() {
+      return ipc.invoke(CHANNEL.mcpRevokeToken) as ReturnType<ScoutBridge['mcpRevokeToken']>;
+    },
+    mcpSetStartMode(mode) {
+      return ipc.invoke(CHANNEL.mcpSetStartMode, mode) as ReturnType<
+        ScoutBridge['mcpSetStartMode']
+      >;
+    },
+    mcpPickPort() {
+      return ipc.invoke(CHANNEL.mcpPickPort) as ReturnType<ScoutBridge['mcpPickPort']>;
+    },
+    mcpAnswerStart(req) {
+      return ipc.invoke(CHANNEL.mcpAnswerStart, req) as ReturnType<ScoutBridge['mcpAnswerStart']>;
+    },
+    onMcpChanged(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) => listener(args[0] as McpStatus);
+      ipc.on(CHANNEL.mcpChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.mcpChanged, handler);
       };
     },
     githubApproveWhenChecksPass(req) {

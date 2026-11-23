@@ -1552,6 +1552,54 @@ describe('a review job in the bell', () => {
     ]);
   });
 
+  it('a review asked while another runs is a waiting entry with its sentence and Stop, and the worker picking it turns it running', () => {
+    const t = setup();
+    const waits =
+      'The review of acme/api#52 waits for the review of acme/web#44 to end; it starts by itself.';
+    t.workerLine(notice(waits));
+    const waiting = shown(t.get(RUNNING_REVIEW.id));
+
+    t.workerLine(
+      notice(
+        'Review of acme/api#52: 0 of 17 batches done, 0 of 133 files read, 0 findings so far.',
+      ),
+    );
+
+    expect(waiting).toEqual({
+      kind: 'waiting',
+      title: 'Review of acme/api#52 waiting',
+      detail: waits,
+      progress: null,
+      control: null,
+      note: null,
+      offered: 'stop',
+    });
+    expect([t.get(RUNNING_REVIEW.id)?.kind, t.get(RUNNING_REVIEW.id)?.title]).toEqual([
+      'running',
+      'Review of acme/api#52',
+    ]);
+  });
+
+  it('Stop on a waiting review asks the control plane to stop it, and its sentence that nothing was read ends the entry as stopped', async () => {
+    const t = setup();
+    t.workerLine(
+      notice(
+        'The review of acme/api#52 waits for the review of acme/web#44 to end; it starts by itself.',
+      ),
+    );
+
+    await t.jobs.control(RUNNING_REVIEW.id, 'stop');
+    t.workerLine(notice('The review of acme/api#52 ended at your request: nothing was read.'));
+
+    expect(t.asked).toEqual([
+      { kind: 'review', owner: 'acme', repo: 'api', number: 52, action: 'stop' },
+    ]);
+    expect([t.get(RUNNING_REVIEW.id)?.kind, t.get(RUNNING_REVIEW.id)?.title]).toEqual([
+      'done',
+      'Review of acme/api#52 stopped',
+    ]);
+  });
+
   it('the plain "is done" sentence that answers a Stop ends the entry as stopped, not done', async () => {
     const t = setup([RUNNING_REVIEW]);
     await t.jobs.control(RUNNING_REVIEW.id, 'stop');

@@ -69,6 +69,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
                     "Read the comments on a pull request",
                     "Read which account Scout signs in as, so it never approves a pull request that account opened",
                     "Read the check runs and commit statuses of a pull request's head commit, and the reviews already given on it",
+                    "Read the review comments on a pull request and the replies under them when a review job checks the findings Scout posted on earlier reviews; nothing is written",
                 },
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
@@ -100,13 +101,13 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Access: ScopeAccess.Write),
             new FeatureScopeRow(
                 Scope: "Pull request reviews",
-                Summary: "Post a review with comments; your click on Post on a review card is the approval, and one asked in chat waits for you in Approvals",
-                Actions: new[] { "Post a review with comments on a pull request; this review only comments, it never approves or requests changes. A review notifies the pull request's author and everyone following it, so each one needs your approval in Scout Desktop: your click on Post on a review card is that approval, and a review asked for in chat waits for you to approve it" },
+                Summary: "Post a review with comments; your click on the review card's action is the approval, and one asked in chat waits for you in Approvals",
+                Actions: new[] { "Post a review with comments on a pull request; this review only comments, it never approves or requests changes. A review notifies the pull request's author and everyone following it, so each one needs your approval in Scout Desktop: your click on the review card's action is that approval, and a review asked for in chat waits for you to approve it" },
                 Access: ScopeAccess.IrreversibleWrite),
             new FeatureScopeRow(
                 Scope: "Pull request verdicts",
-                Summary: "Approve a pull request or request changes; your choice on a review card is the approval, and one asked in chat waits for you in Approvals",
-                Actions: new[] { "Approve a pull request or request changes on it when you choose that verdict on the review card; a verdict stays in the pull request's history, so each one runs only after you approve that action in Scout Desktop", "Approve a pull request or request changes on it when you ask for it in chat; each verdict waits for you to approve it in Scout Desktop" },
+                Summary: "Request changes on a pull request; Scout does not approve on its own, your click on the review card is the approval, and one asked in chat waits for you in Approvals",
+                Actions: new[] { "Request changes on a pull request when the review card offers it and you choose it; Scout does not approve on its own, a person approves on GitHub; a verdict stays in the pull request's history, so each one runs only after you approve that action in Scout Desktop", "Request changes on a pull request when you ask for it in chat; each verdict waits for you to approve it in Scout Desktop" },
                 Access: ScopeAccess.IrreversibleWrite),
             new FeatureScopeRow(
                 Scope: "Pull request comments",

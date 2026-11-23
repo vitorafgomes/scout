@@ -20,24 +20,19 @@ const REVIEW_WITH_A_CHECK_RUNNING = {
       url: 'https://github.com/acme/shop/runs/2',
     },
   ],
-  findings: [
-    {
-      id: 'lock',
-      severity: 'fix',
-      title: 'Move has no lock',
-      path: 'src/orders/Cart.cs',
-      line: 12,
-      why: 'Two moves at once lose an item.',
-      fix: 'Take the cart lock.',
-    },
-  ],
+  findings: [],
+  offer: {
+    verdict: 'wait',
+    reason: 'Approve when the checks pass: 1 check is still running.',
+    commentInstead: false,
+  },
 };
 
 test.use({
   script: {
     replies: [
       {
-        complete: `One thing to fix on acme/shop#5.\n\n\`\`\`scout-findings\n${JSON.stringify(REVIEW_WITH_A_CHECK_RUNNING)}\n\`\`\``,
+        complete: `Nothing to report on acme/shop#5.\n\n\`\`\`scout-findings\n${JSON.stringify(REVIEW_WITH_A_CHECK_RUNNING)}\n\`\`\``,
       },
     ],
   },
@@ -52,27 +47,27 @@ test('a review whose checks still run offers Approve when the checks pass; the c
   await ask(page, 'Review acme/shop#5');
 
   const checkLine = page.getByTestId('check-line');
-  const approveWhenGreen = page.getByTestId('approve-when-green');
+  const approveWhenGreen = page.getByTestId('offer');
   await expect(checkLine).toHaveText(
-    '1 check is still running. Scout approves only when every check passed.',
+    '1 check is still running. Scout does not approve on its own; a person approves on GitHub.',
   );
   await expect(approveWhenGreen).toHaveText('Approve when the checks pass');
-  await expect(page.getByTestId('approve')).toHaveCount(0);
-  await expect(page.getByTestId('request-changes')).toBeVisible();
+  await expect(page.getByTestId('offer-reason')).toHaveText(
+    REVIEW_WITH_A_CHECK_RUNNING.offer.reason,
+  );
+  await expect(page.getByTestId('comment-instead')).toHaveCount(0);
 
   await approveWhenGreen.click();
 
   const waiting = page.getByTestId('waiting-line');
   await expect(waiting).toHaveText(
-    'Waiting for the checks: 1 still running. Scout approves when they pass.',
+    'Waiting for the checks: 1 still running. Your approval is sent when they pass.',
   );
   await expect(waiting).toHaveAttribute('role', 'status');
   await expect(page.getByTestId('cancel-waiting')).toHaveAccessibleName(
     'Cancel the approval of acme/shop#5',
   );
-  await expect(approveWhenGreen).toHaveCount(0);
-  await expect(page.getByTestId('request-changes')).toHaveCount(0);
-  await expect(page.getByTestId('post')).toBeVisible();
+  await expect(approveWhenGreen, 'the offered action gives way to the waiting line').toHaveCount(0);
   await expect(checkLine).toHaveCount(0);
 
   await page.getByTestId('cancel-waiting').click();
@@ -80,7 +75,9 @@ test('a review whose checks still run offers Approve when the checks pass; the c
   await expect(waiting).toHaveCount(0);
   await expect(approveWhenGreen).toHaveText('Approve when the checks pass');
   await expect(checkLine).toHaveText(
-    '1 check is still running. Scout approves only when every check passed.',
+    '1 check is still running. Scout does not approve on its own; a person approves on GitHub.',
   );
-  await expect(page.getByTestId('approve')).toHaveCount(0);
+  await expect(page.getByTestId('offer-reason')).toHaveText(
+    REVIEW_WITH_A_CHECK_RUNNING.offer.reason,
+  );
 });

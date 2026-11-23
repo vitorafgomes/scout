@@ -112,6 +112,9 @@ import { createDocker, githubSnapshotsFolder, sandboxWorkFolder } from './docker
 import { readAllowedUserIds, registerAccessHandlers } from './ipc/access.js';
 import { readSlackTokens, registerSlackHandlers } from './ipc/slack.js';
 import { registerDesktopHandlers, type DesktopHandle } from './ipc/desktop.js';
+import { createMcpServer } from './mcp/mcp-server.js';
+import { loadMcpSettings, registerMcpHandlers } from './mcp/mcp-settings.js';
+import { McpActivity, createMcpTools } from './mcp/mcp-tools.js';
 import { registerTheme, windowBackground, type ThemeHandle } from './shell/theme.js';
 import { installAppLifecycle, launchWindow } from './shell/app-lifecycle.js';
 import { createLoginItem, refreshLoginEntry } from './shell/login-item.js';
@@ -286,6 +289,7 @@ let quickAsk: QuickAsk | null = null;
 let operatorWindow: OperatorWindow | null = null;
 let trayController: TrayController | null = null;
 let desktop: DesktopHandle | null = null;
+let mcp: { dispose(): void } | null = null;
 let theme: ThemeHandle | null = null;
 let updateNotice: UpdateNoticeHandle | null = null;
 let openMainWindow: ((show: boolean) => BrowserWindow) | null = null;
@@ -327,6 +331,7 @@ function disposeAll(): void {
   trayController?.destroy();
   updateNotice?.dispose();
   desktop?.dispose();
+  mcp?.dispose();
   gitHubActivity?.dispose();
   pendingApprovals?.dispose();
   unwatchWorkerHealth?.();
@@ -956,6 +961,60 @@ app
       trayAvailable: trayController !== null,
       logger: logger.child({ module: 'desktop' }),
     });
+    const mcpLogger = logger.child({ module: 'mcp' });
+    const mcpSettings = await loadMcpSettings({ vault, logger: mcpLogger, now: Date.now });
+    let mcpHandle: ReturnType<typeof registerMcpHandlers> | null = null;
+    const mcpActivity = new McpActivity(() => mcpHandle?.changed());
+    let mcpStarts = 0;
+    const mcpTools = createMcpTools({
+      entries: () => notifications.list(),
+      askWhenIdle: (question) => quickAsk?.askWhenIdle(question) ?? null,
+      turns: () => quickAsk?.turns() ?? [],
+      previewNote: (request) =>
+        quickAsk === null
+          ? Promise.reject(new Error('Scout is not running.'))
+          : quickAsk.previewNote(request),
+      startMode: () => mcpSettings.state().startMode,
+      announce: () => mcpHandle?.changed(),
+      activity: mcpActivity,
+      now: Date.now,
+      setTimer,
+      nextId: () => `mcp-start-${++mcpStarts}`,
+    });
+    const mcpServer = createMcpServer({
+      settings: {
+        port: () => mcpSettings.state().port,
+        tokenHash: () => mcpSettings.tokenHash(),
+        setPort: (port) => mcpSettings.setPort(port),
+      },
+      tools: mcpTools,
+      activity: mcpActivity,
+      version: app.getVersion(),
+      logger: mcpLogger,
+    });
+    mcpHandle = registerMcpHandlers(ipcMain, {
+      settings: mcpSettings,
+      server: mcpServer,
+      tools: mcpTools,
+      activity: mcpActivity,
+      push: (status) => {
+        if (mainWindow !== null && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(CHANNEL.mcpChanged, status);
+        }
+      },
+      senders,
+      logger: mcpLogger,
+    });
+    const mcpChannels = mcpHandle;
+    mcp = {
+      dispose: () => {
+        mcpChannels.dispose();
+        void mcpServer.stop();
+      },
+    };
+    if (mcpSettings.state().enabled) {
+      void mcpServer.start().then(() => mcpChannels.changed());
+    }
     theme = await registerTheme({
       ipcMain,
       vault,
