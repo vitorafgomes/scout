@@ -765,18 +765,24 @@ public sealed class AuditWorkerReviewTests : IDisposable
     }
 
     /// <summary>A chat whose turns stay open a moment, counting how many are open together.</summary>
-    private sealed class OpenTurns
+    private sealed class OpenTurns(int together = 1)
     {
         private int _open;
+        private volatile int _most;
 
-        public int Most { get; private set; }
+        public int Most => _most;
 
         public async Task TurnAsync(ChatHistory history, Kernel kernel, int turn)
         {
             var open = Interlocked.Increment(ref _open);
             lock (this)
             {
-                Most = Math.Max(Most, open);
+                _most = Math.Max(_most, open);
+            }
+
+            for (var waited = 0; _most < together && waited < 250; waited++)
+            {
+                await Task.Delay(20);
             }
 
             await Task.Delay(40);
@@ -790,7 +796,7 @@ public sealed class AuditWorkerReviewTests : IDisposable
     {
         var store = Store();
         var job = await ReviewAsync(store, 9);
-        var turns = new OpenTurns();
+        var turns = new OpenTurns(together: 4);
         var refused = new ConcurrentQueue<string?>();
         var chat = new ScriptedChat(async (history, kernel, turn) =>
         {

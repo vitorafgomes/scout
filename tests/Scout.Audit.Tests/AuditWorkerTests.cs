@@ -990,14 +990,13 @@ public sealed class AuditWorkerTests : IDisposable
     {
         var sqlite = Store();
         var job = await sqlite.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeAreas, null, CancellationToken.None);
-        var failed = false;
+        var reads = 0;
         var store = new RacingStore(sqlite)
         {
             BeforeRunningJobs = () =>
             {
-                if (!failed)
+                if (Interlocked.Increment(ref reads) == 2)
                 {
-                    failed = true;
                     throw new AuditStoreException("Scout could not read the audit database: database is locked.", new InvalidOperationException());
                 }
 
